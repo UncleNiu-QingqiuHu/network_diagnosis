@@ -18,27 +18,40 @@ from network_diagnosis.model.report import (
     DegradationEvent,
     DiagnosticReport,
     DnsAnswer,
+    EgressProbeResult,
     GuiSummary,
+    HistoryCompareResult,
+    HttpTlsProbeResult,
+    MtuProbeResult,
     OverallStatus,
     PortFailureClass,
     PortProbeResult,
+    ShellProbeResult,
     TaskMeta,
+    TracerouteStats,
     UserInputSnapshot,
 )
 from network_diagnosis.paths import find_tshark, report_root, resolve_iperf3_exe, resolve_tcping_exe
 from network_diagnosis.probes.bandwidth_http import run_http_bandwidth
 from network_diagnosis.probes.bandwidth_iperf import run_iperf_bandwidth
 from network_diagnosis.probes.subproc_util import read_text_best_effort
-from network_diagnosis.probes.dns_probe import pick_tcp_target, resolve_dns
+from network_diagnosis.probes.dns_probe import pick_tcp_target, resolve_dns, resolve_dns_via_server
+from network_diagnosis.probes.egress_probe import run_egress
+from network_diagnosis.probes.http_tls_probe import probe_https
 from network_diagnosis.probes.local_context import collect_local_context
+from network_diagnosis.probes.mtu_probe import run_mtu_probe
+from network_diagnosis.probes.pathping_probe import run_path_quality
 from network_diagnosis.probes.ping_probe import run_ping
 from network_diagnosis.probes.tcping_probe import probe_tcping_version, run_tcping_port
+from network_diagnosis.probes.tcp_traceroute_probe import run_tcp_traceroute
+from network_diagnosis.probes.traceroute_probe import run_traceroute
 from network_diagnosis.probes.tshark import (
     TsharkCaptureSession,
     pick_capture_interface_index,
     summarize_pcap,
     tshark_version_line,
 )
+from network_diagnosis.reporting.history_store import HistoryEntry, append_history, build_history_compare
 from network_diagnosis.reporting.markdown import write_markdown_report
 from network_diagnosis.quality_assessment import compute_network_quality
 from network_diagnosis.version import APP_VERSION, DESIGN_DOC_REF
@@ -57,6 +70,9 @@ class RunOptions:
     ping_packet_timeout_ms: int = 2000
     ping_long: bool = False
     long_ping_seconds: int = 30
+    enable_traceroute: bool = False
+    traceroute_max_hops: int = 30
+    traceroute_hop_timeout_ms: int = 4000
     bandwidth_mode: str = "off"
     bandwidth_http_url: str = "https://speed.cloudflare.com/__down?bytes=25000000"
     bandwidth_http_parallel: int = 4
@@ -64,6 +80,14 @@ class RunOptions:
     bandwidth_iperf_host: str = ""
     bandwidth_iperf_port: int = 5201
     bandwidth_iperf_seconds: int = 10
+    optional_dns_server: str = ""
+    enable_pathping: bool = False
+    enable_tcp_traceroute: bool = False
+    tcp_traceroute_max_hops: int = 30
+    enable_http_tls_probe: bool = False
+    enable_egress_probe: bool = False
+    enable_mtu_probe: bool = False
+    enable_history_compare: bool = True
 
 
 def _normalize_bw_mode(mode: str) -> str:
@@ -290,6 +314,17 @@ def run_diagnostic(options: RunOptions, progress: Callable[[str], None]) -> Diag
     dns = resolve_dns(options.target_host, prefer_ipv6=options.prefer_ipv6)
     progress("DNS 解析完成。")
 
+    dns_specified: DnsAnswer | None = None
+    if (options.optional_dns_server or "").strip():
+        progress("正在使用指定 DNS 服务器解析…")
+        dns_specified = resolve_dns_via_server(
+            options.target_host,
+            options.optional_dns_server.strip(),
+            report_dir,
+            prefer_ipv6=options.prefer_ipv6,
+        )
+        progress("指定 DNS 解析完成。")
+
     tcp_target = pick_tcp_target(dns, prefer_ipv6=options.prefer_ipv6)
     probe_host = tcp_target or options.target_host
 
@@ -396,6 +431,17 @@ def run_diagnostic(options: RunOptions, progress: Callable[[str], None]) -> Diag
         if ping_stats.attempted:
             ping_okish = ping_stats.received > 0
 
+    tr_stats: TracerouteStats | None = None
+    if options.enable_traceroute:
+        progress("正在执行路由追踪…")
+        tr_stats = run_traceroute(
+            options.target_host,
+            prefer_ipv6=options.prefer_ipv6,
+            max_hops=options.traceroute_max_hops,
+            hop_timeout_ms=options.traceroute_hop_timeout_ms,
+            log_dir=report_dir,
+        )
+
     port_results: list[PortProbeResult] = []
     if tcping_exe is not None and options.ports:
         for p in options.ports:
@@ -438,6 +484,41 @@ def run_diagnostic(options: RunOptions, progress: Callable[[str], None]) -> Diag
 
     bw: BandwidthProbeResult | None = _run_bandwidth(options, report_dir, progress, degradations)
 
+    path_quality: ShellProbeResult | None = None
+    if options.enable_pathping:
+        progress("正在执行 PathPing / mtr（可能较慢）…")
+        path_quality = run_path_quality(options.target_host, report_dir)
+
+    tcp_path: ShellProbeResult | None = None
+    if options.enable_tcp_traceroute:
+        progress("正在执行 TCP 路径探测（nmap / traceroute -T）…")
+        tport = options.ports[0] if options.ports else 443
+        tcp_path = run_tcp_traceroute(
+            options.target_host,
+            tport,
+            options.tcp_traceroute_max_hops,
+            report_dir,
+        )
+
+    http_tls: HttpTlsProbeResult | None = None
+    if options.enable_http_tls_probe:
+        progress("正在探测 HTTPS / TLS…")
+        http_tls = probe_https(options.target_host)
+
+    egress: EgressProbeResult | None = None
+    if options.enable_egress_probe:
+        progress("正在探测出口公网 IP 与代理环境变量…")
+        egress = run_egress()
+
+    mtu: MtuProbeResult | None = None
+    if options.enable_mtu_probe:
+        progress("正在探测 IPv4 MTU（DF ping）…")
+        mtu = run_mtu_probe(
+            options.target_host,
+            prefer_ipv6=options.prefer_ipv6,
+            log_dir=report_dir,
+        )
+
     finished = datetime.now().astimezone()
     md_path = report_dir / f"network_diagnosis_{task_id}.md"
 
@@ -467,6 +548,9 @@ def run_diagnostic(options: RunOptions, progress: Callable[[str], None]) -> Diag
         ping_long=options.ping_long,
         long_ping_seconds=options.long_ping_seconds,
         ping_packet_timeout_ms=options.ping_packet_timeout_ms,
+        enable_traceroute=options.enable_traceroute,
+        traceroute_max_hops=options.traceroute_max_hops,
+        traceroute_hop_timeout_ms=options.traceroute_hop_timeout_ms,
         bandwidth_mode=_normalize_bw_mode(options.bandwidth_mode),
         bandwidth_http_url=options.bandwidth_http_url,
         bandwidth_http_parallel=options.bandwidth_http_parallel,
@@ -474,6 +558,14 @@ def run_diagnostic(options: RunOptions, progress: Callable[[str], None]) -> Diag
         bandwidth_iperf_host=options.bandwidth_iperf_host,
         bandwidth_iperf_port=options.bandwidth_iperf_port,
         bandwidth_iperf_seconds=options.bandwidth_iperf_seconds,
+        optional_dns_server=(options.optional_dns_server or "").strip(),
+        enable_pathping=options.enable_pathping,
+        enable_tcp_traceroute=options.enable_tcp_traceroute,
+        tcp_traceroute_max_hops=options.tcp_traceroute_max_hops,
+        enable_http_tls_probe=options.enable_http_tls_probe,
+        enable_egress_probe=options.enable_egress_probe,
+        enable_mtu_probe=options.enable_mtu_probe,
+        enable_history_compare=options.enable_history_compare,
     )
     gui = _build_gui_summary(
         dns,
@@ -493,19 +585,46 @@ def run_diagnostic(options: RunOptions, progress: Callable[[str], None]) -> Diag
         enable_ping=options.enable_ping,
         bandwidth=bw,
     )
+    hist: HistoryCompareResult | None = None
+    if options.enable_history_compare:
+        hist = build_history_compare(
+            target_host=options.target_host,
+            current_task_id=task_id,
+            current_grade=nq.grade,
+            current_finished_iso=finished.isoformat(),
+        )
     report = DiagnosticReport(
         meta=meta,
         user_input=user_snap,
         local=local,
         dns=dns,
         ping=ping_stats,
+        traceroute=tr_stats,
         ports=port_results,
         capture=capture,
         degradations=degradations,
         gui=gui,
         network_quality=nq,
         bandwidth=bw,
+        dns_specified=dns_specified,
+        path_quality=path_quality,
+        tcp_path=tcp_path,
+        http_tls=http_tls,
+        egress=egress,
+        mtu=mtu,
+        history_compare=hist,
     )
     write_markdown_report(report, md_path)
     progress(f"Markdown 报告已写入: {md_path}")
+    if options.enable_history_compare:
+        append_history(
+            HistoryEntry(
+                task_id=task_id,
+                target_host=options.target_host,
+                finished_at=finished.isoformat(),
+                grade=nq.grade,
+                report_dir=str(report_dir.resolve()),
+                markdown_path=str(md_path.resolve()),
+            )
+        )
     return report

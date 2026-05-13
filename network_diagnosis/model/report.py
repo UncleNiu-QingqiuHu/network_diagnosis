@@ -61,6 +61,9 @@ class UserInputSnapshot:
     ping_long: bool = False
     long_ping_seconds: int = 30
     ping_packet_timeout_ms: int = 2000
+    enable_traceroute: bool = False
+    traceroute_max_hops: int = 30
+    traceroute_hop_timeout_ms: int = 4000
     bandwidth_mode: str = "off"
     bandwidth_http_url: str = ""
     bandwidth_http_parallel: int = 4
@@ -68,6 +71,14 @@ class UserInputSnapshot:
     bandwidth_iperf_host: str = ""
     bandwidth_iperf_port: int = 5201
     bandwidth_iperf_seconds: int = 10
+    optional_dns_server: str = ""
+    enable_pathping: bool = False
+    enable_tcp_traceroute: bool = False
+    tcp_traceroute_max_hops: int = 30
+    enable_http_tls_probe: bool = False
+    enable_egress_probe: bool = False
+    enable_mtu_probe: bool = False
+    enable_history_compare: bool = True
 
 
 @dataclass
@@ -112,6 +123,16 @@ class PingStats:
     raw_stdout_path: Path
     raw_stderr_path: Path
     command: list[str]
+
+
+@dataclass
+class TracerouteStats:
+    target: str
+    raw_stdout_path: Path
+    raw_stderr_path: Path
+    command: list[str]
+    returncode: int | None
+    outline: str
 
 
 @dataclass
@@ -175,6 +196,60 @@ class BandwidthProbeResult:
 
 
 @dataclass
+class ShellProbeResult:
+    """PathPing / mtr / nmap / traceroute -T 等外部命令的通用结果。"""
+
+    kind: str
+    summary: str
+    command: list[str]
+    raw_stdout_path: Path
+    raw_stderr_path: Path
+    returncode: int | None
+
+
+@dataclass
+class HttpTlsProbeResult:
+    url: str
+    ok: bool
+    tls_handshake_ms: float | None
+    http_status: int | None
+    tls_version: str | None
+    cert_subject: str
+    cert_issuer: str
+    cert_not_after: str
+    error: str
+
+
+@dataclass
+class EgressProbeResult:
+    public_ip: str | None
+    ipify_error: str
+    http_proxy: str | None
+    https_proxy: str | None
+    all_proxy: str | None
+    no_proxy: str | None
+    winhttp_note: str
+
+
+@dataclass
+class MtuProbeResult:
+    target: str
+    max_icmp_payload: int | None
+    implied_ipv4_mtu: int | None
+    summary: str
+    raw_log_path: Path | None
+
+
+@dataclass
+class HistoryCompareResult:
+    compared: bool
+    previous_task_id: str | None
+    previous_finished: str | None
+    previous_grade: str | None
+    lines: list[str]
+
+
+@dataclass
 class GuiSummary:
     overall: OverallStatus
     headline: str
@@ -189,9 +264,17 @@ class DiagnosticReport:
     local: LocalContext
     dns: DnsAnswer
     ping: PingStats | None
+    traceroute: TracerouteStats | None
     ports: list[PortProbeResult]
     capture: CaptureInfo
     degradations: list[DegradationEvent]
     gui: GuiSummary
     network_quality: NetworkQualityAssessment
+    dns_specified: DnsAnswer | None = None
     bandwidth: BandwidthProbeResult | None = None
+    path_quality: ShellProbeResult | None = None
+    tcp_path: ShellProbeResult | None = None
+    http_tls: HttpTlsProbeResult | None = None
+    egress: EgressProbeResult | None = None
+    mtu: MtuProbeResult | None = None
+    history_compare: HistoryCompareResult | None = None

@@ -153,6 +153,16 @@ def _gui_oneline_ping(rep: DiagnosticReport) -> str:
     return f"收到 {p.received}/{p.attempted}，丢包约 {loss:.0f}%。"
 
 
+def _gui_oneline_traceroute(rep: DiagnosticReport) -> str:
+    if not rep.user_input.enable_traceroute:
+        return "未启用路由追踪。"
+    tr = rep.traceroute
+    if tr is None:
+        return "无路由追踪输出。"
+    lines = [ln for ln in (tr.outline or "").splitlines() if ln.strip()]
+    return lines[0] if lines else "已完成，详见下方「路由追踪」。"
+
+
 def _gui_oneline_ports(rep: DiagnosticReport) -> str:
     ui = rep.user_input
     if not ui.ports:
@@ -188,16 +198,38 @@ def _gui_lines_dns(rep: DiagnosticReport) -> list[str]:
         f"优先 IPv6：{'是' if ui.prefer_ipv6 else '否'}",
         f"解析耗时：{dns.elapsed_ms:.1f} ms",
     ]
+
+    def append_specified() -> None:
+        opt_srv = (ui.optional_dns_server or "").strip()
+        if not opt_srv or rep.dns_specified is None:
+            return
+        ds = rep.dns_specified
+        fam2 = {"ipv4": "IPv4", "ipv6": "IPv6", "mixed": "IPv4 / IPv6 混合"}.get(
+            ds.family, ds.family
+        )
+        lines.append("")
+        lines.append(f"指定 DNS（{opt_srv}）解析：")
+        lines.append(f"  记录族别：{fam2}，耗时 {ds.elapsed_ms:.1f} ms")
+        if ds.error:
+            lines.append(f"  失败：{ds.error}")
+        elif ds.addresses:
+            lines.append("  地址：" + "、".join(ds.addresses))
+        else:
+            lines.append("  未得到地址。")
+
     if dns.error:
         lines.append(f"解析失败：{dns.error}")
+        append_specified()
         return lines
     if not dns.addresses:
         lines.append("未得到任何解析地址。")
+        append_specified()
         return lines
     lines.append("解析到的地址：" + "、".join(dns.addresses))
     tcp_t = pick_tcp_target(dns, prefer_ipv6=ui.prefer_ipv6)
     if tcp_t:
         lines.append(f"本次 TCP / 抓包使用的 IP：{tcp_t}")
+    append_specified()
     return lines
 
 
@@ -231,6 +263,25 @@ def _gui_lines_ping(rep: DiagnosticReport) -> list[str]:
             "说明：无 ICMP 回复时，常见于对端禁 ping 或防火墙策略，不代表 TCP 端口一定不通。"
         )
     return lines
+
+
+def _gui_lines_traceroute(rep: DiagnosticReport) -> list[str]:
+    ui = rep.user_input
+    if not ui.enable_traceroute:
+        return [
+            "本轮未启用路由追踪。",
+            "可在「探测选项」中勾选「路由追踪」，将调用 Windows tracert（或 Linux/macOS 的 traceroute）。",
+        ]
+    tr = rep.traceroute
+    if tr is None:
+        return ["未获取到路由追踪输出。"]
+    out = list((tr.outline or "").splitlines())
+    if tr.command:
+        out.insert(0, f"命令：{' '.join(tr.command)}")
+    if tr.returncode is not None:
+        out.append(f"退出码：{tr.returncode}")
+    out.append(f"原始 stdout：{tr.raw_stdout_path.resolve()}")
+    return out
 
 
 def _gui_lines_ports(rep: DiagnosticReport) -> list[str]:
@@ -315,6 +366,165 @@ def _gui_lines_bandwidth(rep: DiagnosticReport) -> list[str]:
     if not b.ok and b.error:
         lines.append(f"错误：{b.error}")
     return lines
+
+
+def _any_advanced(rep: DiagnosticReport) -> bool:
+    ui = rep.user_input
+    return bool(
+        (ui.optional_dns_server or "").strip()
+        or ui.enable_pathping
+        or ui.enable_tcp_traceroute
+        or ui.enable_http_tls_probe
+        or ui.enable_egress_probe
+        or ui.enable_mtu_probe
+        or ui.enable_history_compare
+    )
+
+
+def _gui_oneline_advanced(rep: DiagnosticReport) -> str:
+    ui = rep.user_input
+    bits: list[str] = []
+    if (ui.optional_dns_server or "").strip():
+        ds = rep.dns_specified
+        if ds and not ds.error and ds.addresses:
+            bits.append("指定 DNS 解析成功")
+        elif ds and ds.error:
+            bits.append("指定 DNS 解析失败")
+        else:
+            bits.append("已请求指定 DNS 对比")
+    if ui.enable_pathping and rep.path_quality:
+        bits.append("PathPing/mtr 已完成")
+    elif ui.enable_pathping:
+        bits.append("PathPing/mtr 无输出")
+    if ui.enable_tcp_traceroute and rep.tcp_path:
+        bits.append("TCP 路径探测已完成")
+    elif ui.enable_tcp_traceroute:
+        bits.append("TCP 路径探测无输出")
+    if ui.enable_http_tls_probe and rep.http_tls:
+        h = rep.http_tls
+        if h.ok:
+            bits.append("HTTPS/TLS 正常")
+        else:
+            bits.append("HTTPS/TLS 异常或未完整")
+    elif ui.enable_http_tls_probe:
+        bits.append("HTTPS/TLS 无结果")
+    if ui.enable_egress_probe and rep.egress:
+        e = rep.egress
+        if e.public_ip:
+            bits.append(f"出口公网 IP {e.public_ip}")
+        else:
+            bits.append("出口 IP 未取到")
+    elif ui.enable_egress_probe:
+        bits.append("出口探测无结果")
+    if ui.enable_mtu_probe and rep.mtu:
+        m = rep.mtu
+        if m.implied_ipv4_mtu is not None:
+            bits.append(f"估算 MTU {m.implied_ipv4_mtu}")
+        else:
+            bits.append("MTU 未估出或已跳过")
+    elif ui.enable_mtu_probe:
+        bits.append("MTU 无结果")
+    if ui.enable_history_compare and rep.history_compare:
+        hc = rep.history_compare
+        if hc.compared and hc.previous_grade:
+            bits.append(f"相对上次档位：{hc.previous_grade} → {rep.network_quality.grade}")
+        elif hc.lines:
+            bits.append("历史：首次或无更早记录")
+    elif ui.enable_history_compare:
+        bits.append("历史对比未生成")
+    if not bits:
+        return "未启用进阶项。"
+    return "；".join(bits) + "。"
+
+
+def _gui_lines_advanced(rep: DiagnosticReport) -> list[str]:
+    ui = rep.user_input
+    out: list[str] = []
+    opt_srv = (ui.optional_dns_server or "").strip()
+    if opt_srv:
+        ds = rep.dns_specified
+        out.append(f"指定 DNS：{opt_srv}")
+        if ds is None:
+            out.append("  （无独立解析结果）")
+        elif ds.error:
+            out.append(f"  错误：{ds.error}")
+        else:
+            out.append(f"  地址：{'、'.join(ds.addresses) if ds.addresses else '（无）'}，{ds.elapsed_ms:.1f} ms")
+        out.append("")
+
+    def _shell_block(title: str, sp, enabled: bool) -> None:
+        if not enabled:
+            return
+        if sp is None:
+            out.append(f"{title}：未得到结果。")
+            out.append("")
+            return
+        out.append(f"{title}：{sp.summary}")
+        out.append(f"  命令：{' '.join(sp.command) if sp.command else '—'}")
+        out.append(f"  日志：{sp.raw_stdout_path.resolve()}")
+        out.append("")
+
+    _shell_block("路径质量（PathPing/mtr）", rep.path_quality, ui.enable_pathping)
+    _shell_block("TCP 路径", rep.tcp_path, ui.enable_tcp_traceroute)
+
+    if ui.enable_http_tls_probe:
+        h = rep.http_tls
+        if h is None:
+            out.append("HTTPS/TLS：无结果。")
+        else:
+            out.append(f"HTTPS/TLS：URL {h.url}")
+            if h.tls_handshake_ms is not None:
+                out.append(f"  握手约 {h.tls_handshake_ms:.0f} ms")
+            if h.http_status is not None:
+                out.append(f"  HTTP 状态：{h.http_status}")
+            out.append(f"  证书主体：{h.cert_subject or '—'}，有效期至 {h.cert_not_after or '—'}")
+            if h.error:
+                out.append(f"  错误：{h.error}")
+        out.append("")
+
+    if ui.enable_egress_probe:
+        e = rep.egress
+        if e is None:
+            out.append("出口/代理：无结果。")
+        else:
+            out.append(f"出口公网 IPv4：{e.public_ip or '（未获取）'}")
+            if e.ipify_error:
+                out.append(f"  ipify：{e.ipify_error}")
+            proxy_bits = [
+                ("HTTP_PROXY", e.http_proxy),
+                ("HTTPS_PROXY", e.https_proxy),
+                ("ALL_PROXY", e.all_proxy),
+            ]
+            for k, v in proxy_bits:
+                if v:
+                    out.append(f"  {k}={v}")
+            if e.winhttp_note:
+                out.append(f"  WinHTTP：{e.winhttp_note}")
+        out.append("")
+
+    if ui.enable_mtu_probe:
+        m = rep.mtu
+        if m is None:
+            out.append("MTU：无结果。")
+        else:
+            out.append(f"MTU：{m.summary}")
+            if m.implied_ipv4_mtu is not None:
+                out.append(f"  推算 IPv4 MTU：{m.implied_ipv4_mtu}")
+            if m.raw_log_path:
+                out.append(f"  日志：{m.raw_log_path.resolve()}")
+        out.append("")
+
+    if ui.enable_history_compare:
+        hc = rep.history_compare
+        if hc is None:
+            out.append("历史对比：未生成（已关闭或未写入）。")
+        else:
+            out.extend(hc.lines)
+        out.append("")
+
+    if not out:
+        return ["本轮未启用进阶探测（未勾选进阶项且未填写指定 DNS）。"]
+    return out
 
 
 class NetworkDiagnosisApp(ttk.Window):
@@ -479,6 +689,31 @@ class NetworkDiagnosisApp(ttk.Window):
             bootstyle="round-toggle",
         ).grid(row=0, column=2, sticky=W)
 
+        tr_row = ttk.Frame(lf_opts)
+        tr_row.grid(row=4, column=0, columnspan=4, sticky=W, pady=(8, 0))
+        self.var_traceroute = tk.BooleanVar(value=False)
+        self.var_tr_hops = tk.IntVar(value=30)
+        self.var_tr_wait_ms = tk.IntVar(value=4000)
+        ttk.Checkbutton(
+            tr_row,
+            text="路由追踪 (tracert)",
+            variable=self.var_traceroute,
+            bootstyle="round-toggle",
+        ).pack(side=tk.LEFT, padx=(0, 12))
+        ttk.Label(tr_row, text="最大跳数", bootstyle=SECONDARY).pack(side=tk.LEFT)
+        ttk.Spinbox(tr_row, from_=2, to=64, textvariable=self.var_tr_hops, width=5).pack(
+            side=tk.LEFT, padx=(4, 12)
+        )
+        ttk.Label(tr_row, text="每跳超时 (ms)", bootstyle=SECONDARY).pack(side=tk.LEFT)
+        ttk.Spinbox(
+            tr_row,
+            from_=500,
+            to=30000,
+            increment=100,
+            textvariable=self.var_tr_wait_ms,
+            width=7,
+        ).pack(side=tk.LEFT, padx=(4, 0))
+
         lf_bw = ttk.Labelframe(left, text="带宽/吞吐（可选，二选一）", padding=(12, 10, 12, 10))
         lf_bw.pack(fill=tk.X, pady=(0, 8))
         bw_top = ttk.Frame(lf_bw)
@@ -545,6 +780,62 @@ class NetworkDiagnosisApp(ttk.Window):
 
         self.var_bw_mode.trace_add("write", lambda *_: self._sync_bw_panels())
         self._sync_bw_panels()
+
+        lf_adv = ttk.Labelframe(left, text="进阶探测（可选，可能较慢）", padding=(12, 10, 12, 10))
+        lf_adv.pack(fill=tk.X, pady=(0, 8))
+        lf_adv.columnconfigure(1, weight=1)
+        self.var_optional_dns = tk.StringVar(value="")
+        ttk.Label(lf_adv, text="指定 DNS（与系统解析对比）", bootstyle=SECONDARY).grid(
+            row=0, column=0, sticky=W, padx=(0, 8), pady=(0, 6)
+        )
+        ttk.Entry(lf_adv, textvariable=self.var_optional_dns, bootstyle=PRIMARY).grid(
+            row=0, column=1, sticky=EW, pady=(0, 6)
+        )
+        ttk.Label(
+            lf_adv,
+            text="例：8.8.8.8；留空则仅使用系统解析器",
+            bootstyle=SECONDARY,
+            font=("Microsoft YaHei UI", 10),
+        ).grid(row=1, column=1, sticky=W)
+
+        self.var_adv_pathping = tk.BooleanVar(value=False)
+        self.var_adv_tcp_trace = tk.BooleanVar(value=False)
+        self.var_adv_tcp_hops = tk.IntVar(value=30)
+        self.var_adv_http_tls = tk.BooleanVar(value=False)
+        self.var_adv_egress = tk.BooleanVar(value=False)
+        self.var_adv_mtu = tk.BooleanVar(value=False)
+        self.var_adv_history = tk.BooleanVar(value=True)
+
+        adv_chk = ttk.Frame(lf_adv)
+        adv_chk.grid(row=2, column=0, columnspan=2, sticky=W, pady=(10, 4))
+        ttk.Checkbutton(
+            adv_chk, text="PathPing / mtr", variable=self.var_adv_pathping, bootstyle="round-toggle"
+        ).pack(side=tk.LEFT, padx=(0, 12))
+        ttk.Checkbutton(
+            adv_chk, text="TCP 路径", variable=self.var_adv_tcp_trace, bootstyle="round-toggle"
+        ).pack(side=tk.LEFT, padx=(0, 8))
+        ttk.Label(adv_chk, text="TCP 最大跳数", bootstyle=SECONDARY).pack(side=tk.LEFT, padx=(0, 4))
+        ttk.Spinbox(adv_chk, from_=2, to=64, textvariable=self.var_adv_tcp_hops, width=5).pack(
+            side=tk.LEFT, padx=(0, 12)
+        )
+
+        adv_chk2 = ttk.Frame(lf_adv)
+        adv_chk2.grid(row=3, column=0, columnspan=2, sticky=W, pady=(4, 0))
+        ttk.Checkbutton(
+            adv_chk2, text="HTTPS/TLS", variable=self.var_adv_http_tls, bootstyle="round-toggle"
+        ).pack(side=tk.LEFT, padx=(0, 12))
+        ttk.Checkbutton(
+            adv_chk2, text="出口 / 代理", variable=self.var_adv_egress, bootstyle="round-toggle"
+        ).pack(side=tk.LEFT, padx=(0, 12))
+        ttk.Checkbutton(
+            adv_chk2, text="IPv4 MTU", variable=self.var_adv_mtu, bootstyle="round-toggle"
+        ).pack(side=tk.LEFT, padx=(0, 12))
+        ttk.Checkbutton(
+            adv_chk2,
+            text="历史记录对比",
+            variable=self.var_adv_history,
+            bootstyle="round-toggle",
+        ).pack(side=tk.LEFT, padx=(0, 0))
 
         ttk.Separator(left, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=(4, 10))
 
@@ -881,6 +1172,9 @@ class NetworkDiagnosisApp(ttk.Window):
             ping_packet_timeout_ms=int(self.var_ping_wait_ms.get()),
             ping_long=bool(self.var_ping_long.get()),
             long_ping_seconds=int(self.var_long_ping_sec.get()),
+            enable_traceroute=bool(self.var_traceroute.get()),
+            traceroute_max_hops=int(self.var_tr_hops.get()),
+            traceroute_hop_timeout_ms=int(self.var_tr_wait_ms.get()),
             bandwidth_mode=bw_mode,
             bandwidth_http_url=self.var_bw_http_url.get().strip(),
             bandwidth_http_parallel=int(self.var_bw_http_parallel.get()),
@@ -888,6 +1182,14 @@ class NetworkDiagnosisApp(ttk.Window):
             bandwidth_iperf_host=self.var_bw_iperf_host.get().strip(),
             bandwidth_iperf_port=int(self.var_bw_iperf_port.get()),
             bandwidth_iperf_seconds=int(self.var_bw_iperf_seconds.get()),
+            optional_dns_server=self.var_optional_dns.get().strip(),
+            enable_pathping=bool(self.var_adv_pathping.get()),
+            enable_tcp_traceroute=bool(self.var_adv_tcp_trace.get()),
+            tcp_traceroute_max_hops=int(self.var_adv_tcp_hops.get()),
+            enable_http_tls_probe=bool(self.var_adv_http_tls.get()),
+            enable_egress_probe=bool(self.var_adv_egress.get()),
+            enable_mtu_probe=bool(self.var_adv_mtu.get()),
+            enable_history_compare=bool(self.var_adv_history.get()),
         )
 
         self.txt_log.delete("1.0", END)
@@ -962,8 +1264,15 @@ class NetworkDiagnosisApp(ttk.Window):
             t.insert(END, "· Ping 结果 ", ("overall_label",))
             t.insert(END, _gui_oneline_ping(rep) + "\n\n", ("body",))
 
+            t.insert(END, "· 路由追踪 ", ("overall_label",))
+            t.insert(END, _gui_oneline_traceroute(rep) + "\n\n", ("body",))
+
             t.insert(END, "· 端口连接 ", ("overall_label",))
             t.insert(END, _gui_oneline_ports(rep) + "\n\n", ("body",))
+
+            if _any_advanced(rep):
+                t.insert(END, "· 进阶探测 ", ("overall_label",))
+                t.insert(END, _gui_oneline_advanced(rep) + "\n\n", ("body",))
 
         insert_overall_block()
 
@@ -976,6 +1285,9 @@ class NetworkDiagnosisApp(ttk.Window):
         sec("Ping 结果")
         body_lines(_gui_lines_ping(rep))
 
+        sec("路由追踪")
+        body_lines(_gui_lines_traceroute(rep))
+
         sec("端口测试结果")
         body_lines(_gui_lines_ports(rep))
 
@@ -984,6 +1296,10 @@ class NetworkDiagnosisApp(ttk.Window):
 
         sec("带宽/吞吐抽样")
         body_lines(_gui_lines_bandwidth(rep))
+
+        if _any_advanced(rep):
+            sec("进阶探测")
+            body_lines(_gui_lines_advanced(rep))
 
         t.insert(
             END,

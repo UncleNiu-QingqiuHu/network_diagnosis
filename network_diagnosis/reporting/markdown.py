@@ -10,8 +10,13 @@ from network_diagnosis.model.report import (
     CaptureInfo,
     DiagnosticReport,
     DnsAnswer,
+    EgressProbeResult,
+    HistoryCompareResult,
+    HttpTlsProbeResult,
+    MtuProbeResult,
     PingStats,
     PortProbeResult,
+    ShellProbeResult,
     TaskMeta,
 )
 from network_diagnosis.probes.subproc_util import read_text_best_effort
@@ -56,6 +61,36 @@ def _ping_section(p: PingStats | None) -> str:
         f"- 原始 stderr: `{p.raw_stderr_path.resolve()}`",
     ]
     return "\n".join(body)
+
+
+def _traceroute_section(report: DiagnosticReport) -> str:
+    ui = report.user_input
+    tr = report.traceroute
+    if not ui.enable_traceroute:
+        return "（本轮未启用路由追踪。）"
+    if tr is None:
+        return "（已勾选路由追踪，但未得到输出结构。）"
+    lines = [
+        f"- 目标: `{tr.target}`",
+        f"- 命令: `{' '.join(tr.command) if tr.command else '—'}`",
+        f"- 退出码: {tr.returncode}",
+        "",
+        "**自动摘要：**",
+        "",
+        "```",
+        tr.outline,
+        "```",
+        "",
+        f"- stdout: `{tr.raw_stdout_path.resolve()}`",
+        f"- stderr: `{tr.raw_stderr_path.resolve()}`",
+        "",
+        "**stdout 末尾摘录：**",
+        "",
+        "```",
+        _tail_file(tr.raw_stdout_path, 100),
+        "```",
+    ]
+    return "\n".join(lines)
 
 
 def _port_table(ports: list[PortProbeResult]) -> str:
@@ -110,6 +145,162 @@ def _tail_file(path: Path, n_lines: int = 40) -> str:
     return "\n".join(lines[-n_lines:])
 
 
+def _shell_probe_subsection(title: str, p: ShellProbeResult | None, enabled: bool) -> list[str]:
+    out = [f"### {title}", ""]
+    if not enabled:
+        out.append(f"（本轮未启用 {title}。）")
+        out.append("")
+        return out
+    if p is None:
+        out.append("（已勾选，但未得到结构化结果。）")
+        out.append("")
+        return out
+    out.extend(
+        [
+            f"- 子类型: `{p.kind}`",
+            f"- 摘要: {p.summary}",
+            f"- 命令: `{' '.join(p.command)}`" if p.command else "- 命令: —",
+            f"- 退出码: {p.returncode}",
+            f"- stdout: `{p.raw_stdout_path.resolve()}`",
+            f"- stderr: `{p.raw_stderr_path.resolve()}`",
+            "",
+            "**stdout 末尾摘录：**",
+            "",
+            "```",
+            _tail_file(p.raw_stdout_path, 80),
+            "```",
+            "",
+        ]
+    )
+    return out
+
+
+def _http_tls_subsection(h: HttpTlsProbeResult | None, enabled: bool) -> list[str]:
+    title = "HTTPS / TLS"
+    out = [f"### {title}", ""]
+    if not enabled:
+        out.append("（本轮未启用 HTTPS / TLS 探测。）")
+        out.append("")
+        return out
+    if h is None:
+        out.append("（已勾选，但未得到结果。）")
+        out.append("")
+        return out
+    lines = [
+        f"- URL: `{h.url}`",
+        f"- 成功: {h.ok}",
+    ]
+    if h.tls_handshake_ms is not None:
+        lines.append(f"- TLS 握手耗时: {h.tls_handshake_ms:.1f} ms")
+    if h.http_status is not None:
+        lines.append(f"- HTTP 状态码: {h.http_status}")
+    if h.tls_version:
+        lines.append(f"- 协商 TLS 版本: {h.tls_version}")
+    lines.extend(
+        [
+            f"- 证书主体: {h.cert_subject or '—'}",
+            f"- 颁发者: {h.cert_issuer or '—'}",
+            f"- 有效期至: {h.cert_not_after or '—'}",
+        ]
+    )
+    if h.error:
+        lines.append(f"- 错误: {h.error}")
+    out.extend(lines)
+    out.append("")
+    return out
+
+
+def _egress_subsection(e: EgressProbeResult | None, enabled: bool) -> list[str]:
+    title = "出口公网与代理环境"
+    out = [f"### {title}", ""]
+    if not enabled:
+        out.append("（本轮未启用出口 / 代理探测。）")
+        out.append("")
+        return out
+    if e is None:
+        out.append("（已勾选，但未得到结果。）")
+        out.append("")
+        return out
+    out.extend(
+        [
+            f"- 公网 IPv4（ipify）: `{e.public_ip or '—'}`",
+            f"- ipify 错误: {e.ipify_error or '—'}",
+            f"- HTTP_PROXY: `{e.http_proxy or '—'}`",
+            f"- HTTPS_PROXY: `{e.https_proxy or '—'}`",
+            f"- ALL_PROXY: `{e.all_proxy or '—'}`",
+            f"- NO_PROXY: `{e.no_proxy or '—'}`",
+            f"- WinHTTP 代理摘要: {e.winhttp_note or '—'}",
+            "",
+        ]
+    )
+    return out
+
+
+def _mtu_subsection(m: MtuProbeResult | None, enabled: bool) -> list[str]:
+    title = "IPv4 MTU（DF ping 估算）"
+    out = [f"### {title}", ""]
+    if not enabled:
+        out.append("（本轮未启用 MTU 探测。）")
+        out.append("")
+        return out
+    if m is None:
+        out.append("（已勾选，但未得到结果。）")
+        out.append("")
+        return out
+    out.extend(
+        [
+            f"- 目标: `{m.target}`",
+            f"- 摘要: {m.summary}",
+            f"- 最大 ICMP payload（探测）: {m.max_icmp_payload}",
+            f"- 推算 IPv4 MTU: {m.implied_ipv4_mtu}",
+            f"- 原始日志: `{m.raw_log_path.resolve()}`" if m.raw_log_path else "- 原始日志: —",
+            "",
+        ]
+    )
+    return out
+
+
+def _history_subsection(h: HistoryCompareResult | None, enabled: bool) -> list[str]:
+    title = "与历史记录对比"
+    out = [f"### {title}", ""]
+    if not enabled:
+        out.append("（本轮未启用历史索引对比。）")
+        out.append("")
+        return out
+    if h is None:
+        out.append("（已启用，但未生成对比结果。）")
+        out.append("")
+        return out
+    for ln in h.lines:
+        out.append(f"- {ln}")
+    out.append("")
+    return out
+
+
+def _advanced_probes_section(report: DiagnosticReport) -> list[str]:
+    ui = report.user_input
+    lines: list[str] = ["## 11. 进阶探测（PathPing、TCP trace、TLS、出口、MTU、历史）", ""]
+    lines.extend(
+        _shell_probe_subsection(
+            "路径质量（PathPing / mtr）",
+            report.path_quality,
+            ui.enable_pathping,
+        )
+    )
+    lines.extend(
+        _shell_probe_subsection(
+            "TCP 路径（nmap / traceroute -T）",
+            report.tcp_path,
+            ui.enable_tcp_traceroute,
+        )
+    )
+    lines.extend(_http_tls_subsection(report.http_tls, ui.enable_http_tls_probe))
+    lines.extend(_egress_subsection(report.egress, ui.enable_egress_probe))
+    lines.extend(_mtu_subsection(report.mtu, ui.enable_mtu_probe))
+    lines.extend(_history_subsection(report.history_compare, ui.enable_history_compare))
+    return lines
+
+
 def write_markdown_report(report: DiagnosticReport, path: Path) -> None:
     m: TaskMeta = report.meta
     lines: list[str] = [
@@ -140,6 +331,8 @@ def write_markdown_report(report: DiagnosticReport, path: Path) -> None:
         f"- Ping 次数: {report.user_input.ping_count}",
         f"- 长 Ping: {report.user_input.ping_long}（最长 {report.user_input.long_ping_seconds} 秒）",
         f"- ICMP 单次等待 (ms): {report.user_input.ping_packet_timeout_ms}",
+        f"- 路由追踪: {report.user_input.enable_traceroute}"
+        f"（最大跳数 {report.user_input.traceroute_max_hops}，每跳超时 {report.user_input.traceroute_hop_timeout_ms} ms）",
         f"- 启用 ping: {report.user_input.enable_ping}",
         f"- 启用抓包: {report.user_input.enable_capture}",
         f"- 优先 IPv6: {report.user_input.prefer_ipv6}",
@@ -147,6 +340,14 @@ def write_markdown_report(report: DiagnosticReport, path: Path) -> None:
         f"- HTTP 抽样 URL: `{report.user_input.bandwidth_http_url or '—'}`",
         f"- HTTP 并发: {report.user_input.bandwidth_http_parallel}，时长 (s): {report.user_input.bandwidth_http_seconds}",
         f"- iperf3 目标: `{report.user_input.bandwidth_iperf_host or '—'}:{report.user_input.bandwidth_iperf_port}`，时长 (s): {report.user_input.bandwidth_iperf_seconds}",
+        f"- 指定 DNS（可选，与系统解析对比）: `{report.user_input.optional_dns_server or '—'}`",
+        f"- PathPing / mtr: {report.user_input.enable_pathping}",
+        f"- TCP 路径探测: {report.user_input.enable_tcp_traceroute}"
+        f"（最大跳数 {report.user_input.tcp_traceroute_max_hops}）",
+        f"- HTTPS / TLS 探测: {report.user_input.enable_http_tls_probe}",
+        f"- 出口公网 / 代理探测: {report.user_input.enable_egress_probe}",
+        f"- IPv4 MTU 探测: {report.user_input.enable_mtu_probe}",
+        f"- 与同目标历史记录对比: {report.user_input.enable_history_compare}",
         "",
         "## 3. 本机与出口上下文",
         "",
@@ -171,8 +372,24 @@ def write_markdown_report(report: DiagnosticReport, path: Path) -> None:
         [
             "## 4. DNS",
             "",
+            "### 系统默认解析器",
+            "",
             _dns_section(report.dns),
             "",
+        ]
+    )
+    if report.dns_specified is not None:
+        srv = (report.user_input.optional_dns_server or "").strip()
+        lines.extend(
+            [
+                f"### 指定 DNS（`{srv}`）",
+                "",
+                _dns_section(report.dns_specified),
+                "",
+            ]
+        )
+    lines.extend(
+        [
             "## 5. 网络质量与指标",
             "",
             f"- **综合评判**: **{report.network_quality.grade}**（极佳 / 正常 / 较差 / 堵塞）",
@@ -191,7 +408,11 @@ def write_markdown_report(report: DiagnosticReport, path: Path) -> None:
             "",
             _ping_section(report.ping),
             "",
-            "## 8. 端口连通性（tcping）",
+            "## 8. 路由追踪（tracert / traceroute）",
+            "",
+            _traceroute_section(report),
+            "",
+            "## 9. 端口连通性（tcping）",
             "",
             _port_table(report.ports),
             "",
@@ -200,7 +421,7 @@ def write_markdown_report(report: DiagnosticReport, path: Path) -> None:
     cap: CaptureInfo = report.capture
     lines.extend(
         [
-            "## 9. 抓包",
+            "## 10. 抓包",
             "",
             f"- 用户请求: {cap.requested}",
             f"- 是否实际执行: {cap.ran}",
@@ -225,7 +446,8 @@ def write_markdown_report(report: DiagnosticReport, path: Path) -> None:
         lines.append(_tail_file(cap.stdout_path, 30))
         lines.append("```")
         lines.append("")
-    lines.append("## 10. 降级与异常")
+    lines.extend(_advanced_probes_section(report))
+    lines.append("## 12. 降级与异常")
     lines.append("")
     if not report.degradations:
         lines.append("（无）")
@@ -235,7 +457,7 @@ def write_markdown_report(report: DiagnosticReport, path: Path) -> None:
             if ev.detail:
                 lines.append(f"  - 详情: {ev.detail}")
     lines.append("")
-    lines.append("## 11. GUI 摘要（交叉核对）")
+    lines.append("## 13. GUI 摘要（交叉核对）")
     lines.append("")
     lines.append(f"- 总览: **{report.gui.overall.value}** — {report.gui.headline}")
     for b in report.gui.bullets:
