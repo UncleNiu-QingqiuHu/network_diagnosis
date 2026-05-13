@@ -1,4 +1,4 @@
-"""网络诊断桌面应用入口。"""
+"""青丘狐网络工作台桌面应用入口。"""
 
 from network_diagnosis.gui.main_app import main_gui
 

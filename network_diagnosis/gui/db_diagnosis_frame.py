@@ -129,7 +129,7 @@ class DbDiagnosisFrame(ttk.Frame):
         self.lbl_status = ttk.Label(btnf, text="就绪", bootstyle=SECONDARY)
         self.lbl_status.pack(side=tk.RIGHT, padx=(12, 0))
 
-        nb = ttk.Notebook(self)
+        nb = ttk.Notebook(self, bootstyle=PRIMARY)
         nb.grid(row=2, column=0, sticky=NSEW, padx=12, pady=(0, 12))
         tab_d = ttk.Frame(nb, padding=6)
         tab_m = ttk.Frame(nb, padding=6)

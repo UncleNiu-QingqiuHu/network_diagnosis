@@ -1,6 +1,6 @@
-# QQHu 网络诊断工具
+# 青丘狐网络工作台
 
-基于 Python 的 **Windows 桌面网络诊断**应用（tkinter + [ttkbootstrap](https://github.com/israelhudson/ttkbootstrap)）。产品说明与能力范围以设计文档为准：
+基于 Python 的 **Windows 桌面网络工作台**（tkinter + [ttkbootstrap](https://github.com/israelhudson/ttkbootstrap)），集成网络连通性诊断、子网计算、交换机 Console/SSH、数据库诊断等能力。官方网站：<https://www.qingqiuhu.net>。产品说明与能力范围以设计文档为准：
 
 - [`docs/network-diagnostic-tool-design_v1.5.md`](docs/network-diagnostic-tool-design_v1.5.md)（v1.4 见同目录归档）
 

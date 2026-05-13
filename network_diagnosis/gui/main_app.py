@@ -8,6 +8,7 @@ import subprocess
 import sys
 import threading
 import tkinter as tk
+import webbrowser
 import tkinter.font as tkfont
 from pathlib import Path
 from tkinter import messagebox
@@ -53,6 +54,8 @@ from network_diagnosis.version import (
     APP_VERSION,
     AUTHOR_SUMMARY,
     DESIGN_DOC_REF,
+    WEBSITE_DISPLAY,
+    WEBSITE_URL,
 )
 
 
@@ -1447,23 +1450,39 @@ class NetworkDiagnosisApp(ttk.Window):
         ).grid(row=0, column=0, sticky=W, pady=(0, 10))
 
         intro = (
-            "左侧「功能导航」可在各模块间切换。当前已实现「网络诊断」「子网计算」「交换机配置」「数据库诊断（多引擎只读采集 + Markdown + 轻量监控）」。"
+            "左侧「功能导航」可在各模块间切换。下方按标签页分模块说明：「网络诊断」「子网计算」「交换机配置」「数据库诊断」。"
         )
         ttk.Label(
             frm,
             text=intro,
             bootstyle=SECONDARY,
             font=("Microsoft YaHei UI", 11),
-            wraplength=760,
+            wraplength=0,
             justify=tk.LEFT,
         ).grid(row=1, column=0, sticky=EW, pady=(0, 10))
 
-        lf = ttk.Labelframe(frm, text="网络诊断 — 操作步骤", padding=(10, 8, 10, 10))
-        lf.grid(row=2, column=0, sticky=NSEW)
-        lf.rowconfigure(0, weight=1)
-        lf.columnconfigure(0, weight=1)
+        nb = ttk.Notebook(frm, bootstyle=PRIMARY)
+        nb.grid(row=2, column=0, sticky=NSEW)
 
-        body = """一、填写探测目标
+        def add_guide_tab(title: str, body: str) -> None:
+            tab = ttk.Frame(nb, padding=(6, 10, 6, 8))
+            nb.add(tab, text=title)
+            tab.rowconfigure(0, weight=1)
+            tab.columnconfigure(0, weight=1)
+            st = ScrolledText(
+                tab,
+                height=22,
+                wrap=tk.WORD,
+                font=("Microsoft YaHei UI", 11),
+                relief=tk.FLAT,
+                padx=10,
+                pady=10,
+            )
+            st.grid(row=0, column=0, sticky=NSEW)
+            st.insert(tk.END, body)
+            st.configure(state=tk.DISABLED)
+
+        body_network = """一、填写探测目标
   • 「主机名或 IP」：填写要排查的网站域名或服务器地址（如 www.baidu.com 或内网 IP）。
   • 「TCP 端口」：可选。留空则不做端口连通测试；多个端口用英文逗号分隔，如 80,443。
   • 「优先 IPv6」：若目标有 AAAA 记录且本机 IPv6 可用，可优先走 IPv6 路径做后续 TCP / 抓包。
@@ -1499,63 +1518,179 @@ class NetworkDiagnosisApp(ttk.Window):
   • 诊断会调用本机网络栈与若干子进程，请在合规前提下对自有或可授权目标使用。
   • 功能细节与指标含义以设计参考文档及生成的 Markdown 报告为准。"""
 
-        txt = ScrolledText(
-            lf,
-            height=22,
-            wrap=tk.WORD,
-            font=("Microsoft YaHei UI", 11),
-            relief=tk.FLAT,
-            padx=10,
-            pady=10,
-        )
-        txt.grid(row=0, column=0, sticky=NSEW)
-        txt.insert(tk.END, body)
-        txt.configure(state=tk.DISABLED)
+        body_subnet = """一、界面布局
+  • 左侧：输入区与「计算子网」「计算结果」文本框。
+  • 右侧：本机 IPv4、网关、DNS 与公网地址等参考信息；点「刷新」异步拉取（与一次完整「网络诊断」报告不等价）。
+
+二、CIDR 快捷输入
+  • 支持「IP/前缀」，例如 192.168.1.10/24。
+  • 支持「IP/点分掩码」，例如 192.168.1.10/255.255.255.0。
+  • 本栏有有效输入时，以本栏为准，下方「IPv4 + 前缀/掩码」一组可被界面说明忽略。
+
+三、IPv4 + 前缀 / 掩码（分拆输入）
+  • 填写 IPv4 地址；前缀长度用 Spinbox 选 0～32；或填写「或掩码」点分十进制掩码。
+  • 若「或掩码」非空，优先按掩码计算；掩码留空则使用前缀。
+  • 若上方 CIDR 栏已含「/」，请优先用上方栏，避免两套输入混用。
+
+四、计算与结果
+  • 点「计算子网」后，「计算结果」区展示网络地址、广播、掩码、wildcard、可用主机区间等。
+  • 仅用于运维辅助；生产割接请以官方工具与变更流程为准。
+
+五、注意
+  • IPv6、非点分掩码的特例不在本页展开；错误输入会弹窗提示。"""
+
+        body_switch = """一、模式
+  • 「串口 (COM)」：经 RS-232/USB 转串口连接设备 Console。
+  • 「SSH (PTY)」：经网络登录设备，终端为伪终端文本会话。
+
+二、串口
+  • 第一行：端口（下拉或手输）、刷新端口列表、波特率/数据位/校验/停止位。
+  • 第二行：XON/XOFF、RTS/CTS 流控开关。
+  • 连接前确认独占占用该 COM 口（勿被其它程序占用）。
+  • 「串口本地回显」：当设备不在屏幕上回显你键入的字符时可勾选；SSH 模式一般勿开。
+
+三、SSH
+  • 第一行：主机、端口、用户名、密码。
+  • 第二行：私钥路径（可选，可「浏览…」）、私钥口令；TERM、PTY 列与行。
+  • 首次连接未知主机时，程序会把主机密钥写入可写目录下的 known_hosts（见下方路径），仅供本工具使用。
+
+四、终端区与操作
+  • 连接后在下方深色区域按键输入；Enter 发送回车。
+  • 「连接」「断开」控制会话；切换到其它功能页或退出程序时会自动断开，释放串口或 SSH。
+
+五、数据目录（SSH）
+  • 开发运行：项目根目录下 switch_console/（通常已加入 .gitignore）。
+  • 打包为 exe：与可执行文件同目录下的 switch_console/。
+  • 请勿在多人共用电脑上保存密码；凭证默认仅存于本会话与界面变量。
+
+六、合规
+  • 仅对有权管理的设备使用；暴力破解与未授权访问不在本工具用途之内。"""
+
+        body_database = """一、支持引擎
+  • SQLite：「主机/路径」填数据库文件路径；端口对 SQLite 无意义（可随界面禁用或忽略）。
+  • MySQL / MariaDB、PostgreSQL：填写可达主机、端口、用户名、密码、库名（数据库名）。
+  • SQL Server：同上；本机须安装并配置 **ODBC 驱动**（pyodbc 经系统驱动连接）。
+  • Oracle：库名/服务字段请填 **Service Name**（非 SID 时请按实际环境核对）；需满足 python-oracledb 与官方文档对运行时的要求（如 Instant Client 等）。
+
+二、表单与提示
+  • 切换引擎时，界面提示会说明 non-SQLite 时须填主机与库名等注意点。
+  • 连接参数错误、驱动缺失或网络不可达时，报告与弹窗会给出失败原因摘要。
+
+三、诊断与产物
+  • 「运行诊断（生成 Markdown）」：后台连接并采集元数据与健康信息，在 reports/db_diagnosis/<任务ID>/ 下写入 Markdown 等文件。
+  • 「打开报告目录」「打开上次报告」便于取回刚生成的说明。
+  • 报告内容侧重技术人员阅读：版本、会话、对象列表等以实际引擎与权限为准；无权限项会标注跳过。
+
+四、监控
+  • 「开始监控」按设定间隔周期性抓取快照；「停止监控」结束轮询。
+  • 「导出监控 Markdown」将当前监控采样整理为文档并保存到报告目录。
+  • 监控会持续占用连接，请在业务低峰或测试库上使用；长时间轮询注意对库侧负载的影响。
+
+五、安全与边界
+  • 请使用只读或专用诊断账号；勿在生产库上使用高权限账户做试验。
+  • 本模块为连通性与轻量信息采集，非 SQL 性能压测或审计替代方案。"""
+
+        add_guide_tab("网络诊断", body_network)
+        add_guide_tab("子网计算", body_subnet)
+        add_guide_tab("交换机配置", body_switch)
+        add_guide_tab("数据库诊断", body_database)
 
     def _build_about_view(self) -> None:
-        frm = ttk.Frame(self._content_host, padding=(28, 32, 28, 24))
+        frm = ttk.Frame(self._content_host, padding=(28, 28, 32, 28))
         self._view_frames["about"] = frm
         frm.columnconfigure(0, weight=1)
 
         ttk.Label(
             frm,
-            text=APP_DISPLAY_NAME,
-            font=("Microsoft YaHei UI", 20, "bold"),
+            text="关于本软件",
+            bootstyle=SECONDARY,
+            font=("Microsoft YaHei UI", 11),
         ).grid(row=0, column=0, sticky=W)
+        ttk.Label(
+            frm,
+            text=APP_DISPLAY_NAME,
+            font=("Microsoft YaHei UI", 22, "bold"),
+        ).grid(row=1, column=0, sticky=W, pady=(6, 2))
         ttk.Label(
             frm,
             text=APP_DISPLAY_NAME_EN,
             bootstyle=SECONDARY,
-            font=("Microsoft YaHei UI", 12),
-        ).grid(row=1, column=0, sticky=W, pady=(4, 14))
+            font=("Microsoft YaHei UI", 13),
+        ).grid(row=2, column=0, sticky=W, pady=(0, 16))
 
-        meta = ttk.Frame(frm)
-        meta.grid(row=2, column=0, sticky=EW)
-        meta.columnconfigure(0, weight=1)
-        lines = [
-            f"版本：{APP_VERSION}",
-            f"作者与联系方式：{AUTHOR_SUMMARY}",
-            f"设计参考：{DESIGN_DOC_REF}",
-            APP_DESCRIPTION,
-        ]
-        for i, line in enumerate(lines):
+        lf_ver = ttk.Labelframe(frm, text="版本与文档", padding=(14, 12, 14, 12))
+        lf_ver.grid(row=3, column=0, sticky=EW, pady=(0, 10))
+        lf_ver.columnconfigure(1, weight=1)
+
+        def meta_pair(parent: ttk.Frame, r: int, key: str, value: str) -> None:
             ttk.Label(
-                meta,
-                text=line,
-                font=("Microsoft YaHei UI", 12),
-                wraplength=720,
+                parent,
+                text=key,
+                bootstyle=SECONDARY,
+                font=("Microsoft YaHei UI", 11),
+            ).grid(row=r, column=0, sticky=tk.N + tk.E, padx=(0, 12), pady=(0, 8))
+            ttk.Label(
+                parent,
+                text=value,
+                font=("Microsoft YaHei UI", 11),
+                wraplength=0,
                 justify=tk.LEFT,
-            ).grid(row=i, column=0, sticky=W, pady=(0, 8))
+            ).grid(row=r, column=1, sticky=W, pady=(0, 8))
 
-        ttk.Separator(frm, orient=tk.HORIZONTAL).grid(row=3, column=0, sticky=EW, pady=(20, 16))
+        meta_pair(lf_ver, 0, "软件版本", APP_VERSION)
+        meta_pair(lf_ver, 1, "设计参考", f"docs/{DESIGN_DOC_REF}.md")
         ttk.Label(
-            frm,
-            text="运行环境：Python 3.10+，图形界面基于 ttkbootstrap / Tk。",
+            lf_ver,
+            text="官方网站",
             bootstyle=SECONDARY,
             font=("Microsoft YaHei UI", 11),
-            wraplength=720,
+        ).grid(row=2, column=0, sticky=tk.N + tk.E, padx=(0, 12), pady=(0, 8))
+        site_lbl = tk.Label(
+            lf_ver,
+            text=WEBSITE_DISPLAY,
+            font=("Microsoft YaHei UI", 11, "underline"),
+            fg="#0b5ed7",
+            cursor="hand2",
+        )
+        site_lbl.grid(row=2, column=1, sticky=W, pady=(0, 8))
+        site_lbl.bind("<Button-1>", lambda _e: webbrowser.open(WEBSITE_URL))
+
+        lf_intro = ttk.Labelframe(frm, text="简介", padding=(14, 12, 14, 12))
+        lf_intro.grid(row=4, column=0, sticky=EW, pady=(0, 10))
+        lf_intro.columnconfigure(0, weight=1)
+        ttk.Label(
+            lf_intro,
+            text=APP_DESCRIPTION,
+            font=("Microsoft YaHei UI", 11),
+            wraplength=0,
             justify=tk.LEFT,
-        ).grid(row=4, column=0, sticky=W)
+        ).grid(row=0, column=0, sticky=W)
+
+        lf_contact = ttk.Labelframe(frm, text="作者与联系", padding=(14, 12, 14, 12))
+        lf_contact.grid(row=5, column=0, sticky=EW, pady=(0, 10))
+        lf_contact.columnconfigure(0, weight=1)
+        ttk.Label(
+            lf_contact,
+            text=AUTHOR_SUMMARY,
+            font=("Microsoft YaHei UI", 11),
+            wraplength=0,
+            justify=tk.LEFT,
+        ).grid(row=0, column=0, sticky=W)
+
+        ttk.Separator(frm, orient=tk.HORIZONTAL).grid(row=6, column=0, sticky=EW, pady=(8, 14))
+
+        env = (
+            f"运行环境：当前解释器 Python {sys.version_info.major}.{sys.version_info.minor}."
+            f"{sys.version_info.micro}（建议 3.10+）；界面 ttkbootstrap / Tk。"
+        )
+        ttk.Label(
+            frm,
+            text=env,
+            bootstyle=SECONDARY,
+            font=("Microsoft YaHei UI", 10),
+            wraplength=0,
+            justify=tk.LEFT,
+        ).grid(row=7, column=0, sticky=W)
 
     def _build_license_view(self) -> None:
         frm = ttk.Frame(self._content_host, padding=(20, 20, 20, 16))
@@ -1572,7 +1707,7 @@ class NetworkDiagnosisApp(ttk.Window):
             text=intro,
             bootstyle=SECONDARY,
             font=("Microsoft YaHei UI", 11),
-            wraplength=760,
+            wraplength=0,
             justify=tk.LEFT,
         ).grid(row=0, column=0, sticky=EW, pady=(0, 10))
 
@@ -1617,7 +1752,7 @@ class NetworkDiagnosisApp(ttk.Window):
             text=third_party,
             font=("Microsoft YaHei UI", 11),
             justify=tk.LEFT,
-            wraplength=760,
+            wraplength=0,
         ).pack(fill=tk.X)
 
     def _sync_bw_panels(self) -> None:

@@ -1,7 +1,7 @@
 [project]
 name = "qqhu-network-diagnosis"
 dynamic = ["version"]
-description = "Windows 桌面网络诊断工具（设计文档 v1.5）"
+description = "青丘狐网络工作台：Windows 桌面连通性诊断、子网计算、交换机 Console、数据库诊断等（设计文档 v1.5）"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
