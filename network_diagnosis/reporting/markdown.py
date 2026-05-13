@@ -72,6 +72,38 @@ def _port_table(ports: list[PortProbeResult]) -> str:
     return "\n".join(rows)
 
 
+def _bandwidth_section(report: DiagnosticReport) -> str:
+    ui = report.user_input
+    b = report.bandwidth
+    lines = [
+        f"- 模式: {ui.bandwidth_mode}（off / http / iperf3）",
+        f"- HTTP URL: `{ui.bandwidth_http_url or '—'}`",
+        f"- HTTP 并发连接数: {ui.bandwidth_http_parallel}，持续时间 (s): {ui.bandwidth_http_seconds}",
+        f"- iperf3 服务器: `{ui.bandwidth_iperf_host or '—'}`，端口: {ui.bandwidth_iperf_port}，时长 (s): {ui.bandwidth_iperf_seconds}",
+        "",
+    ]
+    if ui.bandwidth_mode == "off" or b is None:
+        lines.append("（本轮未启用或未产生带宽抽样结果。）")
+        return "\n".join(lines)
+    lines.append(f"- 是否成功: {b.ok}")
+    lines.append(f"- 摘要: {b.summary}")
+    if b.megabits_per_second is not None:
+        lines.append(f"- 估算平均速率: **{b.megabits_per_second:.2f} Mbps**")
+    if b.bytes_total is not None:
+        lines.append(f"- 字节量（如适用）: {b.bytes_total}")
+    if b.duration_sec is not None:
+        lines.append(f"- 时长（如适用）: {b.duration_sec:.3f} s")
+    if b.command:
+        lines.append(f"- 命令: `{' '.join(b.command)}`")
+    if b.log_stdout_path:
+        lines.append(f"- 日志/输出: `{b.log_stdout_path.resolve()}`")
+    if b.log_stderr_path:
+        lines.append(f"- stderr: `{b.log_stderr_path.resolve()}`")
+    if b.error:
+        lines.append(f"- 错误信息: {b.error}")
+    return "\n".join(lines)
+
+
 def _tail_file(path: Path, n_lines: int = 40) -> str:
     text = read_text_best_effort(path, max_bytes=256_000)
     lines = text.splitlines()
@@ -111,6 +143,10 @@ def write_markdown_report(report: DiagnosticReport, path: Path) -> None:
         f"- 启用 ping: {report.user_input.enable_ping}",
         f"- 启用抓包: {report.user_input.enable_capture}",
         f"- 优先 IPv6: {report.user_input.prefer_ipv6}",
+        f"- 带宽/吞吐抽样模式: `{report.user_input.bandwidth_mode}`",
+        f"- HTTP 抽样 URL: `{report.user_input.bandwidth_http_url or '—'}`",
+        f"- HTTP 并发: {report.user_input.bandwidth_http_parallel}，时长 (s): {report.user_input.bandwidth_http_seconds}",
+        f"- iperf3 目标: `{report.user_input.bandwidth_iperf_host or '—'}:{report.user_input.bandwidth_iperf_port}`，时长 (s): {report.user_input.bandwidth_iperf_seconds}",
         "",
         "## 3. 本机与出口上下文",
         "",
@@ -147,11 +183,15 @@ def write_markdown_report(report: DiagnosticReport, path: Path) -> None:
     lines.extend(
         [
             "",
-            "## 6. ICMP Ping",
+            "## 6. 带宽/吞吐抽样（可选）",
+            "",
+            _bandwidth_section(report),
+            "",
+            "## 7. ICMP Ping",
             "",
             _ping_section(report.ping),
             "",
-            "## 7. 端口连通性（tcping）",
+            "## 8. 端口连通性（tcping）",
             "",
             _port_table(report.ports),
             "",
@@ -160,7 +200,7 @@ def write_markdown_report(report: DiagnosticReport, path: Path) -> None:
     cap: CaptureInfo = report.capture
     lines.extend(
         [
-            "## 8. 抓包",
+            "## 9. 抓包",
             "",
             f"- 用户请求: {cap.requested}",
             f"- 是否实际执行: {cap.ran}",
@@ -185,7 +225,7 @@ def write_markdown_report(report: DiagnosticReport, path: Path) -> None:
         lines.append(_tail_file(cap.stdout_path, 30))
         lines.append("```")
         lines.append("")
-    lines.append("## 9. 降级与异常")
+    lines.append("## 10. 降级与异常")
     lines.append("")
     if not report.degradations:
         lines.append("（无）")
@@ -195,7 +235,7 @@ def write_markdown_report(report: DiagnosticReport, path: Path) -> None:
             if ev.detail:
                 lines.append(f"  - 详情: {ev.detail}")
     lines.append("")
-    lines.append("## 10. GUI 摘要（交叉核对）")
+    lines.append("## 11. GUI 摘要（交叉核对）")
     lines.append("")
     lines.append(f"- 总览: **{report.gui.overall.value}** — {report.gui.headline}")
     for b in report.gui.bullets:

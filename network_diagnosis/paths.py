@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shutil
 import sys
 from pathlib import Path
 
@@ -29,6 +30,10 @@ def third_party_tcping() -> Path:
     return bundle_root() / "ThirdParty" / "tcping" / "tcping.exe"
 
 
+def third_party_iperf3() -> Path:
+    return bundle_root() / "ThirdParty" / "iperf3" / "iperf3.exe"
+
+
 def third_party_wireshark_dir() -> Path:
     return bundle_root() / "ThirdParty" / "Wireshark"
 
@@ -36,6 +41,14 @@ def third_party_wireshark_dir() -> Path:
 def resolve_tcping_exe() -> Path | None:
     p = third_party_tcping()
     return p if p.is_file() else None
+
+
+def resolve_iperf3_exe() -> Path | None:
+    p = third_party_iperf3()
+    if p.is_file():
+        return p
+    w = shutil.which("iperf3") or shutil.which("iperf3.exe")
+    return Path(w) if w else None
 
 
 def iter_wireshark_installers() -> list[Path]:

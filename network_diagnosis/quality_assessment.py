@@ -6,6 +6,7 @@ import statistics
 from collections.abc import Iterable
 
 from network_diagnosis.model.report import (
+    BandwidthProbeResult,
     DnsAnswer,
     NetworkQualityAssessment,
     PingStats,
@@ -14,9 +15,29 @@ from network_diagnosis.model.report import (
 )
 
 _THROUGHPUT_NOTE = (
-    "本工具未做带宽/吞吐量压测，无法给出 Mbps 级速率；"
-    "以下指标来自 ICMP 与 TCP 连接层面的抽样，可间接反映链路稳定性与时延。"
+    "本工具默认未做带宽/吞吐量压测；若未手动启用下方抽样，则无 Mbps 级速率。"
+    "其它指标来自 ICMP 与 TCP 连接层面的抽样，可间接反映链路稳定性与时延。"
 )
+
+
+def _throughput_bandwidth_body(bw: BandwidthProbeResult | None) -> tuple[str, str]:
+    """得到「带宽/吞吐量」段落正文与简短的 throughput_note。"""
+    if bw is None:
+        return _THROUGHPUT_NOTE, _THROUGHPUT_NOTE
+    if bw.ok and bw.megabits_per_second is not None:
+        body = (
+            f"抽样约 {bw.megabits_per_second:.1f} Mbps（{bw.mode} → {bw.target_label}）。"
+            "仅为到该目标与当前窗口条件下的估计，非签约带宽。"
+        )
+        short = f"抽样约 {bw.megabits_per_second:.1f} Mbps（{bw.mode}）。"
+        return body, short
+    if bw.ok:
+        tail = bw.summary or "抽样已完成。"
+        body = f"{tail}（未得到统一 Mbps 汇总）。"
+        return body, body[:200]
+    err = " ".join(x for x in (bw.summary, bw.error) if x).strip() or "失败"
+    body = f"本次抽样未成功：{err}。不作为签约带宽依据。"
+    return body, body[:200]
 
 
 def _mean_jitter_ipdv(rtts: list[float]) -> float | None:
@@ -62,6 +83,7 @@ def compute_network_quality(
     *,
     user_configured_ports: bool,
     enable_ping: bool,
+    bandwidth: BandwidthProbeResult | None = None,
 ) -> NetworkQualityAssessment:
     metric_lines: list[str] = []
 
@@ -69,13 +91,14 @@ def compute_network_quality(
         metric_lines.append("丢包率：—（DNS 失败，未建立有效探测）")
         metric_lines.append("时延/延迟：—")
         metric_lines.append("抖动：—")
-        metric_lines.append(f"带宽/吞吐量：{_THROUGHPUT_NOTE}")
+        tb, tn = _throughput_bandwidth_body(bandwidth)
+        metric_lines.append(f"带宽/吞吐量：{tb}")
         return NetworkQualityAssessment(
             grade="堵塞",
             loss_pct=None,
             avg_latency_ms=None,
             jitter_ms=None,
-            throughput_note=_THROUGHPUT_NOTE,
+            throughput_note=tn,
             metric_lines=metric_lines,
         )
 
@@ -127,7 +150,8 @@ def compute_network_quality(
     else:
         metric_lines.append("抖动：—（样本过少）")
 
-    metric_lines.append(f"带宽/吞吐量：{_THROUGHPUT_NOTE}")
+    tb, tn = _throughput_bandwidth_body(bandwidth)
+    metric_lines.append(f"带宽/吞吐量：{tb}")
 
     all_ports_bad = bool(
         user_configured_ports and port_results and all(p.failure_class != PortFailureClass.OK for p in port_results)
@@ -186,6 +210,6 @@ def compute_network_quality(
         loss_pct=loss_pct,
         avg_latency_ms=avg_lat,
         jitter_ms=jitter_ms,
-        throughput_note=_THROUGHPUT_NOTE,
+        throughput_note=tn,
         metric_lines=metric_lines,
     )

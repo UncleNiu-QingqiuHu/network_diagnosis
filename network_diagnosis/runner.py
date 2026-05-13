@@ -13,6 +13,7 @@ from datetime import datetime
 from pathlib import Path
 
 from network_diagnosis.model.report import (
+    BandwidthProbeResult,
     CaptureInfo,
     DegradationEvent,
     DiagnosticReport,
@@ -24,7 +25,9 @@ from network_diagnosis.model.report import (
     TaskMeta,
     UserInputSnapshot,
 )
-from network_diagnosis.paths import find_tshark, report_root, resolve_tcping_exe
+from network_diagnosis.paths import find_tshark, report_root, resolve_iperf3_exe, resolve_tcping_exe
+from network_diagnosis.probes.bandwidth_http import run_http_bandwidth
+from network_diagnosis.probes.bandwidth_iperf import run_iperf_bandwidth
 from network_diagnosis.probes.dns_probe import pick_tcp_target, resolve_dns
 from network_diagnosis.probes.local_context import collect_local_context
 from network_diagnosis.probes.ping_probe import run_ping
@@ -53,6 +56,112 @@ class RunOptions:
     ping_packet_timeout_ms: int = 2000
     ping_long: bool = False
     long_ping_seconds: int = 30
+    bandwidth_mode: str = "off"
+    bandwidth_http_url: str = "https://speed.cloudflare.com/__down?bytes=25000000"
+    bandwidth_http_parallel: int = 4
+    bandwidth_http_seconds: int = 15
+    bandwidth_iperf_host: str = ""
+    bandwidth_iperf_port: int = 5201
+    bandwidth_iperf_seconds: int = 10
+
+
+def _normalize_bw_mode(mode: str) -> str:
+    m = (mode or "").strip().lower()
+    if m in ("", "off", "none", "no", "false"):
+        return "off"
+    if m in ("http", "http_download", "https"):
+        return "http"
+    if m in ("iperf3", "iperf"):
+        return "iperf3"
+    return "off"
+
+
+def _run_bandwidth(
+    options: RunOptions,
+    report_dir: Path,
+    progress: Callable[[str], None],
+    degradations: list[DegradationEvent],
+) -> BandwidthProbeResult | None:
+    mode = _normalize_bw_mode(options.bandwidth_mode)
+    if mode == "off":
+        return None
+    if mode == "http":
+        url = (options.bandwidth_http_url or "").strip()
+        if not url:
+            degradations.append(
+                DegradationEvent(
+                    code="bandwidth_http_no_url",
+                    message="已选择 HTTP 抽样但未填写 URL。",
+                    detail="",
+                )
+            )
+            return BandwidthProbeResult(
+                mode="http",
+                ok=False,
+                summary="未填写下载 URL。",
+                megabits_per_second=None,
+                bytes_total=None,
+                duration_sec=None,
+                parallel_streams=None,
+                target_label="",
+                error="no url",
+            )
+        progress("正在进行 HTTP 抽样下载（吞吐估算）…")
+        return run_http_bandwidth(
+            url,
+            options.bandwidth_http_parallel,
+            options.bandwidth_http_seconds,
+            report_dir,
+        )
+
+    host = (options.bandwidth_iperf_host or "").strip()
+    if not host:
+        degradations.append(
+            DegradationEvent(
+                code="bandwidth_iperf_no_host",
+                message="已选择 iperf3 但未填写服务器地址。",
+                detail="",
+            )
+        )
+        return BandwidthProbeResult(
+            mode="iperf3",
+            ok=False,
+            summary="未填写 iperf3 服务器主机名或 IP。",
+            megabits_per_second=None,
+            bytes_total=None,
+            duration_sec=None,
+            parallel_streams=None,
+            target_label="",
+            error="no host",
+        )
+    exe = resolve_iperf3_exe()
+    if exe is None:
+        degradations.append(
+            DegradationEvent(
+                code="iperf3_missing",
+                message="未找到 iperf3。",
+                detail="请将 iperf3.exe 放入 ThirdParty/iperf3/ 或安装并加入 PATH。",
+            )
+        )
+        return BandwidthProbeResult(
+            mode="iperf3",
+            ok=False,
+            summary="未找到 iperf3 可执行文件。",
+            megabits_per_second=None,
+            bytes_total=None,
+            duration_sec=None,
+            parallel_streams=None,
+            target_label=f"{host}:{options.bandwidth_iperf_port}",
+            error="iperf3_missing",
+        )
+    progress(f"正在运行 iperf3（{host}:{options.bandwidth_iperf_port}）…")
+    return run_iperf_bandwidth(
+        exe,
+        host,
+        options.bandwidth_iperf_port,
+        options.bandwidth_iperf_seconds,
+        report_dir,
+    )
 
 
 def _is_ip_literal(addr: str) -> bool:
@@ -97,6 +206,8 @@ def _build_gui_summary(
     md_path: Path,
     *,
     user_configured_ports: bool,
+    bandwidth: BandwidthProbeResult | None,
+    bandwidth_mode: str,
 ) -> GuiSummary:
     bullets: list[str] = []
     status = OverallStatus.OK
@@ -143,6 +254,13 @@ def _build_gui_summary(
             if status == OverallStatus.OK:
                 status = OverallStatus.DEGRADED
             bullets.append(d.message)
+
+    bw_mode = _normalize_bw_mode(bandwidth_mode)
+    if bw_mode != "off" and bandwidth is not None:
+        if bandwidth.ok:
+            bullets.append(f"带宽抽样（{bandwidth.mode}）：{bandwidth.summary}")
+        else:
+            bullets.append(f"带宽抽样（{bandwidth.mode}）未成功：{bandwidth.summary}")
 
     if any(d.code == "tcping_missing" for d in degradations) and user_configured_ports:
         status = OverallStatus.FAILED
@@ -310,6 +428,8 @@ def run_diagnostic(options: RunOptions, progress: Callable[[str], None]) -> Diag
                 capture.analysis_summary = "抓包文件分析失败（tshark 调用出错）。"
             progress("抓包摘要分析完成。")
 
+    bw: BandwidthProbeResult | None = _run_bandwidth(options, report_dir, progress, degradations)
+
     finished = datetime.now().astimezone()
     md_path = report_dir / f"network_diagnosis_{task_id}.md"
 
@@ -339,6 +459,13 @@ def run_diagnostic(options: RunOptions, progress: Callable[[str], None]) -> Diag
         ping_long=options.ping_long,
         long_ping_seconds=options.long_ping_seconds,
         ping_packet_timeout_ms=options.ping_packet_timeout_ms,
+        bandwidth_mode=_normalize_bw_mode(options.bandwidth_mode),
+        bandwidth_http_url=options.bandwidth_http_url,
+        bandwidth_http_parallel=options.bandwidth_http_parallel,
+        bandwidth_http_seconds=options.bandwidth_http_seconds,
+        bandwidth_iperf_host=options.bandwidth_iperf_host,
+        bandwidth_iperf_port=options.bandwidth_iperf_port,
+        bandwidth_iperf_seconds=options.bandwidth_iperf_seconds,
     )
     gui = _build_gui_summary(
         dns,
@@ -347,6 +474,8 @@ def run_diagnostic(options: RunOptions, progress: Callable[[str], None]) -> Diag
         degradations,
         md_path,
         user_configured_ports=bool(options.ports),
+        bandwidth=bw,
+        bandwidth_mode=options.bandwidth_mode,
     )
     nq = compute_network_quality(
         dns,
@@ -354,6 +483,7 @@ def run_diagnostic(options: RunOptions, progress: Callable[[str], None]) -> Diag
         port_results,
         user_configured_ports=bool(options.ports),
         enable_ping=options.enable_ping,
+        bandwidth=bw,
     )
     report = DiagnosticReport(
         meta=meta,
@@ -366,6 +496,7 @@ def run_diagnostic(options: RunOptions, progress: Callable[[str], None]) -> Diag
         degradations=degradations,
         gui=gui,
         network_quality=nq,
+        bandwidth=bw,
     )
     write_markdown_report(report, md_path)
     progress(f"Markdown 报告已写入: {md_path}")

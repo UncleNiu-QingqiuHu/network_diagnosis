@@ -7,6 +7,9 @@ import queue
 import subprocess
 import sys
 import threading
+from pathlib import Path
+from urllib.parse import urlparse
+
 import tkinter as tk
 import tkinter.font as tkfont
 from tkinter import messagebox
@@ -29,9 +32,48 @@ from ttkbootstrap.constants import (
 )
 
 from network_diagnosis.model.report import DiagnosticReport, PortFailureClass
-from network_diagnosis.paths import find_tshark, iter_wireshark_installers, resolve_tcping_exe
+from network_diagnosis.paths import (
+    bundle_root,
+    find_tshark,
+    iter_wireshark_installers,
+    resolve_iperf3_exe,
+    resolve_tcping_exe,
+)
 from network_diagnosis.probes.dns_probe import pick_tcp_target
 from network_diagnosis.runner import RunOptions, run_diagnostic
+
+
+def _resolve_window_icon_path() -> Path | None:
+    """任务栏/标题栏图标：`network_diagnosis/images/qingqiu.ico`（与 `gui` 包同级目录 `images`）。"""
+    pkg_root = Path(__file__).resolve().parent.parent
+    candidates: list[Path] = [
+        pkg_root / "images" / "qingqiu.ico",
+    ]
+    root = bundle_root()
+    candidates.append(root / "network_diagnosis" / "images" / "qingqiu.ico")
+    if getattr(sys, "frozen", False):
+        exe_dir = Path(sys.executable).resolve().parent
+        candidates.extend(
+            [
+                exe_dir / "network_diagnosis" / "images" / "qingqiu.ico",
+                exe_dir / "qingqiu.ico",
+            ]
+        )
+    candidates.append(root / "qingqiu.ico")
+    for p in candidates:
+        if p.is_file():
+            return p
+    return None
+
+
+def _try_set_window_icon(win: tk.Misc) -> None:
+    path = _resolve_window_icon_path()
+    if path is None:
+        return
+    try:
+        win.iconbitmap(str(path))
+    except tk.TclError:
+        pass
 
 
 def _parse_ports(text: str) -> list[int]:
@@ -59,14 +101,79 @@ _PORT_CLASS_CN: dict[PortFailureClass, str] = {
 }
 
 
-def _gui_lines_network_quality(rep: DiagnosticReport) -> list[str]:
+def _quality_tag_for_grade(grade: str) -> str:
+    return {
+        "极佳": "quality_grade_exc",
+        "正常": "quality_grade_ok",
+        "较差": "quality_grade_poor",
+        "堵塞": "quality_grade_bad",
+    }.get(grade, "quality_grade_ok")
+
+
+def _gui_oneline_network_quality(rep: DiagnosticReport) -> str:
     nq = rep.network_quality
-    lines = [
-        f"综合评判：{nq.grade}（四档：极佳、正常、较差、堵塞）。",
-        "",
-    ]
-    lines.extend(nq.metric_lines)
-    return lines
+    parts: list[str] = []
+    if nq.loss_pct is not None:
+        parts.append(f"丢包约 {nq.loss_pct:.1f}%")
+    if nq.avg_latency_ms is not None:
+        parts.append(f"平均时延约 {nq.avg_latency_ms:.0f} ms")
+    if nq.jitter_ms is not None:
+        parts.append(f"抖动约 {nq.jitter_ms:.1f} ms")
+    if parts:
+        return "，".join(parts) + "。详情见下方「网络质量与指标」。"
+    return "详见下方「网络质量与指标」。"
+
+
+def _gui_oneline_dns(rep: DiagnosticReport) -> str:
+    dns = rep.dns
+    if dns.error:
+        tail = dns.error if len(dns.error) <= 100 else dns.error[:97] + "…"
+        return f"失败：{tail}"
+    if not dns.addresses:
+        return "未得到可用地址。"
+    first = dns.addresses[0]
+    more = f" 等共 {len(dns.addresses)} 个" if len(dns.addresses) > 1 else ""
+    return f"成功，记录族别 {dns.family}，例：{first}{more}。"
+
+
+def _gui_oneline_ping(rep: DiagnosticReport) -> str:
+    if not rep.user_input.enable_ping:
+        return "未启用 ICMP Ping。"
+    p = rep.ping
+    if p is None:
+        return "无 Ping 统计数据。"
+    if p.attempted <= 0:
+        return "未发起 Ping。"
+    if p.received == 0:
+        return f"无成功回复（已试 {p.attempted} 次，丢失 {p.lost}）。"
+    loss = 100.0 * p.lost / p.attempted
+    if p.rtts_ms:
+        avg = sum(p.rtts_ms) / len(p.rtts_ms)
+        return f"收到 {p.received}/{p.attempted}，丢包约 {loss:.0f}%，平均延迟约 {avg:.0f} ms。"
+    return f"收到 {p.received}/{p.attempted}，丢包约 {loss:.0f}%。"
+
+
+def _gui_oneline_ports(rep: DiagnosticReport) -> str:
+    ui = rep.user_input
+    if not ui.ports:
+        return "未填写端口，未做 TCP 连通性测试。"
+    if any(d.code == "tcping_missing" for d in rep.degradations):
+        return "已填端口，但缺少 tcping.exe，无法探测。"
+    if not rep.ports:
+        return "未得到端口探测结果。"
+    bad = [p for p in rep.ports if p.failure_class != PortFailureClass.OK]
+    if not bad:
+        return f"所测 {len(rep.ports)} 个端口均可建立连接。"
+    return (
+        f"{len(bad)}/{len(rep.ports)} 个端口异常（"
+        + "、".join(str(p.port) for p in bad)
+        + "）。"
+    )
+
+
+def _gui_lines_network_quality(rep: DiagnosticReport) -> list[str]:
+    """明细：仅指标行（整体结论中已含评判档位）。"""
+    return list(rep.network_quality.metric_lines)
 
 
 def _gui_lines_dns(rep: DiagnosticReport) -> list[str]:
@@ -186,13 +293,38 @@ def _gui_lines_capture(rep: DiagnosticReport) -> list[str]:
     return lines
 
 
+def _gui_lines_bandwidth(rep: DiagnosticReport) -> list[str]:
+    ui = rep.user_input
+    b = rep.bandwidth
+    if ui.bandwidth_mode == "off":
+        return [
+            "本轮未启用带宽/吞吐抽样。",
+            "需要时请在左侧选择「HTTP 抽样下载」或「iperf3」（二选一）。",
+        ]
+    if b is None:
+        return ["未得到带宽抽样结果。"]
+    lines = [b.summary]
+    if b.megabits_per_second is not None:
+        lines.append(f"估算平均速率：约 {b.megabits_per_second:.1f} Mbps")
+    if b.bytes_total is not None:
+        lines.append(f"传输字节（如适用）：{b.bytes_total}")
+    if b.parallel_streams is not None:
+        lines.append(f"HTTP 并发连接数：{b.parallel_streams}")
+    if b.log_stdout_path:
+        lines.append(f"详细日志：{b.log_stdout_path}")
+    if not b.ok and b.error:
+        lines.append(f"错误：{b.error}")
+    return lines
+
+
 class NetworkDiagnosisApp(ttk.Window):
     """网络诊断工具主界面"""
     def __init__(self) -> None:
         # 主题
         super().__init__(themename="flatly")
+        _try_set_window_icon(self)
         # 窗口标题
-        self.title("网络诊断工具v1.0.0（开发：Mr. Z /联系方式：mr.zed@qq.com /QQ：40061980）")
+        self.title("网络诊断工具v1.0.0（作者：Mr. Z  联系方式：mr.zed@qq.com  QQ：40061980）")
         # 最小窗口大小
         self.minsize(1260, 720)
         # 默认窗口大小：每次启动在主屏居中（大于屏幕时先缩放到可放入再居中）
@@ -235,10 +367,8 @@ class NetworkDiagnosisApp(ttk.Window):
         pw_main.grid(row=0, column=0, sticky=NSEW)
 
         left = ttk.Frame(pw_main, padding=(0, 0, 8, 0))
-        mid = ttk.Frame(pw_main, padding=(8, 0, 8, 0))
         right = ttk.Frame(pw_main, padding=(8, 0, 0, 0))
         pw_main.add(left, weight=1)
-        pw_main.add(mid, weight=1)
         pw_main.add(right, weight=1)
         self._pw_main = pw_main
 
@@ -258,13 +388,13 @@ class NetworkDiagnosisApp(ttk.Window):
         ttk.Label(lf_target, text="TCP 端口（可选）", bootstyle=SECONDARY).grid(
             row=1, column=0, sticky=W, padx=(0, 12), pady=(0, 2)
         )
-        self.var_ports = tk.StringVar(value="")
+        self.var_ports = tk.StringVar(value="80,443")
         ttk.Entry(lf_target, textvariable=self.var_ports, bootstyle=PRIMARY).grid(
             row=1, column=1, sticky=EW, pady=(0, 2)
         )
         ttk.Label(
             lf_target,
-            text="留空则不测端口；填写时用英文逗号分隔，例如 80,443",
+            text="默认 80,443；留空则不测端口；多个端口用英文逗号分隔",
             bootstyle=SECONDARY,
             font=("Microsoft YaHei UI", 10),
         ).grid(row=2, column=1, sticky=W)
@@ -349,49 +479,123 @@ class NetworkDiagnosisApp(ttk.Window):
             bootstyle="round-toggle",
         ).grid(row=0, column=2, sticky=W)
 
+        lf_bw = ttk.Labelframe(left, text="带宽/吞吐（可选，二选一）", padding=(12, 10, 12, 10))
+        lf_bw.pack(fill=tk.X, pady=(0, 8))
+        bw_top = ttk.Frame(lf_bw)
+        bw_top.pack(fill=tk.X)
+        self.var_bw_mode = tk.StringVar(value="off")
+        ttk.Radiobutton(bw_top, text="不进行测速", variable=self.var_bw_mode, value="off").pack(
+            side=tk.LEFT, padx=(0, 10)
+        )
+        ttk.Radiobutton(bw_top, text="HTTP 抽样下载", variable=self.var_bw_mode, value="http").pack(
+            side=tk.LEFT, padx=(0, 10)
+        )
+        ttk.Radiobutton(bw_top, text="iperf3", variable=self.var_bw_mode, value="iperf3").pack(side=tk.LEFT)
+
+        self.var_bw_http_url = tk.StringVar(
+            value="https://speed.cloudflare.com/__down?bytes=25000000"
+        )
+        self.var_bw_http_parallel = tk.IntVar(value=4)
+        self.var_bw_http_seconds = tk.IntVar(value=15)
+
+        self._frm_bw_http = ttk.Frame(lf_bw)
+        http_row1 = ttk.Frame(self._frm_bw_http)
+        http_row1.pack(fill=tk.X)
+        http_row1.columnconfigure(1, weight=1)
+        ttk.Label(http_row1, text="HTTP URL", bootstyle=SECONDARY).grid(row=0, column=0, sticky=W, padx=(0, 8))
+        self.ent_bw_http_url = ttk.Entry(http_row1, textvariable=self.var_bw_http_url, bootstyle=PRIMARY)
+        self.ent_bw_http_url.grid(row=0, column=1, sticky=EW)
+
+        http_row2 = ttk.Frame(self._frm_bw_http)
+        http_row2.pack(fill=tk.X, pady=(6, 0))
+        ttk.Label(http_row2, text="并发连接", bootstyle=SECONDARY).pack(side=tk.LEFT)
+        self.sb_bw_http_parallel = ttk.Spinbox(
+            http_row2, from_=1, to=16, textvariable=self.var_bw_http_parallel, width=6
+        )
+        self.sb_bw_http_parallel.pack(side=tk.LEFT, padx=(6, 16))
+        ttk.Label(http_row2, text="持续时间 (秒)", bootstyle=SECONDARY).pack(side=tk.LEFT)
+        self.sb_bw_http_seconds = ttk.Spinbox(
+            http_row2, from_=3, to=300, textvariable=self.var_bw_http_seconds, width=6
+        )
+        self.sb_bw_http_seconds.pack(side=tk.LEFT, padx=(6, 0))
+
+        self.var_bw_iperf_host = tk.StringVar(value="")
+        self.var_bw_iperf_port = tk.IntVar(value=5201)
+        self.var_bw_iperf_seconds = tk.IntVar(value=10)
+
+        self._frm_bw_iperf = ttk.Frame(lf_bw)
+        ip_row = ttk.Frame(self._frm_bw_iperf)
+        ip_row.pack(fill=tk.X)
+        ip_row.columnconfigure(1, weight=1)
+        ttk.Label(ip_row, text="iperf 服务器", bootstyle=SECONDARY).grid(row=0, column=0, sticky=W, padx=(0, 8))
+        self.ent_bw_iperf_host = ttk.Entry(ip_row, textvariable=self.var_bw_iperf_host, bootstyle=PRIMARY)
+        self.ent_bw_iperf_host.grid(row=0, column=1, sticky=EW)
+        ttk.Label(ip_row, text="端口", bootstyle=SECONDARY).grid(row=0, column=2, sticky=W, padx=(12, 6))
+        self.sb_bw_iperf_port = ttk.Spinbox(
+            ip_row, from_=1, to=65535, textvariable=self.var_bw_iperf_port, width=7
+        )
+        self.sb_bw_iperf_port.grid(row=0, column=3, sticky=W)
+        ttk.Label(ip_row, text="时长 (秒)", bootstyle=SECONDARY).grid(
+            row=1, column=0, sticky=W, padx=(0, 8), pady=(6, 0)
+        )
+        self.sb_bw_iperf_seconds = ttk.Spinbox(
+            ip_row, from_=2, to=600, textvariable=self.var_bw_iperf_seconds, width=6
+        )
+        self.sb_bw_iperf_seconds.grid(row=1, column=1, sticky=W, pady=(6, 0))
+
+        self.var_bw_mode.trace_add("write", lambda *_: self._sync_bw_panels())
+        self._sync_bw_panels()
+
         ttk.Separator(left, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=(4, 10))
 
         actions = ttk.Frame(left)
         actions.pack(fill=tk.X, pady=(0, 6))
-        actions.columnconfigure(0, weight=1)
-        actions.columnconfigure(1, weight=1)
+        for c in (0, 1, 2, 3):
+            actions.columnconfigure(c, weight=1)
 
-        big_btn_kwargs = {"width": 18}
+        big_btn_kwargs = {"width": 12}
 
-        self.btn_run = ttk.Button(
-            actions,
-            text="开始诊断",
-            command=self._on_run,
-            bootstyle=SUCCESS,
-            **big_btn_kwargs,
-        )
-        self.btn_run.grid(row=0, column=0, sticky=EW, padx=(0, 6), pady=(0, 8))
         ttk.Button(
             actions,
             text="安装 Wireshark",
             command=self._open_wireshark_installer,
             bootstyle=INFO,
             **big_btn_kwargs,
-        ).grid(row=0, column=1, sticky=EW, padx=(6, 0), pady=(0, 8))
-
+        ).grid(row=0, column=0, sticky=EW, padx=(0, 3), pady=(0, 8))
         ttk.Button(
             actions,
             text="检测 Tcping",
             command=self._probe_tcping,
             bootstyle=SECONDARY,
             **big_btn_kwargs,
-        ).grid(row=1, column=0, sticky=EW, padx=(0, 6))
+        ).grid(row=0, column=1, sticky=EW, padx=(3, 3), pady=(0, 8))
         ttk.Button(
             actions,
             text="检测 Tshark",
             command=self._probe_tshark,
             bootstyle=SECONDARY,
             **big_btn_kwargs,
-        ).grid(row=1, column=1, sticky=EW, padx=(6, 0))
+        ).grid(row=0, column=2, sticky=EW, padx=(3, 3), pady=(0, 8))
+        ttk.Button(
+            actions,
+            text="检测 Iperf3",
+            command=self._probe_iperf3,
+            bootstyle=SECONDARY,
+            **big_btn_kwargs,
+        ).grid(row=0, column=3, sticky=EW, padx=(3, 0), pady=(0, 8))
+
+        self.btn_run = ttk.Button(
+            actions,
+            text="开始诊断",
+            command=self._on_run,
+            bootstyle=SUCCESS,
+            width=14,
+        )
+        self.btn_run.grid(row=1, column=0, columnspan=4, sticky=EW, pady=(0, 0))
 
         status_shell = ttk.Labelframe(left, text="任务状态", padding=(12, 10, 12, 10), bootstyle=SECONDARY)
         self._status_shell = status_shell
-        status_shell.pack(fill=BOTH, expand=True, pady=(8, 8))
+        status_shell.pack(fill=tk.X, pady=(8, 0))
         status_bar = ttk.Frame(status_shell)
         status_bar.pack(fill=tk.X)
         self.lbl_status = ttk.Label(
@@ -400,7 +604,7 @@ class NetworkDiagnosisApp(ttk.Window):
             bootstyle=SECONDARY,
             anchor=W,
             font=self._status_font_normal,
-            wraplength=320,
+            wraplength=520,
             justify=tk.LEFT,
         )
         self.lbl_status.pack(fill=tk.X)
@@ -408,11 +612,27 @@ class NetworkDiagnosisApp(ttk.Window):
             status_shell,
             mode="indeterminate",
             bootstyle=WARNING,
-            length=320,
+            length=400,
         )
 
+        lf_log = ttk.Labelframe(left, text="进度详情", padding=(10, 8, 10, 10))
+        lf_log.pack(fill=BOTH, expand=True, pady=(8, 0))
+        lf_log.rowconfigure(0, weight=1)
+        lf_log.columnconfigure(0, weight=1)
+
+        self.txt_log = ScrolledText(
+            lf_log,
+            height=14,
+            wrap=tk.WORD,
+            font=("Consolas", 11),
+            relief=tk.FLAT,
+            padx=8,
+            pady=8,
+        )
+        self.txt_log.grid(row=0, column=0, sticky=NSEW)
+
         btn2 = ttk.Frame(left)
-        btn2.pack(fill=tk.X, pady=(0, 0))
+        btn2.pack(fill=tk.X, pady=(8, 0))
         self.btn_open_md = ttk.Button(
             btn2,
             text="打开技术报告 (Markdown)",
@@ -430,11 +650,11 @@ class NetworkDiagnosisApp(ttk.Window):
         )
         self.btn_open_dir.pack(side=tk.LEFT, padx=(10, 0))
 
-        # —— 中列：结论 ——
-        mid.rowconfigure(0, weight=1)
-        mid.columnconfigure(0, weight=1)
+        # —— 右侧：诊断结果 ——
+        right.rowconfigure(0, weight=1)
+        right.columnconfigure(0, weight=1)
 
-        lf_summary = ttk.Labelframe(mid, text="诊断结果", padding=(10, 8, 10, 10))
+        lf_summary = ttk.Labelframe(right, text="诊断结果", padding=(10, 8, 10, 10))
         lf_summary.grid(row=0, column=0, sticky=NSEW)
         lf_summary.rowconfigure(0, weight=1)
         lf_summary.columnconfigure(0, weight=1)
@@ -451,37 +671,55 @@ class NetworkDiagnosisApp(ttk.Window):
         self.txt_summary.grid(row=0, column=0, sticky=NSEW)
         self._setup_summary_text_tags()
 
-        # —— 右列：进度详情 ——
-        right.rowconfigure(0, weight=1)
-        right.columnconfigure(0, weight=1)
-
-        lf_log = ttk.Labelframe(right, text="进度详情", padding=(10, 8, 10, 10))
-        lf_log.grid(row=0, column=0, sticky=NSEW)
-        lf_log.rowconfigure(0, weight=1)
-        lf_log.columnconfigure(0, weight=1)
-
-        self.txt_log = ScrolledText(
-            lf_log,
-            height=22,
-            wrap=tk.WORD,
-            font=("Consolas", 11),
-            relief=tk.FLAT,
-            padx=8,
-            pady=8,
-        )
-        self.txt_log.grid(row=0, column=0, sticky=NSEW)
-
         self._last_md: str | None = None
         self._last_dir: str | None = None
 
         self.after(200, self._poll_queue)
         self.after_idle(self._init_main_sash)
 
+    def _sync_bw_panels(self) -> None:
+        m = self.var_bw_mode.get()
+        self._frm_bw_http.pack_forget()
+        self._frm_bw_iperf.pack_forget()
+        if m == "http":
+            self._frm_bw_http.pack(fill=tk.X, pady=(8, 0))
+        elif m == "iperf3":
+            self._frm_bw_iperf.pack(fill=tk.X, pady=(8, 0))
+
     def _setup_summary_text_tags(self) -> None:
         st = self.txt_summary
         st.tag_configure("sec_title", font=("Microsoft YaHei UI", 12, "bold"))
         st.tag_configure("headline", font=("Microsoft YaHei UI", 13, "bold"))
         st.tag_configure("body", font=("Microsoft YaHei UI", 12))
+        st.tag_configure(
+            "quality_grade_exc",
+            font=("Microsoft YaHei UI", 13, "bold"),
+            background="#d4edda",
+            foreground="#155724",
+        )
+        st.tag_configure(
+            "quality_grade_ok",
+            font=("Microsoft YaHei UI", 13, "bold"),
+            background="#d1ecf1",
+            foreground="#0c5460",
+        )
+        st.tag_configure(
+            "quality_grade_poor",
+            font=("Microsoft YaHei UI", 13, "bold"),
+            background="#fff3cd",
+            foreground="#856404",
+        )
+        st.tag_configure(
+            "quality_grade_bad",
+            font=("Microsoft YaHei UI", 13, "bold"),
+            background="#f8d7da",
+            foreground="#721c24",
+        )
+        st.tag_configure(
+            "overall_label",
+            font=("Microsoft YaHei UI", 12, "bold"),
+            foreground="#2c3e50",
+        )
 
     def _centered_geometry(self, width: int, height: int) -> str:
         sw = self.winfo_screenwidth()
@@ -493,7 +731,7 @@ class NetworkDiagnosisApp(ttk.Window):
         return f"{w}x{h}+{x}+{y}"
 
     def _init_main_sash(self) -> None:
-        """初次分配三列宽度为 1:1:1（按 Panedwindow 实际宽度，而非整窗宽度）。"""
+        """初次分配左右两栏为 1:1（按 Panedwindow 实际宽度）。"""
         self._init_main_sash_attempt(0)
 
     def _init_main_sash_attempt(self, attempt: int) -> None:
@@ -506,17 +744,14 @@ class NetworkDiagnosisApp(ttk.Window):
             if w <= 10:
                 self.after(60, lambda: self._init_main_sash_attempt(attempt + 1))
                 return
-            a = w // 3
-            b = (2 * w) // 3
-            pw.sashpos(0, a)
-            pw.sashpos(1, b)
+            pw.sashpos(0, w // 2)
         except tk.TclError:
             pass
 
     def _start_running_ui(self) -> None:
         self._status_shell.configure(bootstyle=WARNING)
         self.lbl_status.configure(
-            text="正在运行诊断\n请留意最右侧「进度详情」中的实时输出。",
+            text="正在运行诊断\n请留意左侧「进度详情」中的实时输出。",
             bootstyle=WARNING,
             font=self._status_font_running,
         )
@@ -555,6 +790,17 @@ class NetworkDiagnosisApp(ttk.Window):
                 "tshark",
                 "未找到 tshark。请先安装 Wireshark（含 Npcap），"
                 "或使用「打开 Wireshark 安装包」。",
+            )
+
+    def _probe_iperf3(self) -> None:
+        p = resolve_iperf3_exe()
+        if p:
+            messagebox.showinfo("Iperf3", f"已找到:\n{p}")
+        else:
+            messagebox.showwarning(
+                "Iperf3",
+                "未找到 iperf3。\n请将 iperf3.exe 置于 ThirdParty/iperf3/，"
+                "或从系统 PATH 中安装 iperf3。官方参考：https://iperf.fr/",
             )
 
     def _open_wireshark_installer(self) -> None:
@@ -608,6 +854,21 @@ class NetworkDiagnosisApp(ttk.Window):
             messagebox.showwarning("校验", "端口列表格式不正确。")
             return
 
+        bw_mode = self.var_bw_mode.get()
+        if bw_mode == "http":
+            u = self.var_bw_http_url.get().strip()
+            if not u:
+                messagebox.showwarning("校验", "已选择 HTTP 抽样，请填写下载 URL。")
+                return
+            pr = urlparse(u)
+            if pr.scheme not in ("http", "https"):
+                messagebox.showwarning("校验", "HTTP URL 须以 http:// 或 https:// 开头。")
+                return
+        elif bw_mode == "iperf3":
+            if not self.var_bw_iperf_host.get().strip():
+                messagebox.showwarning("校验", "已选择 iperf3，请填写服务器主机名或 IP。")
+                return
+
         opts = RunOptions(
             target_host=host,
             ports=ports,
@@ -620,6 +881,13 @@ class NetworkDiagnosisApp(ttk.Window):
             ping_packet_timeout_ms=int(self.var_ping_wait_ms.get()),
             ping_long=bool(self.var_ping_long.get()),
             long_ping_seconds=int(self.var_long_ping_sec.get()),
+            bandwidth_mode=bw_mode,
+            bandwidth_http_url=self.var_bw_http_url.get().strip(),
+            bandwidth_http_parallel=int(self.var_bw_http_parallel.get()),
+            bandwidth_http_seconds=int(self.var_bw_http_seconds.get()),
+            bandwidth_iperf_host=self.var_bw_iperf_host.get().strip(),
+            bandwidth_iperf_port=int(self.var_bw_iperf_port.get()),
+            bandwidth_iperf_seconds=int(self.var_bw_iperf_seconds.get()),
         )
 
         self.txt_log.delete("1.0", END)
@@ -678,11 +946,26 @@ class NetworkDiagnosisApp(ttk.Window):
                 t.insert(END, line + "\n", ("body",))
             t.insert(END, "\n")
 
-        sec("整体结论")
-        t.insert(END, g.headline + "\n", ("headline",))
-        for b in g.bullets:
-            t.insert(END, "• " + b + "\n", ("body",))
-        t.insert(END, "\n")
+        def insert_overall_block() -> None:
+            qg = rep.network_quality.grade
+            qtag = _quality_tag_for_grade(qg)
+            t.insert(END, g.headline + "\n\n", ("headline",))
+
+            t.insert(END, "· 网络质量 ", ("overall_label",))
+            t.insert(END, "评判：", ("body",))
+            t.insert(END, qg, (qtag,))
+            t.insert(END, "  " + _gui_oneline_network_quality(rep) + "\n\n", ("body",))
+
+            t.insert(END, "· 域名解析 ", ("overall_label",))
+            t.insert(END, _gui_oneline_dns(rep) + "\n\n", ("body",))
+
+            t.insert(END, "· Ping 结果 ", ("overall_label",))
+            t.insert(END, _gui_oneline_ping(rep) + "\n\n", ("body",))
+
+            t.insert(END, "· 端口连接 ", ("overall_label",))
+            t.insert(END, _gui_oneline_ports(rep) + "\n\n", ("body",))
+
+        insert_overall_block()
 
         sec("网络质量与指标")
         body_lines(_gui_lines_network_quality(rep))
@@ -698,6 +981,9 @@ class NetworkDiagnosisApp(ttk.Window):
 
         sec("抓包结果")
         body_lines(_gui_lines_capture(rep))
+
+        sec("带宽/吞吐抽样")
+        body_lines(_gui_lines_bandwidth(rep))
 
         t.insert(
             END,
@@ -716,7 +1002,7 @@ class NetworkDiagnosisApp(ttk.Window):
 
         if g.overall.value == "ok":
             self.lbl_status.configure(
-                text=f"完成（整体正常）（网络质量：{q}）",
+                text=f"完成（网络质量：{q}）",
                 bootstyle=SUCCESS,
             )
         elif g.overall.value == "degraded":

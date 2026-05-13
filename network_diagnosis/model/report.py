@@ -61,6 +61,13 @@ class UserInputSnapshot:
     ping_long: bool = False
     long_ping_seconds: int = 30
     ping_packet_timeout_ms: int = 2000
+    bandwidth_mode: str = "off"
+    bandwidth_http_url: str = ""
+    bandwidth_http_parallel: int = 4
+    bandwidth_http_seconds: int = 15
+    bandwidth_iperf_host: str = ""
+    bandwidth_iperf_port: int = 5201
+    bandwidth_iperf_seconds: int = 10
 
 
 @dataclass
@@ -150,6 +157,24 @@ class NetworkQualityAssessment:
 
 
 @dataclass
+class BandwidthProbeResult:
+    """可选带宽/吞吐抽样结果（HTTP 多连接或 iperf3）。"""
+
+    mode: str
+    ok: bool
+    summary: str
+    megabits_per_second: float | None
+    bytes_total: int | None
+    duration_sec: float | None
+    parallel_streams: int | None
+    target_label: str
+    error: str
+    log_stdout_path: Path | None = None
+    log_stderr_path: Path | None = None
+    command: list[str] | None = None
+
+
+@dataclass
 class GuiSummary:
     overall: OverallStatus
     headline: str
@@ -169,3 +194,4 @@ class DiagnosticReport:
     degradations: list[DegradationEvent]
     gui: GuiSummary
     network_quality: NetworkQualityAssessment
+    bandwidth: BandwidthProbeResult | None = None
