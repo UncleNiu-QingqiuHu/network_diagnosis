@@ -4,9 +4,28 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 from pathlib import Path
 
 from network_diagnosis.model.report import BandwidthProbeResult
+
+
+def _win32_subprocess_kw() -> dict:
+    if sys.platform != "win32":
+        return {}
+    out: dict = {}
+    try:
+        si = subprocess.STARTUPINFO()
+        si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        si.wShowWindow = subprocess.SW_HIDE  # type: ignore[attr-defined]
+        out["startupinfo"] = si
+    except (AttributeError, TypeError):
+        pass
+    try:
+        out["creationflags"] = subprocess.CREATE_NO_WINDOW  # type: ignore[attr-defined]
+    except AttributeError:
+        pass
+    return out
 
 
 def run_iperf_bandwidth(
@@ -44,6 +63,7 @@ def run_iperf_bandwidth(
             text=True,
             encoding="utf-8",
             errors="replace",
+            **_win32_subprocess_kw(),
         )
     except subprocess.TimeoutExpired:
         err_path.write_text("iperf3 subprocess timeout", encoding="utf-8")

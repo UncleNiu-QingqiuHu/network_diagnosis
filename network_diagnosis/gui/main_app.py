@@ -41,6 +41,7 @@ from network_diagnosis.paths import (
 )
 from network_diagnosis.probes.dns_probe import pick_tcp_target
 from network_diagnosis.runner import RunOptions, run_diagnostic
+from network_diagnosis.version import APP_VERSION
 
 
 def _resolve_window_icon_path() -> Path | None:
@@ -534,7 +535,9 @@ class NetworkDiagnosisApp(ttk.Window):
         super().__init__(themename="flatly")
         _try_set_window_icon(self)
         # 窗口标题
-        self.title("网络诊断工具v1.0.0（作者：Mr. Z  联系方式：mr.zed@qq.com  QQ：40061980）")
+        self.title(
+            f"网络诊断工具v{APP_VERSION}（作者：Mr. Z  联系方式：mr.zed@qq.com  QQ：40061980）"
+        )
         # 最小窗口大小
         self.minsize(1260, 720)
         # 默认窗口大小：每次启动在主屏居中（大于屏幕时先缩放到可放入再居中）
