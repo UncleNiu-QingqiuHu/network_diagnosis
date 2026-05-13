@@ -582,8 +582,14 @@ class NetworkDiagnosisApp(ttk.Window):
         pw_main.add(right, weight=1)
         self._pw_main = pw_main
 
-        # —— 左侧：表单 + 状态 + 报告按钮 ——
-        lf_target = ttk.Labelframe(left, text="探测目标", padding=(12, 10, 12, 10))
+        # —— 左侧：表单与控制 ——
+        left.columnconfigure(0, weight=1)
+        left.rowconfigure(0, weight=1)
+
+        ctrl_panel = ttk.Frame(left)
+        ctrl_panel.grid(row=0, column=0, sticky=tk.N + tk.E + tk.W)
+
+        lf_target = ttk.Labelframe(ctrl_panel, text="探测目标", padding=(12, 10, 12, 10))
         lf_target.pack(fill=tk.X, pady=(0, 8))
         lf_target.columnconfigure(1, weight=1)
 
@@ -609,7 +615,7 @@ class NetworkDiagnosisApp(ttk.Window):
             font=("Microsoft YaHei UI", 10),
         ).grid(row=2, column=1, sticky=W)
 
-        lf_opts = ttk.Labelframe(left, text="探测选项", padding=(12, 10, 12, 12))
+        lf_opts = ttk.Labelframe(ctrl_panel, text="探测选项", padding=(12, 10, 12, 12))
         lf_opts.pack(fill=tk.X, pady=(0, 8))
         for c in (1, 3):
             lf_opts.columnconfigure(c, weight=1)
@@ -653,44 +659,45 @@ class NetworkDiagnosisApp(ttk.Window):
             textvariable=self.var_ping_wait_ms,
             width=7,
         ).pack(side=tk.LEFT, padx=(4, 14))
-
-        long_ping_row = ttk.Frame(lf_opts)
-        long_ping_row.grid(row=2, column=0, columnspan=4, sticky=W, pady=(6, 0))
         ttk.Checkbutton(
-            long_ping_row,
+            ping_row,
+            text="ICMP Ping",
+            variable=self.var_ping,
+            bootstyle="round-toggle",
+        ).pack(side=tk.LEFT, padx=(4, 0))
+
+        chk_row = ttk.Frame(lf_opts)
+        chk_row.grid(row=2, column=0, columnspan=4, sticky=EW, pady=(10, 0))
+        ttk.Checkbutton(
+            chk_row,
             text="长 Ping",
             variable=self.var_ping_long,
             bootstyle="round-toggle",
         ).pack(side=tk.LEFT, padx=(0, 8))
         ttk.Spinbox(
-            long_ping_row, from_=5, to=600, textvariable=self.var_long_ping_sec, width=5
+            chk_row, from_=5, to=600, textvariable=self.var_long_ping_sec, width=5
         ).pack(side=tk.LEFT, padx=(0, 4))
-        ttk.Label(long_ping_row, text="秒（覆盖上方「Ping 次数」）").pack(side=tk.LEFT)
-
-        chk_row = ttk.Frame(lf_opts)
-        chk_row.grid(row=3, column=0, columnspan=4, sticky=EW, pady=(10, 0))
-        chk_row.columnconfigure(0, weight=1)
-        ttk.Checkbutton(
+        ttk.Label(
             chk_row,
-            text="ICMP Ping",
-            variable=self.var_ping,
-            bootstyle="round-toggle",
-        ).grid(row=0, column=0, sticky=W, padx=(0, 20))
+            text="秒（覆盖「Ping 次数」）",
+            bootstyle=SECONDARY,
+            font=("Microsoft YaHei UI", 10),
+        ).pack(side=tk.LEFT, padx=(0, 14))
         ttk.Checkbutton(
             chk_row,
             text="抓包",
             variable=self.var_capture,
             bootstyle="round-toggle",
-        ).grid(row=0, column=1, sticky=W, padx=(0, 20))
+        ).pack(side=tk.LEFT, padx=(0, 14))
         ttk.Checkbutton(
             chk_row,
             text="优先 IPv6",
             variable=self.var_ipv6,
             bootstyle="round-toggle",
-        ).grid(row=0, column=2, sticky=W)
+        ).pack(side=tk.LEFT, padx=(0, 14))
 
         tr_row = ttk.Frame(lf_opts)
-        tr_row.grid(row=4, column=0, columnspan=4, sticky=W, pady=(8, 0))
+        tr_row.grid(row=3, column=0, columnspan=4, sticky=W, pady=(8, 0))
         self.var_traceroute = tk.BooleanVar(value=False)
         self.var_tr_hops = tk.IntVar(value=30)
         self.var_tr_wait_ms = tk.IntVar(value=4000)
@@ -714,7 +721,7 @@ class NetworkDiagnosisApp(ttk.Window):
             width=7,
         ).pack(side=tk.LEFT, padx=(4, 0))
 
-        lf_bw = ttk.Labelframe(left, text="带宽/吞吐（可选，二选一）", padding=(12, 10, 12, 10))
+        lf_bw = ttk.Labelframe(ctrl_panel, text="带宽/吞吐（可选，二选一）", padding=(12, 10, 12, 10))
         lf_bw.pack(fill=tk.X, pady=(0, 8))
         bw_top = ttk.Frame(lf_bw)
         bw_top.pack(fill=tk.X)
@@ -781,10 +788,10 @@ class NetworkDiagnosisApp(ttk.Window):
         self.var_bw_mode.trace_add("write", lambda *_: self._sync_bw_panels())
         self._sync_bw_panels()
 
-        lf_adv = ttk.Labelframe(left, text="进阶探测（可选，可能较慢）", padding=(12, 10, 12, 10))
+        lf_adv = ttk.Labelframe(ctrl_panel, text="进阶探测（可选，可能较慢）", padding=(12, 10, 12, 10))
         lf_adv.pack(fill=tk.X, pady=(0, 8))
         lf_adv.columnconfigure(1, weight=1)
-        self.var_optional_dns = tk.StringVar(value="")
+        self.var_optional_dns = tk.StringVar(value="223.5.5.5")
         ttk.Label(lf_adv, text="指定 DNS（与系统解析对比）", bootstyle=SECONDARY).grid(
             row=0, column=0, sticky=W, padx=(0, 8), pady=(0, 6)
         )
@@ -837,9 +844,9 @@ class NetworkDiagnosisApp(ttk.Window):
             bootstyle="round-toggle",
         ).pack(side=tk.LEFT, padx=(0, 0))
 
-        ttk.Separator(left, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=(4, 10))
+        ttk.Separator(ctrl_panel, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=(4, 10))
 
-        actions = ttk.Frame(left)
+        actions = ttk.Frame(ctrl_panel)
         actions.pack(fill=tk.X, pady=(0, 6))
         for c in (0, 1, 2, 3):
             actions.columnconfigure(c, weight=1)
@@ -884,7 +891,7 @@ class NetworkDiagnosisApp(ttk.Window):
         )
         self.btn_run.grid(row=1, column=0, columnspan=4, sticky=EW, pady=(0, 0))
 
-        status_shell = ttk.Labelframe(left, text="任务状态", padding=(12, 10, 12, 10), bootstyle=SECONDARY)
+        status_shell = ttk.Labelframe(ctrl_panel, text="任务状态", padding=(12, 10, 12, 10), bootstyle=SECONDARY)
         self._status_shell = status_shell
         status_shell.pack(fill=tk.X, pady=(8, 0))
         status_bar = ttk.Frame(status_shell)
@@ -907,7 +914,7 @@ class NetworkDiagnosisApp(ttk.Window):
         )
 
         btn2 = ttk.Frame(left)
-        btn2.pack(side=tk.BOTTOM, fill=tk.X, pady=(8, 0))
+        btn2.grid(row=1, column=0, sticky=EW, pady=(8, 0))
         self.btn_open_md = ttk.Button(
             btn2,
             text="打开技术报告 (Markdown)",
@@ -925,28 +932,13 @@ class NetworkDiagnosisApp(ttk.Window):
         )
         self.btn_open_dir.pack(side=tk.LEFT, padx=(10, 0))
 
-        lf_log = ttk.Labelframe(left, text="进度详情", padding=(10, 8, 10, 10))
-        lf_log.pack(fill=BOTH, expand=True, pady=(8, 0))
-        lf_log.rowconfigure(0, weight=1)
-        lf_log.columnconfigure(0, weight=1)
-
-        self.txt_log = ScrolledText(
-            lf_log,
-            height=14,
-            wrap=tk.WORD,
-            font=("Consolas", 11),
-            relief=tk.FLAT,
-            padx=8,
-            pady=8,
-        )
-        self.txt_log.grid(row=0, column=0, sticky=NSEW)
-
-        # —— 右侧：诊断结果 ——
-        right.rowconfigure(0, weight=1)
+        # —— 右侧：诊断结果 + 进度详情 ——
         right.columnconfigure(0, weight=1)
+        right.rowconfigure(0, weight=1)
+        right.rowconfigure(1, weight=1)
 
         lf_summary = ttk.Labelframe(right, text="诊断结果", padding=(10, 8, 10, 10))
-        lf_summary.grid(row=0, column=0, sticky=NSEW)
+        lf_summary.grid(row=0, column=0, sticky=NSEW, pady=(0, 8))
         lf_summary.rowconfigure(0, weight=1)
         lf_summary.columnconfigure(0, weight=1)
 
@@ -961,6 +953,22 @@ class NetworkDiagnosisApp(ttk.Window):
         )
         self.txt_summary.grid(row=0, column=0, sticky=NSEW)
         self._setup_summary_text_tags()
+
+        lf_log = ttk.Labelframe(right, text="进度详情", padding=(10, 8, 10, 10))
+        lf_log.grid(row=1, column=0, sticky=NSEW)
+        lf_log.rowconfigure(0, weight=1)
+        lf_log.columnconfigure(0, weight=1)
+
+        self.txt_log = ScrolledText(
+            lf_log,
+            height=8,
+            wrap=tk.WORD,
+            font=("Consolas", 11),
+            relief=tk.FLAT,
+            padx=8,
+            pady=8,
+        )
+        self.txt_log.grid(row=0, column=0, sticky=NSEW)
 
         self._last_md: str | None = None
         self._last_dir: str | None = None
@@ -1042,7 +1050,7 @@ class NetworkDiagnosisApp(ttk.Window):
     def _start_running_ui(self) -> None:
         self._status_shell.configure(bootstyle=WARNING)
         self.lbl_status.configure(
-            text="正在运行诊断\n请留意左侧「进度详情」中的实时输出。",
+            text="正在运行诊断\n请留意右侧「进度详情」中的实时输出。",
             bootstyle=WARNING,
             font=self._status_font_running,
         )
