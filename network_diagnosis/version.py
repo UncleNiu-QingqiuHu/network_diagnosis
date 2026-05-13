@@ -6,3 +6,8 @@
 
 APP_VERSION = "1.0.0"
 DESIGN_DOC_REF = "network-diagnostic-tool-design_v1.4"
+
+APP_DISPLAY_NAME = "网络诊断工具"
+APP_DISPLAY_NAME_EN = "QQHU Network Diagnosis"
+AUTHOR_SUMMARY = "Mr. Z  ·  mr.zed@qq.com  ·  QQ：40061980"
+APP_DESCRIPTION = "Windows 桌面网络与连通性诊断工具（含多模块扩展占位）。"

@@ -7,13 +7,12 @@ import queue
 import subprocess
 import sys
 import threading
-from pathlib import Path
-from urllib.parse import urlparse
-
 import tkinter as tk
 import tkinter.font as tkfont
+from pathlib import Path
 from tkinter import messagebox
 from tkinter.scrolledtext import ScrolledText
+from urllib.parse import urlparse
 
 import ttkbootstrap as ttk
 from ttkbootstrap.constants import (
@@ -22,6 +21,7 @@ from ttkbootstrap.constants import (
     END,
     EW,
     INFO,
+    INVERSE,
     NSEW,
     OUTLINE,
     PRIMARY,
@@ -41,7 +41,14 @@ from network_diagnosis.paths import (
 )
 from network_diagnosis.probes.dns_probe import pick_tcp_target
 from network_diagnosis.runner import RunOptions, run_diagnostic
-from network_diagnosis.version import APP_VERSION
+from network_diagnosis.version import (
+    APP_DESCRIPTION,
+    APP_DISPLAY_NAME,
+    APP_DISPLAY_NAME_EN,
+    APP_VERSION,
+    AUTHOR_SUMMARY,
+    DESIGN_DOC_REF,
+)
 
 
 def _resolve_window_icon_path() -> Path | None:
@@ -528,20 +535,36 @@ def _gui_lines_advanced(rep: DiagnosticReport) -> list[str]:
     return out
 
 
+def _blend_hex(hex_a: str, hex_b: str, t: float) -> str:
+    """线性混合两个 #RRGGBB 颜色，t 为 hex_b 的权重（0–1）。"""
+
+    def _rgb(h: str) -> tuple[int, int, int]:
+        h = h.strip().lstrip("#")
+        if len(h) != 6:
+            return (13, 110, 253)
+        return tuple(int(h[i : i + 2], 16) for i in (0, 2, 4))  # type: ignore[misc]
+
+    ar, ag, ab = _rgb(hex_a)
+    br, bg, bb = _rgb(hex_b)
+    t = max(0.0, min(1.0, t))
+    r = int(ar + (br - ar) * t)
+    g = int(ag + (bg - ag) * t)
+    b = int(ab + (bb - ab) * t)
+    return f"#{r:02x}{g:02x}{b:02x}"
+
+
 class NetworkDiagnosisApp(ttk.Window):
-    """网络诊断工具主界面"""
+    """网络与运维相关工具（左侧导航 + 右侧内容区）。"""
     def __init__(self) -> None:
         # 主题
         super().__init__(themename="flatly")
         _try_set_window_icon(self)
         # 窗口标题
-        self.title(
-            f"网络诊断工具v{APP_VERSION}（作者：Mr. Z  联系方式：mr.zed@qq.com  QQ：40061980）"
-        )
+        self.title(f"{APP_DISPLAY_NAME} v{APP_VERSION}（{AUTHOR_SUMMARY}）")
         # 最小窗口大小
         self.minsize(1260, 720)
         # 默认窗口大小：每次启动在主屏居中（大于屏幕时先缩放到可放入再居中）
-        self.geometry(self._centered_geometry(1800, 1200))
+        self.geometry(self._centered_geometry(1920, 1080))
 
         self._queue: queue.Queue[tuple[str, object]] = queue.Queue()
         self._worker: threading.Thread | None = None
@@ -571,12 +594,68 @@ class NetworkDiagnosisApp(ttk.Window):
         self.style.configure("TSpinbox", font=("Microsoft YaHei UI", 11))
         self.style.configure("TEntry", font=("Microsoft YaHei UI", 11))
 
-        outer = ttk.Frame(self, padding=(16, 14, 16, 12))
-        outer.pack(fill=BOTH, expand=True)
-        outer.rowconfigure(0, weight=1)
-        outer.columnconfigure(0, weight=1)
+        root_layout = ttk.Frame(self)
+        root_layout.pack(fill=BOTH, expand=True)
+        root_layout.rowconfigure(0, weight=1)
+        root_layout.columnconfigure(0, weight=0, minsize=212)
+        root_layout.columnconfigure(1, weight=1)
 
-        pw_main = ttk.Panedwindow(outer, orient=tk.HORIZONTAL)
+        # 左侧整列主色底铺满；导航项用自定义样式，避免 LIGHT 白块与默认焦点虚线框
+        sidebar = ttk.Frame(root_layout, bootstyle=PRIMARY, padding=(12, 16, 12, 16))
+        sidebar.grid(row=0, column=0, sticky=NSEW)
+
+        ttk.Label(
+            sidebar,
+            text="功能导航",
+            font=("Microsoft YaHei UI", 12, "bold"),
+            bootstyle=(INVERSE, PRIMARY),
+        ).pack(anchor=W, pady=(0, 14))
+
+        action_frame = ttk.Frame(sidebar, bootstyle=PRIMARY)
+        action_frame.pack(fill=BOTH, expand=True)
+
+        self._configure_sidebar_nav_styles()
+
+        self._sidebar_btn_by_module: dict[str, ttk.Button] = {}
+        nav_items: list[tuple[str, str]] = [
+            ("network", "网络诊断"),
+            ("subnet", "子网计算"),
+            ("switch", "交换机配置"),
+            ("database", "数据库诊断"),
+            ("guide", "使用说明"),
+            ("about", "关于"),
+            ("license", "许可"),
+        ]
+        for mod_key, nav_label in nav_items:
+            btn = ttk.Button(
+                action_frame,
+                text=nav_label,
+                command=lambda k=mod_key: self._select_module(k),
+                style="SidebarNav.TButton",
+                takefocus=False,
+                cursor="hand2",
+            )
+            btn.pack(side=tk.TOP, fill=tk.X, pady=(0, 4))
+            self._sidebar_btn_by_module[mod_key] = btn
+
+        content_outer = ttk.Frame(root_layout, padding=(16, 14, 16, 12))
+        content_outer.grid(row=0, column=1, sticky=NSEW)
+        content_outer.rowconfigure(0, weight=1)
+        content_outer.columnconfigure(0, weight=1)
+
+        self._content_host = ttk.Frame(content_outer)
+        self._content_host.grid(row=0, column=0, sticky=NSEW)
+        self._content_host.rowconfigure(0, weight=1)
+        self._content_host.columnconfigure(0, weight=1)
+
+        self._view_frames: dict[str, ttk.Frame] = {}
+
+        frm_network = ttk.Frame(self._content_host)
+        frm_network.rowconfigure(0, weight=1)
+        frm_network.columnconfigure(0, weight=1)
+        self._view_frames["network"] = frm_network
+
+        pw_main = ttk.Panedwindow(frm_network, orient=tk.HORIZONTAL)
         pw_main.grid(row=0, column=0, sticky=NSEW)
 
         left = ttk.Frame(pw_main, padding=(0, 0, 8, 0))
@@ -978,6 +1057,270 @@ class NetworkDiagnosisApp(ttk.Window):
 
         self.after(200, self._poll_queue)
         self.after_idle(self._init_main_sash)
+
+        self._add_placeholder_view("subnet", "子网计算")
+        self._add_placeholder_view("switch", "交换机配置")
+        self._add_placeholder_view("database", "数据库诊断")
+        self._build_guide_view()
+        self._build_about_view()
+        self._build_license_view()
+
+        self._active_module: str | None = None
+        self._select_module("network")
+
+    def _select_module(self, module_key: str) -> None:
+        if self._active_module == module_key:
+            return
+        self._active_module = module_key
+        for k, frame in self._view_frames.items():
+            if k == module_key:
+                frame.grid(row=0, column=0, sticky=NSEW)
+            else:
+                frame.grid_remove()
+        for k, btn in self._sidebar_btn_by_module.items():
+            btn.configure(
+                style="SidebarNavActive.TButton" if k == module_key else "SidebarNav.TButton"
+            )
+
+    def _configure_sidebar_nav_styles(self) -> None:
+        pri = getattr(self.style.colors, "primary", "#0d6efd")
+        if not isinstance(pri, str) or len(pri.strip().lstrip("#")) != 6:
+            pri = "#0d6efd"
+        pri = pri if pri.startswith("#") else f"#{pri}"
+        hover = _blend_hex(pri, "#ffffff", 0.14)
+        pressed = _blend_hex(pri, "#000000", 0.12)
+        active_bg = _blend_hex(pri, "#ffffff", 0.22)
+        idle_fg = "#e8f1fc"
+        for name in ("SidebarNav.TButton", "SidebarNavActive.TButton"):
+            self.style.configure(
+                name,
+                font=("Microsoft YaHei UI", 11),
+                anchor="w",
+                borderwidth=0,
+                relief="flat",
+                padding=(14, 11),
+                background=pri,
+                foreground=idle_fg,
+                focuscolor=pri,
+            )
+            self.style.map(
+                name,
+                background=[("active", hover), ("pressed", pressed)],
+                foreground=[("disabled", "#a8bdd9")],
+            )
+        self.style.configure(
+            "SidebarNavActive.TButton",
+            font=("Microsoft YaHei UI", 11, "bold"),
+            background=active_bg,
+            foreground="#ffffff",
+            focuscolor=active_bg,
+        )
+        self.style.map(
+            "SidebarNavActive.TButton",
+            background=[("active", hover), ("pressed", pressed)],
+            foreground=[("disabled", "#c8d9ef")],
+        )
+
+    def _add_placeholder_view(self, module_key: str, title: str) -> None:
+        frm = ttk.Frame(self._content_host, padding=(32, 48))
+        self._view_frames[module_key] = frm
+        frm.rowconfigure(0, weight=1)
+        frm.columnconfigure(0, weight=1)
+        ttk.Label(
+            frm,
+            text=f"{title}\n\n此功能尚未实现，后续版本补充。\n当前为空白占位页面。",
+            bootstyle=SECONDARY,
+            font=("Microsoft YaHei UI", 13),
+            justify=tk.CENTER,
+            wraplength=520,
+        ).grid(row=0, column=0)
+
+    def _build_guide_view(self) -> None:
+        frm = ttk.Frame(self._content_host, padding=(24, 28, 24, 20))
+        self._view_frames["guide"] = frm
+        frm.rowconfigure(2, weight=1)
+        frm.columnconfigure(0, weight=1)
+
+        ttk.Label(
+            frm,
+            text="使用说明",
+            font=("Microsoft YaHei UI", 18, "bold"),
+        ).grid(row=0, column=0, sticky=W, pady=(0, 10))
+
+        intro = (
+            "左侧「功能导航」可在各模块间切换。当前已实现的主要能力在「网络诊断」；"
+            "子网计算、交换机配置、数据库诊断为后续规划占位。"
+        )
+        ttk.Label(
+            frm,
+            text=intro,
+            bootstyle=SECONDARY,
+            font=("Microsoft YaHei UI", 11),
+            wraplength=760,
+            justify=tk.LEFT,
+        ).grid(row=1, column=0, sticky=EW, pady=(0, 10))
+
+        lf = ttk.Labelframe(frm, text="网络诊断 — 操作步骤", padding=(10, 8, 10, 10))
+        lf.grid(row=2, column=0, sticky=NSEW)
+        lf.rowconfigure(0, weight=1)
+        lf.columnconfigure(0, weight=1)
+
+        body = """一、填写探测目标
+  • 「主机名或 IP」：填写要排查的网站域名或服务器地址（如 www.baidu.com 或内网 IP）。
+  • 「TCP 端口」：可选。留空则不做端口连通测试；多个端口用英文逗号分隔，如 80,443。
+  • 「优先 IPv6」：若目标有 AAAA 记录且本机 IPv6 可用，可优先走 IPv6 路径做后续 TCP / 抓包。
+
+二、探测选项（左侧「探测选项」区域）
+  • 端口采样次数、TCP 超时：影响 tcping 类端口探测的统计与等待时间。
+  • ICMP Ping：开关控制是否发 Ping；可设 Ping 次数或勾选「长 Ping」用时长覆盖次数。
+  • 抓包：勾选后会在诊断过程中尝试用 tshark 抓包（需本机安装 Wireshark + Npcap）。
+  • 路由追踪：勾选后调用系统 tracert（Windows）等进行路径追踪。
+  • 任务状态：诊断运行时此处显示进度提示；右侧「进度详情」为实时文字日志。
+
+三、带宽 / 吞吐（可选）
+  • 「不进行测速」：跳过带宽相关步骤。
+  • 「HTTP 抽样下载」：按填写的 URL、并发与时长做下载抽样（会消耗流量，请用合规测速地址）。
+  • 「iperf3」：向指定 iperf 服务端打流；需本机可运行 iperf3 且对端已启动服务。
+
+四、进阶探测（可选，可能较慢）
+  • 指定 DNS：在系统解析之外，向指定 DNS 再解析一次，便于对比解析差异。
+  • PathPing / mtr、TCP 路径、HTTPS/TLS、出口与代理、IPv4 MTU、历史记录对比等按需勾选；
+    未安装的依赖会在报告与界面中提示降级或跳过。
+
+五、运行与查看结果
+  • 点击「开始诊断」启动后台任务；运行期间请勿重复点击（会提示正在运行）。
+  • 右侧「诊断结果」为结构化摘要；「进度详情」为步骤日志。
+  • 结束后可点「打开技术报告 (Markdown)」或在报告目录中查看完整说明与原始日志路径。
+
+六、外部工具（按需）
+  • 端口探测依赖 tcping：可用「检测 Tcping」确认；缺失时请按提示放到 ThirdParty/tcping/。
+  • 抓包依赖 tshark：可用「检测 Tshark」或「打开 Wireshark」安装包目录中的安装程序。
+  • iperf3 测速：可用「检测 Iperf3」；可执行文件可放在 ThirdParty/iperf3/ 或系统 PATH。
+
+七、其他说明
+  • 诊断会调用本机网络栈与若干子进程，请在合规前提下对自有或可授权目标使用。
+  • 功能细节与指标含义以设计参考文档及生成的 Markdown 报告为准。"""
+
+        txt = ScrolledText(
+            lf,
+            height=22,
+            wrap=tk.WORD,
+            font=("Microsoft YaHei UI", 11),
+            relief=tk.FLAT,
+            padx=10,
+            pady=10,
+        )
+        txt.grid(row=0, column=0, sticky=NSEW)
+        txt.insert(tk.END, body)
+        txt.configure(state=tk.DISABLED)
+
+    def _build_about_view(self) -> None:
+        frm = ttk.Frame(self._content_host, padding=(28, 32, 28, 24))
+        self._view_frames["about"] = frm
+        frm.columnconfigure(0, weight=1)
+
+        ttk.Label(
+            frm,
+            text=APP_DISPLAY_NAME,
+            font=("Microsoft YaHei UI", 20, "bold"),
+        ).grid(row=0, column=0, sticky=W)
+        ttk.Label(
+            frm,
+            text=APP_DISPLAY_NAME_EN,
+            bootstyle=SECONDARY,
+            font=("Microsoft YaHei UI", 12),
+        ).grid(row=1, column=0, sticky=W, pady=(4, 14))
+
+        meta = ttk.Frame(frm)
+        meta.grid(row=2, column=0, sticky=EW)
+        meta.columnconfigure(0, weight=1)
+        lines = [
+            f"版本：{APP_VERSION}",
+            f"作者与联系方式：{AUTHOR_SUMMARY}",
+            f"设计参考：{DESIGN_DOC_REF}",
+            APP_DESCRIPTION,
+        ]
+        for i, line in enumerate(lines):
+            ttk.Label(
+                meta,
+                text=line,
+                font=("Microsoft YaHei UI", 12),
+                wraplength=720,
+                justify=tk.LEFT,
+            ).grid(row=i, column=0, sticky=W, pady=(0, 8))
+
+        ttk.Separator(frm, orient=tk.HORIZONTAL).grid(row=3, column=0, sticky=EW, pady=(20, 16))
+        ttk.Label(
+            frm,
+            text="运行环境：Python 3.10+，图形界面基于 ttkbootstrap / Tk。",
+            bootstyle=SECONDARY,
+            font=("Microsoft YaHei UI", 11),
+            wraplength=720,
+            justify=tk.LEFT,
+        ).grid(row=4, column=0, sticky=W)
+
+    def _build_license_view(self) -> None:
+        frm = ttk.Frame(self._content_host, padding=(20, 20, 20, 16))
+        self._view_frames["license"] = frm
+        frm.rowconfigure(1, weight=1)
+        frm.columnconfigure(0, weight=1)
+
+        intro = (
+            "以下为本仓库根目录中 LICENSE 文件的原文。若以可执行包发布，请一并附带许可证文件；"
+            "第三方组件权利见下方说明。"
+        )
+        ttk.Label(
+            frm,
+            text=intro,
+            bootstyle=SECONDARY,
+            font=("Microsoft YaHei UI", 11),
+            wraplength=760,
+            justify=tk.LEFT,
+        ).grid(row=0, column=0, sticky=EW, pady=(0, 10))
+
+        lf = ttk.Labelframe(frm, text="LICENSE（MIT）", padding=(10, 8, 10, 10))
+        lf.grid(row=1, column=0, sticky=NSEW, pady=(0, 14))
+        lf.rowconfigure(0, weight=1)
+        lf.columnconfigure(0, weight=1)
+
+        lic_path = bundle_root() / "LICENSE"
+        try:
+            body = (
+                lic_path.read_text(encoding="utf-8")
+                if lic_path.is_file()
+                else f"（未在以下路径找到 LICENSE：{lic_path}）"
+            )
+        except OSError as e:
+            body = f"（读取 LICENSE 失败：{e}）"
+
+        txt = ScrolledText(
+            lf,
+            height=16,
+            wrap=tk.WORD,
+            font=("Consolas", 10),
+            relief=tk.FLAT,
+            padx=10,
+            pady=10,
+        )
+        txt.grid(row=0, column=0, sticky=NSEW)
+        txt.insert(tk.END, body)
+        txt.configure(state=tk.DISABLED)
+
+        lf2 = ttk.Labelframe(frm, text="第三方组件与外部工具（节选说明）", padding=(12, 10))
+        lf2.grid(row=2, column=0, sticky=EW)
+        third_party = (
+            "• GUI 库 ttkbootstrap：MIT License，参见 https://github.com/israel-dryer/ttkbootstrap\n"
+            "• 诊断流程可选用 Eli Fulkerson tcping、Wireshark/tshark、iperf3 等；"
+            "均为各自版权方软件，再分发或打包时请遵守其许可与商标要求。\n"
+            "• 本程序按需调用上述可执行文件，不代表与之存在隶属或担保关系。"
+        )
+        ttk.Label(
+            lf2,
+            text=third_party,
+            font=("Microsoft YaHei UI", 11),
+            justify=tk.LEFT,
+            wraplength=760,
+        ).pack(fill=tk.X)
 
     def _sync_bw_panels(self) -> None:
         m = self.var_bw_mode.get()
