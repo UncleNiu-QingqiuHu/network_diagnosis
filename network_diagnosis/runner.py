@@ -28,6 +28,7 @@ from network_diagnosis.model.report import (
 from network_diagnosis.paths import find_tshark, report_root, resolve_iperf3_exe, resolve_tcping_exe
 from network_diagnosis.probes.bandwidth_http import run_http_bandwidth
 from network_diagnosis.probes.bandwidth_iperf import run_iperf_bandwidth
+from network_diagnosis.probes.subproc_util import read_text_best_effort
 from network_diagnosis.probes.dns_probe import pick_tcp_target, resolve_dns
 from network_diagnosis.probes.local_context import collect_local_context
 from network_diagnosis.probes.ping_probe import run_ping
@@ -351,10 +352,10 @@ def run_diagnostic(options: RunOptions, progress: Callable[[str], None]) -> Diag
                     pcap_path=pcap_path,
                     stdout_path=out_p,
                     stderr_path=err_p,
-                    notes=f"捕获过滤器 (BPF): `{bpf}`",
+                    notes=f"捕获接口 (-i): `{if_idx}`；BPF: `{bpf}`",
                 )
                 progress("tshark 抓包已启动。")
-                time.sleep(0.6)
+                time.sleep(1.0)
             except OSError as e:
                 capture = CaptureInfo(
                     requested=True,
@@ -414,6 +415,13 @@ def run_diagnostic(options: RunOptions, progress: Callable[[str], None]) -> Diag
         progress("正在停止抓包…")
         cap_session.stop()
         progress("抓包已停止。")
+        if capture.stderr_path is not None and capture.stderr_path.is_file():
+            err_blob = read_text_best_effort(capture.stderr_path, max_bytes=16_384)
+            if err_blob.strip():
+                tail = err_blob.strip()[-1800:]
+                capture.notes = (
+                    f"{capture.notes}\n\n---- tshark stderr（末尾，便于排查空包/权限） ----\n{tail}"
+                )
         if (
             tshark_path is not None
             and capture.pcap_path is not None

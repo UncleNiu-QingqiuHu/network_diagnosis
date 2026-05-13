@@ -615,24 +615,8 @@ class NetworkDiagnosisApp(ttk.Window):
             length=400,
         )
 
-        lf_log = ttk.Labelframe(left, text="进度详情", padding=(10, 8, 10, 10))
-        lf_log.pack(fill=BOTH, expand=True, pady=(8, 0))
-        lf_log.rowconfigure(0, weight=1)
-        lf_log.columnconfigure(0, weight=1)
-
-        self.txt_log = ScrolledText(
-            lf_log,
-            height=14,
-            wrap=tk.WORD,
-            font=("Consolas", 11),
-            relief=tk.FLAT,
-            padx=8,
-            pady=8,
-        )
-        self.txt_log.grid(row=0, column=0, sticky=NSEW)
-
         btn2 = ttk.Frame(left)
-        btn2.pack(fill=tk.X, pady=(8, 0))
+        btn2.pack(side=tk.BOTTOM, fill=tk.X, pady=(8, 0))
         self.btn_open_md = ttk.Button(
             btn2,
             text="打开技术报告 (Markdown)",
@@ -649,6 +633,22 @@ class NetworkDiagnosisApp(ttk.Window):
             bootstyle=OUTLINE,
         )
         self.btn_open_dir.pack(side=tk.LEFT, padx=(10, 0))
+
+        lf_log = ttk.Labelframe(left, text="进度详情", padding=(10, 8, 10, 10))
+        lf_log.pack(fill=BOTH, expand=True, pady=(8, 0))
+        lf_log.rowconfigure(0, weight=1)
+        lf_log.columnconfigure(0, weight=1)
+
+        self.txt_log = ScrolledText(
+            lf_log,
+            height=14,
+            wrap=tk.WORD,
+            font=("Consolas", 11),
+            relief=tk.FLAT,
+            padx=8,
+            pady=8,
+        )
+        self.txt_log.grid(row=0, column=0, sticky=NSEW)
 
         # —— 右侧：诊断结果 ——
         right.rowconfigure(0, weight=1)

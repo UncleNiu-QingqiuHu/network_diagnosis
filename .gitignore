@@ -35,5 +35,4 @@ reports/
 _bmad/
 .cursor/commands/
 media/
-tcping.exe
 Wireshark*.exe

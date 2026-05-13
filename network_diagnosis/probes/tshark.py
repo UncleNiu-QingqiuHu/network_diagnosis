@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ipaddress
 import re
+import signal
 import subprocess
 import sys
 from collections import Counter
@@ -29,6 +30,9 @@ def _iface_choice_score(line: str) -> int:
     if "loopback" in low or "npcap loopback" in low:
         return -10_000
     score = 0
+    # Windows Npcap 实体网卡（非 extcap 虚拟管道）
+    if "npf_" in low:
+        score += 45
     for bad in (
         "vmware",
         "virtualbox",
@@ -61,6 +65,30 @@ def _iface_choice_score(line: str) -> int:
     return score
 
 
+def _iface_skip_auto_capture(desc: str) -> bool:
+    """跳过 loopback、以及必须手工传参的 extcap（如 Wi‑Fi remote / wifidump）。"""
+    low = desc.lower()
+    if "loopback" in low or "npcap loopback" in low:
+        return True
+    # 需 --remote-host 等对端参数，默认诊断无法填
+    needles = (
+        "remote capture",
+        "wifidump",
+        "randpkt",
+        " udp listener",
+        " ssh ",
+        " ciscodump",
+        " sdjournal",
+        " etwdump",
+    )
+    if any(n in low for n in needles):
+        return True
+    # 常见 extcap 管道名（非 Npcap 网卡）
+    if "androiddump" in low:
+        return True
+    return False
+
+
 def pick_capture_interface_index(tshark: Path, log_dir: Path) -> str:
     r = run_to_log_files([str(tshark), "-D"], log_dir, "tshark_list_if", timeout_sec=30)
     text = read_text_best_effort(r.stdout_path)
@@ -71,7 +99,7 @@ def pick_capture_interface_index(tshark: Path, log_dir: Path) -> str:
         if not m:
             continue
         idx, desc = m.group(1), m.group(2)
-        if "loopback" in desc.lower():
+        if _iface_skip_auto_capture(desc):
             continue
         candidates.append((_iface_choice_score(desc), idx))
     if not candidates:
@@ -87,6 +115,31 @@ def _creationflags() -> int:
         except AttributeError:
             return 0
     return 0
+
+
+def _popen_kwargs_capture() -> dict:
+    """Windows 上抓包子进程需能收到控制台控制信号以正常刷盘，不能用 TerminateProcess 硬杀。"""
+    if sys.platform == "win32":
+        si = subprocess.STARTUPINFO()
+        si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        si.wShowWindow = subprocess.SW_HIDE  # type: ignore[attr-defined]
+        return {
+            "creationflags": subprocess.CREATE_NEW_PROCESS_GROUP,  # type: ignore[attr-defined]
+            "startupinfo": si,
+        }
+    return {"creationflags": _creationflags()}
+
+
+def _request_tshark_stop(proc: subprocess.Popen[bytes]) -> None:
+    if proc.poll() is not None:
+        return
+    try:
+        if sys.platform == "win32":
+            proc.send_signal(signal.CTRL_BREAK_EVENT)
+        else:
+            proc.send_signal(signal.SIGINT)
+    except OSError:
+        proc.terminate()
 
 
 class TsharkCaptureSession:
@@ -121,7 +174,7 @@ class TsharkCaptureSession:
             argv,
             stdout=self._stdout_f,
             stderr=self._stderr_f,
-            creationflags=_creationflags(),
+            **_popen_kwargs_capture(),
         )
         return out_log, err_log
 
@@ -129,12 +182,13 @@ class TsharkCaptureSession:
         proc = self._proc
         if proc is None:
             return None
-        proc.terminate()
-        try:
-            proc.wait(timeout=45)
-        except subprocess.TimeoutExpired:
-            proc.kill()
-            proc.wait(timeout=20)
+        if proc.poll() is None:
+            _request_tshark_stop(proc)
+            try:
+                proc.wait(timeout=45)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait(timeout=20)
         rc = proc.returncode
         self._proc = None
         if self._stdout_f:
