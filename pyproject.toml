@@ -2,7 +2,7 @@
 name = "qqhu-network-diagnosis"
 version = "0.1.0"
 description = "Windows 桌面网络诊断工具（设计文档 v1.4）"
-readme = "ThirdParty/README.md"
+readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "ttkbootstrap>=1.10.1",

@@ -1,3 +1,4 @@
+LICENSE
 pyproject.toml
 ThirdParty/README.md
 network_diagnosis/__init__.py

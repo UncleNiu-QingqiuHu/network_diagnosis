@@ -1,11 +1,6 @@
 # 第三方资源目录
 
-## tcping
+完整说明见项目根目录 [`README.md`](../README.md) 中的「第三方资源」一节。
 
-将官方分发的 `tcping.exe` 置于 `ThirdParty/tcping/tcping.exe`。  
-应用优先从此路径调用，不依赖系统 PATH。
-
-## Wireshark
-
-将官方 Windows 安装程序（如 `Wireshark-x64-*.exe`）置于 `ThirdParty/Wireshark/`。  
-应用在未检测到已安装的 `tshark.exe` 时可引导用户运行该目录下的安装包。
+- **tcping**：`ThirdParty/tcping/tcping.exe`
+- **Wireshark 安装包**：`ThirdParty/Wireshark/*.exe`（可选）

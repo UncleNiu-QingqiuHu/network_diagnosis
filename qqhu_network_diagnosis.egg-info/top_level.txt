@@ -1,4 +1,3 @@
 ThirdParty
 docs
 network_diagnosis
-scripts

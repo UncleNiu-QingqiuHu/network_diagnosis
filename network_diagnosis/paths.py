@@ -14,6 +14,17 @@ def bundle_root() -> Path:
     return Path(__file__).resolve().parent.parent
 
 
+def report_root() -> Path:
+    """诊断报告与任务产物默认根目录（项目下 `reports/`，可写）。
+
+    - 开发模式：仓库根目录下的 ``reports/``。
+    - PyInstaller：可执行文件所在目录下的 ``reports/``（避免写入临时 ``_MEIPASS``）。
+    """
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent / "reports"
+    return bundle_root() / "reports"
+
+
 def third_party_tcping() -> Path:
     return bundle_root() / "ThirdParty" / "tcping" / "tcping.exe"
 

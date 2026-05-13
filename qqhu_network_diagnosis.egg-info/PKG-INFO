@@ -4,7 +4,9 @@ Version: 0.1.0
 Summary: Windows 桌面网络诊断工具（设计文档 v1.4）
 Requires-Python: >=3.10
 Description-Content-Type: text/markdown
+License-File: LICENSE
 Requires-Dist: ttkbootstrap>=1.10.1
+Dynamic: license-file
 
 # 第三方资源目录
 

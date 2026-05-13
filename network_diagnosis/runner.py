@@ -23,7 +23,7 @@ from network_diagnosis.model.report import (
     TaskMeta,
     UserInputSnapshot,
 )
-from network_diagnosis.paths import find_tshark, resolve_tcping_exe
+from network_diagnosis.paths import find_tshark, report_root, resolve_tcping_exe
 from network_diagnosis.probes.dns_probe import pick_tcp_target, resolve_dns
 from network_diagnosis.probes.local_context import collect_local_context
 from network_diagnosis.probes.ping_probe import run_ping
@@ -35,10 +35,6 @@ from network_diagnosis.probes.tshark import (
 )
 from network_diagnosis.reporting.markdown import write_markdown_report
 from network_diagnosis.version import APP_VERSION, DESIGN_DOC_REF
-
-
-def default_report_root() -> Path:
-    return Path.home() / "Documents" / "QQHuNetworkDiagnosis"
 
 
 @dataclass
@@ -137,7 +133,7 @@ def _build_gui_summary(
 def run_diagnostic(options: RunOptions, progress: Callable[[str], None]) -> DiagnosticReport:
     task_id = uuid.uuid4().hex[:12]
     started = datetime.now().astimezone()
-    root = default_report_root()
+    root = report_root()
     report_dir = root / f"{task_id}_{started.strftime('%Y%m%d_%H%M%S')}"
     report_dir.mkdir(parents=True, exist_ok=True)
     progress(f"工作目录: {report_dir}")

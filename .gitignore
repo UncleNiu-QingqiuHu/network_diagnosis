@@ -30,6 +30,8 @@ media/workflow_pdfs/
 unpackage/
 backups/
 logs/
+# 网络诊断工具默认输出（项目目录 reports/）
+reports/
 _bmad/
 .cursor/commands/
 media/
