@@ -8,6 +8,7 @@ import subprocess
 import sys
 import threading
 import tkinter as tk
+import tkinter.font as tkfont
 from tkinter import messagebox
 from tkinter.scrolledtext import ScrolledText
 
@@ -27,7 +28,7 @@ from ttkbootstrap.constants import (
     W,
 )
 
-from network_diagnosis.paths import find_tshark, iter_wireshark_installers
+from network_diagnosis.paths import find_tshark, iter_wireshark_installers, resolve_tcping_exe
 from network_diagnosis.runner import RunOptions, run_diagnostic
 
 
@@ -43,15 +44,43 @@ def _parse_ports(text: str) -> list[int]:
 
 class NetworkDiagnosisApp(ttk.Window):
     def __init__(self) -> None:
+        # 主题
         super().__init__(themename="flatly")
+        # 窗口标题
         self.title("网络诊断工具")
-        self.minsize(960, 680)
-        self.geometry("1180x800")
+        # 最小窗口大小
+        self.minsize(1260, 720)
+        # 默认窗口大小
+        # self.geometry("1380x840")
+        self.geometry("1800x1200")
 
         self._queue: queue.Queue[tuple[str, object]] = queue.Queue()
         self._worker: threading.Thread | None = None
-        self._status_font_normal = ("Microsoft YaHei UI", 10)
-        self._status_font_running = ("Microsoft YaHei UI", 14, "bold")
+        self._status_font_normal = ("Microsoft YaHei UI", 12)
+        self._status_font_running = ("Microsoft YaHei UI", 16, "bold")
+
+        for name in ("TkDefaultFont", "TkTextFont", "TkFixedFont", "TkMenuFont"):
+            try:
+                f = tkfont.nametofont(name)
+                cur = f.actual()
+                sz = cur.get("size", 10)
+                try:
+                    sz_i = int(sz)
+                except (TypeError, ValueError):
+                    continue
+                if sz_i > 0:
+                    f.configure(size=max(sz_i + 2, 11))
+                elif sz_i < 0:
+                    f.configure(size=sz_i - 2)
+            except tk.TclError:
+                pass
+        self.style.configure("TLabelframe.Label", font=("Microsoft YaHei UI", 12, "bold"))
+        self.style.configure("TLabel", font=("Microsoft YaHei UI", 11))
+        self.style.configure("TButton", font=("Microsoft YaHei UI", 12))
+        self.style.configure("TCheckbutton", font=("Microsoft YaHei UI", 11))
+        self.style.configure("TRadiobutton", font=("Microsoft YaHei UI", 11))
+        self.style.configure("TSpinbox", font=("Microsoft YaHei UI", 11))
+        self.style.configure("TEntry", font=("Microsoft YaHei UI", 11))
 
         outer = ttk.Frame(self, padding=(16, 14, 16, 12))
         outer.pack(fill=BOTH, expand=True)
@@ -61,10 +90,12 @@ class NetworkDiagnosisApp(ttk.Window):
         pw_main = ttk.Panedwindow(outer, orient=tk.HORIZONTAL)
         pw_main.grid(row=0, column=0, sticky=NSEW)
 
-        left = ttk.Frame(pw_main, padding=(0, 0, 10, 0))
-        right = ttk.Frame(pw_main, padding=(10, 0, 0, 0))
+        left = ttk.Frame(pw_main, padding=(0, 0, 8, 0))
+        mid = ttk.Frame(pw_main, padding=(8, 0, 8, 0))
+        right = ttk.Frame(pw_main, padding=(8, 0, 0, 0))
         pw_main.add(left, weight=1)
-        pw_main.add(right, weight=3)
+        pw_main.add(mid, weight=1)
+        pw_main.add(right, weight=1)
         self._pw_main = pw_main
 
         # —— 左侧：表单 + 状态 + 报告按钮 ——
@@ -91,7 +122,7 @@ class NetworkDiagnosisApp(ttk.Window):
             lf_target,
             text="多个端口请用英文逗号分隔，例如 80,443,8080",
             bootstyle=SECONDARY,
-            font=("Microsoft YaHei UI", 8),
+            font=("Microsoft YaHei UI", 10),
         ).grid(row=2, column=1, sticky=W)
 
         lf_opts = ttk.Labelframe(left, text="探测选项", padding=(12, 10, 12, 12))
@@ -121,56 +152,65 @@ class NetworkDiagnosisApp(ttk.Window):
 
         chk_row = ttk.Frame(lf_opts)
         chk_row.grid(row=1, column=0, columnspan=4, sticky=EW, pady=(10, 0))
-        chk_col = ttk.Frame(chk_row)
-        chk_col.pack(anchor=W)
+        chk_row.columnconfigure(0, weight=1)
         ttk.Checkbutton(
-            chk_col,
-            text="ICMP ping",
+            chk_row,
+            text="ICMP Ping",
             variable=self.var_ping,
             bootstyle="round-toggle",
-        ).pack(anchor=W, pady=(0, 4))
+        ).grid(row=0, column=0, sticky=W, padx=(0, 20))
         ttk.Checkbutton(
-            chk_col,
-            text="抓包（需 tshark + Npcap）",
+            chk_row,
+            text="抓包",
             variable=self.var_capture,
             bootstyle="round-toggle",
-        ).pack(anchor=W, pady=(0, 4))
+        ).grid(row=0, column=1, sticky=W, padx=(0, 20))
         ttk.Checkbutton(
-            chk_col,
-            text="优先 IPv6",
+            chk_row,
+            text="优化 IPv6",
             variable=self.var_ipv6,
             bootstyle="round-toggle",
-        ).pack(anchor=W)
+        ).grid(row=0, column=2, sticky=W)
 
         ttk.Separator(left, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=(4, 10))
 
         actions = ttk.Frame(left)
         actions.pack(fill=tk.X, pady=(0, 6))
+        actions.columnconfigure(0, weight=1)
         actions.columnconfigure(1, weight=1)
+
+        big_btn_kwargs = {"width": 18}
 
         self.btn_run = ttk.Button(
             actions,
             text="开始诊断",
             command=self._on_run,
             bootstyle=SUCCESS,
-            width=14,
+            **big_btn_kwargs,
         )
-        self.btn_run.grid(row=0, column=0, sticky=W)
-
-        tools = ttk.Frame(actions)
-        tools.grid(row=1, column=0, columnspan=2, sticky=W, pady=(8, 0))
+        self.btn_run.grid(row=0, column=0, sticky=EW, padx=(0, 6), pady=(0, 8))
         ttk.Button(
-            tools,
+            actions,
             text="Wireshark 安装包",
             command=self._open_wireshark_installer,
             bootstyle=INFO,
-        ).pack(side=tk.LEFT, padx=(0, 8))
+            **big_btn_kwargs,
+        ).grid(row=0, column=1, sticky=EW, padx=(6, 0), pady=(0, 8))
+
         ttk.Button(
-            tools,
-            text="检测 tshark",
+            actions,
+            text="检测 Tcping",
+            command=self._probe_tcping,
+            bootstyle=SECONDARY,
+            **big_btn_kwargs,
+        ).grid(row=1, column=0, sticky=EW, padx=(0, 6))
+        ttk.Button(
+            actions,
+            text="检测 Tshark",
             command=self._probe_tshark,
             bootstyle=SECONDARY,
-        ).pack(side=tk.LEFT)
+            **big_btn_kwargs,
+        ).grid(row=1, column=1, sticky=EW, padx=(6, 0))
 
         status_shell = ttk.Labelframe(left, text="任务状态", padding=(12, 10, 12, 10), bootstyle=SECONDARY)
         self._status_shell = status_shell
@@ -183,7 +223,7 @@ class NetworkDiagnosisApp(ttk.Window):
             bootstyle=SECONDARY,
             anchor=W,
             font=self._status_font_normal,
-            wraplength=280,
+            wraplength=320,
             justify=tk.LEFT,
         )
         self.lbl_status.pack(fill=tk.X)
@@ -191,7 +231,7 @@ class NetworkDiagnosisApp(ttk.Window):
             status_shell,
             mode="indeterminate",
             bootstyle=WARNING,
-            length=280,
+            length=320,
         )
 
         btn2 = ttk.Frame(left)
@@ -213,29 +253,32 @@ class NetworkDiagnosisApp(ttk.Window):
         )
         self.btn_open_dir.pack(side=tk.LEFT, padx=(10, 0))
 
-        # —— 右侧：结论（上）+ 进度与详情（下，占更大垂直空间）——
-        right.rowconfigure(0, weight=1)
-        right.rowconfigure(1, weight=4)
-        right.columnconfigure(0, weight=1)
+        # —— 中列：结论 ——
+        mid.rowconfigure(0, weight=1)
+        mid.columnconfigure(0, weight=1)
 
-        lf_summary = ttk.Labelframe(right, text="结论（非技术摘要）", padding=(10, 8, 10, 10))
-        lf_summary.grid(row=0, column=0, sticky=NSEW, pady=(0, 8))
+        lf_summary = ttk.Labelframe(mid, text="结论（非技术摘要）", padding=(10, 8, 10, 10))
+        lf_summary.grid(row=0, column=0, sticky=NSEW)
         lf_summary.rowconfigure(0, weight=1)
         lf_summary.columnconfigure(0, weight=1)
 
         self.txt_summary = ScrolledText(
             lf_summary,
-            height=5,
+            height=12,
             wrap=tk.WORD,
-            font=("Microsoft YaHei UI", 10),
+            font=("Microsoft YaHei UI", 12),
             relief=tk.FLAT,
-            padx=6,
-            pady=6,
+            padx=8,
+            pady=8,
         )
         self.txt_summary.grid(row=0, column=0, sticky=NSEW)
 
-        lf_log = ttk.Labelframe(right, text="进度与详情", padding=(10, 8, 10, 10))
-        lf_log.grid(row=1, column=0, sticky=NSEW)
+        # —— 右列：进度详情 ——
+        right.rowconfigure(0, weight=1)
+        right.columnconfigure(0, weight=1)
+
+        lf_log = ttk.Labelframe(right, text="进度详情", padding=(10, 8, 10, 10))
+        lf_log.grid(row=0, column=0, sticky=NSEW)
         lf_log.rowconfigure(0, weight=1)
         lf_log.columnconfigure(0, weight=1)
 
@@ -243,10 +286,10 @@ class NetworkDiagnosisApp(ttk.Window):
             lf_log,
             height=22,
             wrap=tk.WORD,
-            font=("Consolas", 9),
+            font=("Consolas", 11),
             relief=tk.FLAT,
-            padx=6,
-            pady=6,
+            padx=8,
+            pady=8,
         )
         self.txt_log.grid(row=0, column=0, sticky=NSEW)
 
@@ -257,17 +300,30 @@ class NetworkDiagnosisApp(ttk.Window):
         self.after_idle(self._init_main_sash)
 
     def _init_main_sash(self) -> None:
-        """初次分配左右栏宽度（左侧约 34%）。"""
+        """初次分配三列宽度为 1:1:1（按 Panedwindow 实际宽度，而非整窗宽度）。"""
+        self._init_main_sash_attempt(0)
+
+    def _init_main_sash_attempt(self, attempt: int) -> None:
+        if attempt > 10:
+            return
         try:
-            w = max(self.winfo_width(), 700)
-            self._pw_main.sashpos(0, int(w * 0.34))
+            self.update_idletasks()
+            pw = self._pw_main
+            w = pw.winfo_width()
+            if w <= 10:
+                self.after(60, lambda: self._init_main_sash_attempt(attempt + 1))
+                return
+            a = w // 3
+            b = (2 * w) // 3
+            pw.sashpos(0, a)
+            pw.sashpos(1, b)
         except tk.TclError:
             pass
 
     def _start_running_ui(self) -> None:
         self._status_shell.configure(bootstyle=WARNING)
         self.lbl_status.configure(
-            text="正在运行诊断\n请留意右侧「进度与详情」中的实时输出。",
+            text="正在运行诊断\n请留意最右侧「进度详情」中的实时输出。",
             bootstyle=WARNING,
             font=self._status_font_running,
         )
@@ -286,6 +342,16 @@ class NetworkDiagnosisApp(ttk.Window):
     def _append_log(self, text: str) -> None:
         self.txt_log.insert(END, text + "\n")
         self.txt_log.see(END)
+
+    def _probe_tcping(self) -> None:
+        p = resolve_tcping_exe()
+        if p:
+            messagebox.showinfo("Tcping", f"已找到:\n{p}")
+        else:
+            messagebox.showwarning(
+                "Tcping",
+                "未找到同捆 tcping.exe。\n请将可执行文件置于 ThirdParty/tcping/tcping.exe。",
+            )
 
     def _probe_tshark(self) -> None:
         p = find_tshark()
@@ -411,7 +477,7 @@ class NetworkDiagnosisApp(ttk.Window):
         self._stop_running_ui()
         g = rep.gui
         self.txt_summary.insert(END, g.headline + "\n\n", ("head",))
-        self.txt_summary.tag_configure("head", font=("Microsoft YaHei UI", 11, "bold"))
+        self.txt_summary.tag_configure("head", font=("Microsoft YaHei UI", 14, "bold"))
         for b in g.bullets:
             self.txt_summary.insert(END, "• " + b + "\n")
         self.txt_summary.insert(
