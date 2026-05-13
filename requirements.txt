@@ -2,3 +2,9 @@ pillow==12.2.0
 -e git+https://gitcode.com/ibobcheung/qqhu_network_diagnosis.git@af7d57338365b7280ef317a2a889251d8c8cdd00#egg=qqhu_network_diagnosis
 ruff==0.15.12
 ttkbootstrap==1.20.3
+paramiko==5.0.0
+pyserial==3.5
+psycopg[binary]==3.3.4
+pyodbc==5.3.0
+oracledb==4.0.0
+pymysql==1.1.3

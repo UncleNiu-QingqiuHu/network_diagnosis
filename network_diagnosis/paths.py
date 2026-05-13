@@ -25,6 +25,13 @@ def switch_console_data_dir() -> Path:
     return p
 
 
+def db_diagnosis_report_dir(task_id: str) -> Path:
+    """单次数据库诊断或监控导出目录：`reports/db_diagnosis/<task_id>/`。"""
+    d = report_root() / "db_diagnosis" / task_id
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
 def report_root() -> Path:
     """诊断报告与任务产物默认根目录（项目下 `reports/`，可写）。
 

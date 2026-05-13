@@ -31,6 +31,7 @@ from ttkbootstrap.constants import (
     W,
 )
 
+from network_diagnosis.gui.db_diagnosis_frame import DbDiagnosisFrame
 from network_diagnosis.gui.switch_console_frame import SwitchConsoleFrame
 from network_diagnosis.host_l3_info import AdapterIPv4Block, list_local_ipv4_adapters, local_hostname
 from network_diagnosis.model.report import DiagnosticReport, EgressProbeResult, PortFailureClass
@@ -1065,7 +1066,8 @@ class NetworkDiagnosisApp(ttk.Window):
         self._build_subnet_view()
         self._switch_console = SwitchConsoleFrame(self._content_host)
         self._view_frames["switch"] = self._switch_console
-        self._add_placeholder_view("database", "数据库诊断")
+        self._db_diagnosis = DbDiagnosisFrame(self._content_host)
+        self._view_frames["database"] = self._db_diagnosis
         self._build_guide_view()
         self._build_about_view()
         self._build_license_view()
@@ -1077,10 +1079,10 @@ class NetworkDiagnosisApp(ttk.Window):
         if self._active_module == module_key:
             return
         prev = self._active_module
-        if prev == "switch" and module_key != "switch":
-            sw = self._view_frames.get("switch")
-            if sw is not None:
-                leave = getattr(sw, "on_leave", None)
+        if prev is not None and prev != module_key:
+            fr = self._view_frames.get(prev)
+            if fr is not None:
+                leave = getattr(fr, "on_leave", None)
                 if callable(leave):
                     leave()
         self._active_module = module_key
@@ -1445,8 +1447,7 @@ class NetworkDiagnosisApp(ttk.Window):
         ).grid(row=0, column=0, sticky=W, pady=(0, 10))
 
         intro = (
-            "左侧「功能导航」可在各模块间切换。当前已实现「网络诊断」「子网计算」「交换机配置（串口/SSH）」；"
-            "数据库诊断为后续规划占位。"
+            "左侧「功能导航」可在各模块间切换。当前已实现「网络诊断」「子网计算」「交换机配置」「数据库诊断（多引擎只读采集 + Markdown + 轻量监控）」。"
         )
         ttk.Label(
             frm,
