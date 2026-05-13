@@ -8,11 +8,11 @@ from tkinter import filedialog, messagebox
 from tkinter.scrolledtext import ScrolledText
 
 import ttkbootstrap as ttk
-from ttkbootstrap.constants import DANGER, EW, NSEW, SECONDARY, SUCCESS, W, WARNING
+from ttkbootstrap.constants import DANGER, EW, NSEW, SECONDARY, SUCCESS, WARNING, W
 
 from network_diagnosis.switch_console.session import (
-    SSHPtyBackend,
     SerialBackend,
+    SSHPtyBackend,
     SwitchConsoleSession,
     iter_serial_port_labels,
 )

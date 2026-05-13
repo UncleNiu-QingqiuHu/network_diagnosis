@@ -11,6 +11,8 @@ APP_DISPLAY_NAME = "青丘狐网络工作台"
 APP_DISPLAY_NAME_EN = "Qingqiuhu Network Workbench"
 WEBSITE_URL = "https://www.qingqiuhu.net"
 WEBSITE_DISPLAY = "www.qingqiuhu.net"
+COMMUNITY_URL = "https://www.pheks.com/community/"
+COMMUNITY_DISPLAY = "www.pheks.com/community/"
 AUTHOR_SUMMARY = "Mr. Z  ·  mr.zed@qq.com  ·  QQ：40061980"
 APP_DESCRIPTION = (
     "青丘狐网络工作台（Windows 桌面）：网络连通性诊断（GUI 摘要与 Markdown 技术报告）、子网计算、"

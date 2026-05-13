@@ -34,7 +34,6 @@ from network_diagnosis.model.report import (
 from network_diagnosis.paths import find_tshark, report_root, resolve_iperf3_exe, resolve_tcping_exe
 from network_diagnosis.probes.bandwidth_http import run_http_bandwidth
 from network_diagnosis.probes.bandwidth_iperf import run_iperf_bandwidth
-from network_diagnosis.probes.subproc_util import read_text_best_effort
 from network_diagnosis.probes.dns_probe import pick_tcp_target, resolve_dns, resolve_dns_via_server
 from network_diagnosis.probes.egress_probe import run_egress
 from network_diagnosis.probes.http_tls_probe import probe_https
@@ -42,8 +41,9 @@ from network_diagnosis.probes.local_context import collect_local_context
 from network_diagnosis.probes.mtu_probe import run_mtu_probe
 from network_diagnosis.probes.pathping_probe import run_path_quality
 from network_diagnosis.probes.ping_probe import run_ping
-from network_diagnosis.probes.tcping_probe import probe_tcping_version, run_tcping_port
+from network_diagnosis.probes.subproc_util import read_text_best_effort
 from network_diagnosis.probes.tcp_traceroute_probe import run_tcp_traceroute
+from network_diagnosis.probes.tcping_probe import probe_tcping_version, run_tcping_port
 from network_diagnosis.probes.traceroute_probe import run_traceroute
 from network_diagnosis.probes.tshark import (
     TsharkCaptureSession,
@@ -51,9 +51,9 @@ from network_diagnosis.probes.tshark import (
     summarize_pcap,
     tshark_version_line,
 )
+from network_diagnosis.quality_assessment import compute_network_quality
 from network_diagnosis.reporting.history_store import HistoryEntry, append_history, build_history_compare
 from network_diagnosis.reporting.markdown import write_markdown_report
-from network_diagnosis.quality_assessment import compute_network_quality
 from network_diagnosis.version import APP_VERSION, DESIGN_DOC_REF
 
 

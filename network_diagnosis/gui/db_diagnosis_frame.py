@@ -14,7 +14,7 @@ from tkinter import messagebox
 from tkinter.scrolledtext import ScrolledText
 
 import ttkbootstrap as ttk
-from ttkbootstrap.constants import DANGER, EW, INFO, NSEW, PRIMARY, SECONDARY, SUCCESS, W, WARNING
+from ttkbootstrap.constants import DANGER, EW, INFO, NSEW, PRIMARY, SECONDARY, SUCCESS, WARNING, W
 
 from network_diagnosis.db_diagnosis.markdown_report import render_monitor_snapshot_markdown
 from network_diagnosis.db_diagnosis.model import DbDiagnosisReport
