@@ -8,7 +8,7 @@ from tkinter import filedialog, messagebox
 from tkinter.scrolledtext import ScrolledText
 
 import ttkbootstrap as ttk
-from ttkbootstrap.constants import DANGER, EW, NSEW, PRIMARY, SECONDARY, SUCCESS, W, WARNING
+from ttkbootstrap.constants import DANGER, EW, NSEW, SECONDARY, SUCCESS, W, WARNING
 
 from network_diagnosis.switch_console.session import (
     SSHPtyBackend,
@@ -75,37 +75,36 @@ class SwitchConsoleFrame(ttk.Frame):
         r0 = ttk.Frame(sf)
         r0.grid(row=0, column=0, sticky=EW)
         ttk.Label(r0, text="端口", bootstyle=SECONDARY).pack(side=tk.LEFT)
-        self.cmb_port = ttk.Combobox(r0, textvariable=self.var_port, width=22, bootstyle=PRIMARY)
+        self.cmb_port = ttk.Combobox(r0, textvariable=self.var_port, width=18)
         self.cmb_port.pack(side=tk.LEFT, padx=(6, 10))
         ttk.Button(r0, text="刷新端口列表", command=self._refresh_ports, bootstyle=SECONDARY).pack(
-            side=tk.LEFT
+            side=tk.LEFT, padx=(0, 16)
         )
-
-        row1 = ttk.Frame(sf)
-        row1.grid(row=1, column=0, sticky=W, pady=(8, 0))
-        ttk.Label(row1, text="波特率", bootstyle=SECONDARY).pack(side=tk.LEFT)
-        ttk.Spinbox(row1, from_=300, to=921600, increment=300, textvariable=self.var_baud, width=10).pack(
+        ttk.Label(r0, text="波特率", bootstyle=SECONDARY).pack(side=tk.LEFT)
+        ttk.Spinbox(r0, from_=300, to=921600, increment=300, textvariable=self.var_baud, width=10).pack(
             side=tk.LEFT, padx=(4, 12)
         )
-        ttk.Label(row1, text="数据位", bootstyle=SECONDARY).pack(side=tk.LEFT)
-        ttk.Spinbox(row1, from_=5, to=8, textvariable=self.var_bytesize, width=6).pack(
+        ttk.Label(r0, text="数据位", bootstyle=SECONDARY).pack(side=tk.LEFT)
+        ttk.Spinbox(r0, from_=5, to=8, textvariable=self.var_bytesize, width=6).pack(
             side=tk.LEFT, padx=(4, 12)
         )
-        ttk.Label(row1, text="校验", bootstyle=SECONDARY).pack(side=tk.LEFT)
+        ttk.Label(r0, text="校验", bootstyle=SECONDARY).pack(side=tk.LEFT)
         ttk.Combobox(
-            row1,
+            r0,
             textvariable=self.var_parity,
             values=["N", "E", "O", "M", "S"],
             width=5,
             state="readonly",
-            bootstyle=PRIMARY,
         ).pack(side=tk.LEFT, padx=(4, 12))
-        ttk.Label(row1, text="停止位", bootstyle=SECONDARY).pack(side=tk.LEFT)
-        ttk.Spinbox(row1, from_=1, to=2, textvariable=self.var_stopbits, width=5).pack(
-            side=tk.LEFT, padx=(4, 12)
+        ttk.Label(r0, text="停止位", bootstyle=SECONDARY).pack(side=tk.LEFT)
+        ttk.Spinbox(r0, from_=1, to=2, textvariable=self.var_stopbits, width=5).pack(
+            side=tk.LEFT, padx=(4, 0)
         )
+
+        row1 = ttk.Frame(sf)
+        row1.grid(row=1, column=0, sticky=W, pady=(8, 0))
         ttk.Checkbutton(row1, text="XON/XOFF", variable=self.var_xonxoff, bootstyle="round-toggle").pack(
-            side=tk.LEFT, padx=(8, 8)
+            side=tk.LEFT, padx=(0, 8)
         )
         ttk.Checkbutton(row1, text="RTS/CTS", variable=self.var_rtscts, bootstyle="round-toggle").pack(
             side=tk.LEFT
@@ -122,65 +121,63 @@ class SwitchConsoleFrame(ttk.Frame):
         self.var_ssh_rows = tk.IntVar(value=36)
 
         z = self._frm_ssh
-        z.columnconfigure(0, weight=0)
-        z.columnconfigure(1, weight=1)
+        z.columnconfigure(0, weight=1)
 
-        ssh_line1 = ttk.Frame(z)
-        ssh_line1.grid(row=0, column=0, columnspan=2, sticky=EW)
-        ssh_line1.columnconfigure(1, weight=2)
-        ssh_line1.columnconfigure(3, weight=0)
-        ssh_line1.columnconfigure(5, weight=1)
-        ssh_line1.columnconfigure(7, weight=1)
-        ttk.Label(ssh_line1, text="主机", bootstyle=SECONDARY).grid(row=0, column=0, sticky=W, padx=(0, 6))
-        ttk.Entry(ssh_line1, textvariable=self.var_ssh_host, bootstyle=PRIMARY).grid(
+        ssh_row1 = ttk.Frame(z)
+        ssh_row1.grid(row=0, column=0, sticky=EW)
+        ssh_row1.columnconfigure(1, weight=2)
+        ssh_row1.columnconfigure(5, weight=1)
+        ssh_row1.columnconfigure(7, weight=1)
+        ttk.Label(ssh_row1, text="主机", bootstyle=SECONDARY).grid(row=0, column=0, sticky=W, padx=(0, 6))
+        ttk.Entry(ssh_row1, textvariable=self.var_ssh_host).grid(
             row=0, column=1, sticky=EW, padx=(0, 10)
         )
-        ttk.Label(ssh_line1, text="端口", bootstyle=SECONDARY).grid(row=0, column=2, sticky=W, padx=(0, 6))
-        ttk.Spinbox(ssh_line1, from_=1, to=65535, textvariable=self.var_ssh_port, width=7).grid(
+        ttk.Label(ssh_row1, text="端口", bootstyle=SECONDARY).grid(row=0, column=2, sticky=W, padx=(0, 6))
+        ttk.Spinbox(ssh_row1, from_=1, to=65535, textvariable=self.var_ssh_port, width=7).grid(
             row=0, column=3, sticky=W, padx=(0, 14)
         )
-        ttk.Label(ssh_line1, text="用户名", bootstyle=SECONDARY).grid(row=0, column=4, sticky=W, padx=(0, 6))
-        ttk.Entry(ssh_line1, textvariable=self.var_ssh_user, bootstyle=PRIMARY).grid(
+        ttk.Label(ssh_row1, text="用户名", bootstyle=SECONDARY).grid(row=0, column=4, sticky=W, padx=(0, 6))
+        ttk.Entry(ssh_row1, textvariable=self.var_ssh_user).grid(
             row=0, column=5, sticky=EW, padx=(0, 10)
         )
-        ttk.Label(ssh_line1, text="密码", bootstyle=SECONDARY).grid(row=0, column=6, sticky=W, padx=(0, 6))
-        ttk.Entry(ssh_line1, textvariable=self.var_ssh_pass, show="*", bootstyle=PRIMARY).grid(
+        ttk.Label(ssh_row1, text="密码", bootstyle=SECONDARY).grid(row=0, column=6, sticky=W, padx=(0, 6))
+        ttk.Entry(ssh_row1, textvariable=self.var_ssh_pass, show="*").grid(
             row=0, column=7, sticky=EW
         )
 
-        key_row = ttk.Frame(z)
-        key_row.grid(row=1, column=0, columnspan=2, sticky=EW, pady=(8, 0))
-        key_row.columnconfigure(1, weight=2)
-        key_row.columnconfigure(3, weight=1)
-        ttk.Label(key_row, text="私钥路径（可选）", bootstyle=SECONDARY).grid(
+        ssh_row2 = ttk.Frame(z)
+        ssh_row2.grid(row=1, column=0, sticky=EW, pady=(8, 0))
+        ssh_row2.columnconfigure(1, weight=2)
+        ssh_row2.columnconfigure(3, weight=1)
+        ttk.Label(ssh_row2, text="私钥路径（可选）", bootstyle=SECONDARY).grid(
             row=0, column=0, sticky=W, padx=(0, 6)
         )
-        kf = ttk.Frame(key_row)
+        kf = ttk.Frame(ssh_row2)
         kf.grid(row=0, column=1, sticky=EW, padx=(0, 14))
         kf.columnconfigure(0, weight=1)
-        ttk.Entry(kf, textvariable=self.var_ssh_key, bootstyle=PRIMARY).grid(row=0, column=0, sticky=EW)
+        ttk.Entry(kf, textvariable=self.var_ssh_key).grid(row=0, column=0, sticky=EW)
         ttk.Button(kf, text="浏览…", command=self._browse_key, bootstyle=SECONDARY, width=8).grid(
             row=0, column=1, padx=(8, 0)
         )
-        ttk.Label(key_row, text="私钥口令", bootstyle=SECONDARY).grid(row=0, column=2, sticky=W, padx=(0, 6))
-        ttk.Entry(key_row, textvariable=self.var_ssh_key_pass, show="*", bootstyle=PRIMARY).grid(
-            row=0, column=3, sticky=EW
+        ttk.Label(ssh_row2, text="私钥口令", bootstyle=SECONDARY).grid(row=0, column=2, sticky=W, padx=(0, 6))
+        ttk.Entry(ssh_row2, textvariable=self.var_ssh_key_pass, show="*").grid(
+            row=0, column=3, sticky=EW, padx=(0, 14)
         )
-
-        ttk.Label(z, text="TERM", bootstyle=SECONDARY).grid(row=2, column=0, sticky=W, pady=(8, 0), padx=(0, 8))
-        term_row = ttk.Frame(z)
-        term_row.grid(row=2, column=1, sticky=W, pady=(8, 0))
+        ttk.Label(ssh_row2, text="TERM", bootstyle=SECONDARY).grid(row=0, column=4, sticky=W, padx=(0, 6))
         ttk.Combobox(
-            term_row,
+            ssh_row2,
             textvariable=self.var_ssh_term,
             values=["xterm", "xterm-256color", "vt100", "linux"],
             width=18,
-            bootstyle=PRIMARY,
-        ).pack(side=tk.LEFT)
-        ttk.Label(term_row, text="PTY 列", bootstyle=SECONDARY).pack(side=tk.LEFT, padx=(16, 6))
-        ttk.Spinbox(term_row, from_=40, to=300, textvariable=self.var_ssh_cols, width=6).pack(side=tk.LEFT)
-        ttk.Label(term_row, text="行", bootstyle=SECONDARY).pack(side=tk.LEFT, padx=(12, 6))
-        ttk.Spinbox(term_row, from_=10, to=100, textvariable=self.var_ssh_rows, width=6).pack(side=tk.LEFT)
+        ).grid(row=0, column=5, sticky=W, padx=(0, 10))
+        ttk.Label(ssh_row2, text="PTY 列", bootstyle=SECONDARY).grid(row=0, column=6, sticky=W, padx=(0, 6))
+        ttk.Spinbox(ssh_row2, from_=40, to=300, textvariable=self.var_ssh_cols, width=6).grid(
+            row=0, column=7, sticky=W, padx=(0, 10)
+        )
+        ttk.Label(ssh_row2, text="行", bootstyle=SECONDARY).grid(row=0, column=8, sticky=W, padx=(0, 6))
+        ttk.Spinbox(ssh_row2, from_=10, to=100, textvariable=self.var_ssh_rows, width=6).grid(
+            row=0, column=9, sticky=W
+        )
 
         btn_row = ttk.Frame(top)
         btn_row.grid(row=4, column=0, sticky=EW, pady=(12, 0))

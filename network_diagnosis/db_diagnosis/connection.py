@@ -99,6 +99,7 @@ def open_database_connection(
             host=(host or "127.0.0.1").strip(),
             port=int(port or 1521),
             service_name=database.strip(),
+            tcp_connect_timeout=float(timeout_sec),
         )
 
     raise ValueError(f"不支持的引擎：{engine}")

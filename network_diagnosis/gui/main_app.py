@@ -1176,10 +1176,10 @@ class NetworkDiagnosisApp(ttk.Window):
             text="支持 IP/前缀（如 192.168.1.10/24）或 IP/掩码（如 192.168.1.10/255.255.255.0）",
             bootstyle=SECONDARY,
             font=("Microsoft YaHei UI", 10),
-            wraplength=420,
+            wraplength=0,
             justify=tk.LEFT,
         ).grid(row=0, column=0, sticky=W)
-        ttk.Entry(lf_cidr, textvariable=self.var_subnet_combo, bootstyle=PRIMARY).grid(
+        ttk.Entry(lf_cidr, textvariable=self.var_subnet_combo).grid(
             row=1, column=0, sticky=EW, pady=(8, 0)
         )
 
@@ -1191,7 +1191,7 @@ class NetworkDiagnosisApp(ttk.Window):
         self.var_subnet_mask = tk.StringVar(value="")
 
         ttk.Label(lf_split, text="IPv4 地址", bootstyle=SECONDARY).grid(row=0, column=0, sticky=W, padx=(0, 10))
-        ttk.Entry(lf_split, textvariable=self.var_subnet_ip, bootstyle=PRIMARY).grid(
+        ttk.Entry(lf_split, textvariable=self.var_subnet_ip).grid(
             row=0, column=1, sticky=EW
         )
         row1 = ttk.Frame(lf_split)
@@ -1201,7 +1201,7 @@ class NetworkDiagnosisApp(ttk.Window):
             side=tk.LEFT, padx=(6, 16)
         )
         ttk.Label(row1, text="或掩码", bootstyle=SECONDARY).pack(side=tk.LEFT)
-        ttk.Entry(row1, textvariable=self.var_subnet_mask, width=18, bootstyle=PRIMARY).pack(
+        ttk.Entry(row1, textvariable=self.var_subnet_mask, width=18).pack(
             side=tk.LEFT, padx=(6, 0)
         )
         ttk.Label(
@@ -1209,7 +1209,7 @@ class NetworkDiagnosisApp(ttk.Window):
             text="填写点分掩码时将优先用掩码；留空则使用前缀。上一栏含 “/” 时忽略本组。",
             bootstyle=SECONDARY,
             font=("Microsoft YaHei UI", 10),
-            wraplength=420,
+            wraplength=0,
             justify=tk.LEFT,
         ).grid(row=2, column=0, columnspan=2, sticky=W, pady=(10, 0))
 

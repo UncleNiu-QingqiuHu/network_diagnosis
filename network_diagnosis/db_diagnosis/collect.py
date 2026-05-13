@@ -162,7 +162,7 @@ def collect_full_postgresql(conn: Any) -> dict[str, str]:
         conn,
         "postgresql",
         "SELECT pid, usename, application_name, client_addr, state, wait_event_type, "
-        "wait_event, query_start, LEFT(query, 160) AS q FROM pg_stat_activity "
+        "wait_event, query_start, SUBSTRING(query FROM 1 FOR 160) AS q FROM pg_stat_activity "
         "WHERE state <> 'idle' OR wait_event IS NOT NULL ORDER BY query_start NULLS LAST LIMIT 25",
     )
     out["活跃会话（节选）"] = sql_to_markdown_table(r4, c4, max_rows=25) if not e4 else f"`{e4}`"
