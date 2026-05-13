@@ -16,6 +16,7 @@ import ttkbootstrap as ttk
 from ttkbootstrap.constants import END, EW, INFO, NSEW, PRIMARY, SECONDARY, SUCCESS, W
 
 from network_diagnosis.gui.main_app_common import bind_label_wraplength
+from network_diagnosis.gui.simple_markdown_text import append_simple_markdown, configure_simple_markdown_tags
 from network_diagnosis.paths import report_root
 from network_diagnosis.security_diag.collect import (
     check_https_target_markdown,
@@ -123,6 +124,7 @@ class SecurityDiagnosisFrame(ttk.Frame):
             pady=8,
         )
         self.txt.grid(row=1, column=0, sticky=NSEW)
+        configure_simple_markdown_tags(self.txt, base_font=("Microsoft YaHei UI", 10))
 
     def _clear_out(self) -> None:
         self._sections.clear()
@@ -133,9 +135,8 @@ class SecurityDiagnosisFrame(ttk.Frame):
     def _append_md(self, chunk: str) -> None:
         self._sections.append(chunk.strip())
         self.txt.configure(state=tk.NORMAL)
-        self.txt.insert(END, chunk)
-        if not chunk.endswith("\n"):
-            self.txt.insert(END, "\n")
+        md = chunk if chunk.endswith("\n") else chunk + "\n"
+        append_simple_markdown(self.txt, md)
         self.txt.insert(END, "\n")
         self.txt.see(END)
         self.txt.configure(state=tk.DISABLED)

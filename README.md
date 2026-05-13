@@ -55,6 +55,111 @@ python -m network_diagnosis
 network-diagnosis
 ```
 
+## Windows 打包（PyInstaller）
+
+设计约定见 [`docs/network-diagnostic-tool-design_v1.5.md`](docs/network-diagnostic-tool-design_v1.5.md) 中「打包与分发」。 frozen 模式下 `network_diagnosis.paths.bundle_root()` 指向 **`sys._MEIPASS`**，因此 **`ThirdParty/tcping/tcping.exe`** 与包内资源需通过 **`--add-data`**（或 spec 里 `datas`）打进包内；**`reports/`、`switch_console/`** 仍写在 **exe 同目录**（无需打进包）。
+
+### 1. 环境与依赖
+
+在已 `pip install -e .` 的同一虚拟环境中安装打包工具：
+
+```powershell
+.\.venv\Scripts\activate
+pip install pyinstaller
+```
+
+### 2. 推荐：`onedir` + 无控制台窗口
+
+在**仓库根目录**执行（路径请按本机修改）。Windows 下 `--add-data` 使用 **`源路径;包内目标相对路径`**（分号分隔）：
+
+```powershell
+cd E:\Workspace\qqhu_network_diagnosis
+
+pyinstaller --noconfirm --windowed --onedir `
+  --name qqhu-network-workbench `
+  --paths . `
+  --collect-all ttkbootstrap `
+  --add-data "ThirdParty/tcping/tcping.exe;ThirdParty/tcping" `
+  --add-data "network_diagnosis/images/qingqiu.ico;network_diagnosis/images" `
+  network_diagnosis/__main__.py
+```
+
+产物目录：`dist\qqhu-network-workbench\`，其中 `qqhu-network-workbench.exe` 为可执行文件。首次分发前请在本机实际运行一遍，确认杀毒/策略未拦截。
+
+**可选资源（按需加入 `--add-data`）**
+
+- **iperf3**：若仓库内已有 `ThirdParty/iperf3/iperf3.exe`，可增加  
+  `--add-data "ThirdParty/iperf3/iperf3.exe;ThirdParty/iperf3"`
+- **Wireshark 安装包**：体积较大，也可改为**不**打入 `_MEIPASS`，而在发布 zip 中把 `ThirdParty\Wireshark\*.exe` 与 exe **并列**拷贝；程序通过 `bundle_root()` 在开发树或包内查找安装包（与 [`network_diagnosis/paths.py`](network_diagnosis/paths.py) 一致）。若选择打入包内，对目录使用例如：  
+  `--add-data "ThirdParty/Wireshark;ThirdParty/Wireshark"`（仅当该目录存在且需随包分发时）
+
+若 PyInstaller 分析阶段漏掉可选驱动，可补 **`--hidden-import`**，例如：`pymysql`、`psycopg`、`pyodbc`、`oracledb`、`paramiko`、`serial`。
+
+### 3. `onefile` 单文件（可选）
+
+增加 `--onefile` 可得到单个 exe，启动时需解压临时目录，冷启动较慢，且杀毒更易误报；资源路径规则与上相同。
+
+### 4. Python  wheel / sdist（库形态）
+
+若仅需可安装的 Python 包（非桌面 exe），在项目根目录：
+
+```powershell
+pip install build
+python -m build
+```
+
+**Wheel** 与 sdist 位于 `dist/`，安装后可通过 **`network-diagnosis`** 命令启动（见 `pyproject.toml` 的 `[project.entry-points.gui_scripts]`）。
+
+## Windows 打包（Nuitka · 目录分发）
+
+不使用 **`--onefile`** 时，Nuitka 生成 **standalone 目录**（整夹 zip 分发），冷启动与排错一般优于单文件 exe。
+
+未走 PyInstaller 时，`network_diagnosis.paths.bundle_root()` 用 **`network_diagnosis/paths.py` 所在位置**推算发行根目录，因此 **`--include-data-dir`** 的**右侧路径**须与仓库内 **`ThirdParty/...`、`network_diagnosis/images/...`** 布局一致（与 [`network_diagnosis/paths.py`](network_diagnosis/paths.py) 一致）。
+
+### 1. 环境与编译器
+
+Windows 上需要 **C 编译器**（Visual Studio Build Tools 或 Nuitka 文档推荐的 MinGW）。配置说明见 [Nuitka User Manual](https://nuitka.net/user-documentation/user-manual.html)。
+
+```powershell
+.\.venv\Scripts\activate
+pip install nuitka ordered-set zstandard
+```
+
+### 2. standalone 目录（推荐）
+
+在**仓库根目录**执行（路径请按本机修改）：
+
+```powershell
+cd E:\Workspace\qqhu_network_diagnosis
+
+python -m nuitka `
+  --standalone `
+  --assume-yes-for-downloads `
+  --windows-console-mode=disable `
+  --enable-plugin=tk-inter `
+  --include-package-data=ttkbootstrap `
+  --include-data-dir=ThirdParty/tcping=ThirdParty/tcping `
+  --include-data-dir=network_diagnosis/images=network_diagnosis/images `
+  network_diagnosis/__main__.py
+```
+
+默认生成 **`__main__.dist`** 目录，内含 **`__main__.exe`** 及依赖 DLL。分发时将整个 **`__main__.dist`** 打成 zip 即可。
+
+若希望 exe 名称更直观，可在仓库根新增 **`launcher.py`**，仅转调入口（例如 `from network_diagnosis.__main__ import main` 后调用 `main()`），再对 **`launcher.py`** 执行同一套参数，产物一般为 **`launcher.dist` / `launcher.exe`**（具体以本机 `python -m nuitka --help` 为准）。
+
+**可选 `--include-data-dir`**
+
+- **iperf3**：`--include-data-dir=ThirdParty/iperf3=ThirdParty/iperf3`（仅当该目录存在）
+- **Wireshark 安装包**：体积较大时可不打进 standalone，在 zip 中与 **`.dist` 并列**放置 `ThirdParty\Wireshark\`；若打入：  
+  `--include-data-dir=ThirdParty/Wireshark=ThirdParty/Wireshark`
+
+若运行时提示缺少数据库驱动等模块，可追加 **`--include-module=...`**（按需，例如 `pymysql`、`psycopg`、`pyodbc`、`oracledb`）。
+
+### 3. 与 PyInstaller 的差异提示
+
+- Nuitka **不提供** `sys._MEIPASS`；资源路径依赖发行目录布局与 `paths.py` 中的推算逻辑。
+- 单文件形态为 **`--onefile`**，启动需解压、排障成本更高；**目录分发建议不要加 `--onefile`**。
+
 ## 报告与数据目录
 
 **网络诊断**每次任务会在**项目根目录**（或打包后 **exe 同目录**）下创建：
@@ -77,7 +182,7 @@ reports/db_diagnosis/<任务ID>/
 reports/security_diagnosis/
 ```
 
-**交换机 Console**（如 SSH `known_hosts`）可写数据默认在仓库根下的 `switch_console/`；若使用 PyInstaller 打包，则在 **exe 同目录下的 `switch_console/`**。
+**交换机 Console**（如 SSH `known_hosts`）可写数据默认在仓库根下的 `switch_console/`；若使用 **PyInstaller** 或 **Nuitka standalone** 打包，则在 **exe 所在发行目录下的 `switch_console/`**（与 `paths.py` 约定一致）。
 
 以上目录若不存在会在首次使用时创建；`reports/` 已加入 `.gitignore`。
 

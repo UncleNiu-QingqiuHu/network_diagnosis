@@ -27,7 +27,6 @@ from ttkbootstrap.constants import (
 )
 
 from network_diagnosis.gui.db_diagnosis_frame import DbDiagnosisFrame
-from network_diagnosis.gui.security_diagnosis_frame import SecurityDiagnosisFrame
 from network_diagnosis.gui.main_app_common import parse_ports, try_set_window_icon
 from network_diagnosis.gui.main_app_network_views import NetworkViewsMixin
 from network_diagnosis.gui.main_app_report_text import (
@@ -51,6 +50,7 @@ from network_diagnosis.gui.main_app_report_text import (
 )
 from network_diagnosis.gui.main_app_static_views import StaticViewsMixin
 from network_diagnosis.gui.main_app_subnet_views import SubnetViewsMixin
+from network_diagnosis.gui.security_diagnosis_frame import SecurityDiagnosisFrame
 from network_diagnosis.gui.switch_console_frame import SwitchConsoleFrame
 from network_diagnosis.model.report import DiagnosticReport
 from network_diagnosis.paths import (
@@ -74,7 +74,7 @@ class NetworkDiagnosisApp(NetworkViewsMixin, SubnetViewsMixin, StaticViewsMixin,
         # 最小窗口大小
         self.minsize(1260, 720)
         # 默认窗口大小：每次启动在主屏居中（大于屏幕时先缩放到可放入再居中）
-        self.geometry(self._centered_geometry(1920, 1080))
+        self.geometry(self._centered_geometry(1920, 1200))
 
         self._queue: queue.Queue[tuple[str, object]] = queue.Queue()
         self._worker: threading.Thread | None = None
