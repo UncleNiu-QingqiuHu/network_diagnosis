@@ -5,6 +5,7 @@ from __future__ import annotations
 import ipaddress
 import platform
 import socket
+import time
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -31,6 +32,7 @@ from network_diagnosis.probes.tcping_probe import probe_tcping_version, run_tcpi
 from network_diagnosis.probes.tshark import (
     TsharkCaptureSession,
     pick_capture_interface_index,
+    summarize_pcap,
     tshark_version_line,
 )
 from network_diagnosis.reporting.markdown import write_markdown_report
@@ -46,8 +48,10 @@ class RunOptions:
     enable_ping: bool
     enable_capture: bool
     prefer_ipv6: bool
-    ping_count: int = 4
+    ping_count: int = 10
     ping_packet_timeout_ms: int = 2000
+    ping_long: bool = False
+    long_ping_seconds: int = 30
 
 
 def _is_ip_literal(addr: str) -> bool:
@@ -59,23 +63,39 @@ def _is_ip_literal(addr: str) -> bool:
     return True
 
 
+def _host_bpf(addr: str) -> str:
+    """将字面量 IP 转为 pcap bpf 主机表达式（IPv4 用 ip host，IPv6 用 ip6 host）。"""
+    base = addr.strip().rstrip(".").split("%", 1)[0]
+    if ":" in base:
+        return f"ip6 host {base}"
+    return f"ip host {base}"
+
+
 def _build_capture_filter(target_ip_or_host: str, ports: list[int]) -> str:
-    port_expr = " or ".join(f"tcp port {p}" for p in ports)
+    """构建抓包过滤器：有端口时限定为到该主机的 TCP 端口；无端口时只按主机抓，避免过窄导致空文件。"""
+    port_parts = [f"tcp port {p}" for p in ports]
+    port_expr = " or ".join(port_parts) if port_parts else ""
+
     if _is_ip_literal(target_ip_or_host):
-        a = target_ip_or_host.strip().rstrip(".")
-        if ":" in a:
-            return f"ip6 and host {a} and ({port_expr})"
-        return f"ip and host {a} and ({port_expr})"
-    # 主机名在 BPF 中不一定可解析；降级为仅按 TCP 端口过滤（体积可能较大）。
-    return f"tcp and ({port_expr})"
+        hp = _host_bpf(target_ip_or_host)
+        if port_expr:
+            return f"(({hp}) and tcp and ({port_expr}))"
+        return f"({hp})"
+
+    # 主机名不能写入 BPF；有端口时仅按 TCP 端口收（略宽）；无端口时用常见探测流量
+    if port_expr:
+        return f"tcp and ({port_expr})"
+    return "(tcp or icmp or icmp6)"
 
 
 def _build_gui_summary(
     dns: DnsAnswer,
     ping_okish: bool | None,
-    ports: list[PortProbeResult],
+    port_results: list[PortProbeResult],
     degradations: list[DegradationEvent],
     md_path: Path,
+    *,
+    user_configured_ports: bool,
 ) -> GuiSummary:
     bullets: list[str] = []
     status = OverallStatus.OK
@@ -96,14 +116,18 @@ def _build_gui_summary(
     elif ping_okish is True:
         bullets.append("ICMP ping 有响应，基础连通性大致正常。")
 
-    if not ports:
-        bullets.append("未执行 TCP 端口探测（可能缺少内置 tcping.exe）。")
-        status = OverallStatus.FAILED if status == OverallStatus.OK else status
+    if not user_configured_ports:
+        bullets.append("未配置 TCP 端口，已跳过端口连通性探测。")
+    elif any(d.code == "tcping_missing" for d in degradations):
+        bullets.append("已填写端口，但未找到内置 tcping，无法完成端口探测。")
     else:
-        bad = [p for p in ports if p.failure_class != PortFailureClass.OK]
-        if not bad:
+        bad = [p for p in port_results if p.failure_class != PortFailureClass.OK]
+        if not port_results:
+            bullets.append("未能得到端口探测结果（可能未成功执行 tcping）。")
+            status = OverallStatus.FAILED if status == OverallStatus.OK else status
+        elif not bad:
             bullets.append("所测 TCP 端口均可建立连接。")
-        elif len(bad) == len(ports):
+        elif len(bad) == len(port_results):
             status = OverallStatus.FAILED
             bullets.append("所测 TCP 端口均异常，更像对端或路径上的网络/策略问题。")
         else:
@@ -119,7 +143,7 @@ def _build_gui_summary(
                 status = OverallStatus.DEGRADED
             bullets.append(d.message)
 
-    if any(d.code == "tcping_missing" for d in degradations):
+    if any(d.code == "tcping_missing" for d in degradations) and user_configured_ports:
         status = OverallStatus.FAILED
 
     headline = {
@@ -211,6 +235,7 @@ def run_diagnostic(options: RunOptions, progress: Callable[[str], None]) -> Diag
                     notes=f"捕获过滤器 (BPF): `{bpf}`",
                 )
                 progress("tshark 抓包已启动。")
+                time.sleep(0.6)
             except OSError as e:
                 capture = CaptureInfo(
                     requested=True,
@@ -233,12 +258,21 @@ def run_diagnostic(options: RunOptions, progress: Callable[[str], None]) -> Diag
     ping_okish: bool | None = None
     if options.enable_ping:
         progress("正在执行 ICMP ping…")
-        ping_stats = run_ping(
-            options.target_host,
-            options.ping_count,
-            options.ping_packet_timeout_ms,
-            report_dir,
-        )
+        if options.ping_long:
+            ping_stats = run_ping(
+                options.target_host,
+                options.ping_count,
+                options.ping_packet_timeout_ms,
+                report_dir,
+                long_duration_sec=max(5, int(options.long_ping_seconds)),
+            )
+        else:
+            ping_stats = run_ping(
+                options.target_host,
+                options.ping_count,
+                options.ping_packet_timeout_ms,
+                report_dir,
+            )
         if ping_stats.attempted:
             ping_okish = ping_stats.received > 0
 
@@ -261,6 +295,19 @@ def run_diagnostic(options: RunOptions, progress: Callable[[str], None]) -> Diag
         progress("正在停止抓包…")
         cap_session.stop()
         progress("抓包已停止。")
+        if (
+            tshark_path is not None
+            and capture.pcap_path is not None
+            and capture.pcap_path.is_file()
+        ):
+            progress("正在用 tshark 分析抓包文件…")
+            try:
+                capture.analysis_summary = summarize_pcap(
+                    tshark_path, capture.pcap_path, report_dir
+                )
+            except OSError:
+                capture.analysis_summary = "抓包文件分析失败（tshark 调用出错）。"
+            progress("抓包摘要分析完成。")
 
     finished = datetime.now().astimezone()
     md_path = report_dir / f"network_diagnosis_{task_id}.md"
@@ -287,8 +334,19 @@ def run_diagnostic(options: RunOptions, progress: Callable[[str], None]) -> Diag
         enable_ping=options.enable_ping,
         enable_capture=options.enable_capture,
         prefer_ipv6=options.prefer_ipv6,
+        ping_count=options.ping_count,
+        ping_long=options.ping_long,
+        long_ping_seconds=options.long_ping_seconds,
+        ping_packet_timeout_ms=options.ping_packet_timeout_ms,
     )
-    gui = _build_gui_summary(dns, ping_okish, port_results, degradations, md_path)
+    gui = _build_gui_summary(
+        dns,
+        ping_okish,
+        port_results,
+        degradations,
+        md_path,
+        user_configured_ports=bool(options.ports),
+    )
     report = DiagnosticReport(
         meta=meta,
         user_input=user_snap,

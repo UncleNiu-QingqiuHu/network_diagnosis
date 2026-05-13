@@ -25,35 +25,79 @@ def _parse_ping_line(line: str) -> PingSample | None:
     return PingSample(rtt_ms=rtt, ttl=ttl, line=line.strip())
 
 
-def run_ping(host: str, count: int, timeout_ms: int, log_dir: Path) -> PingStats:
-    argv = ["ping", "-n", str(count), "-w", str(timeout_ms), host]
-    r = run_to_log_files(
-        argv,
-        log_dir,
-        "ping",
-        timeout_sec=max(30.0, count * (timeout_ms / 1000.0) + 10),
+def _parse_ping_summary_stats(text: str) -> tuple[int | None, int | None, int | None]:
+    """解析 Windows ping 结束时的发送/接收/丢失统计。"""
+    m = re.search(
+        r"Sent\s*=\s*(\d+).*?Received\s*=\s*(\d+).*?Lost\s*=\s*(\d+)",
+        text,
+        re.I | re.S,
     )
+    if m:
+        sent, recv, lost = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        return sent, recv, lost
+    m = re.search(
+        r"已发送\s*=\s*(\d+).*?已接收\s*=\s*(\d+).*?丢失\s*=\s*(\d+)",
+        text,
+        re.S,
+    )
+    if m:
+        sent, recv, lost = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        return sent, recv, lost
+    m = re.search(r"Packets:\s*Sent\s*=\s*(\d+),\s*Received\s*=\s*(\d+),\s*Lost\s*=\s*(\d+)", text, re.I)
+    if m:
+        return int(m.group(1)), int(m.group(2)), int(m.group(3))
+    return None, None, None
+
+
+def run_ping(
+    host: str,
+    count: int,
+    timeout_ms: int,
+    log_dir: Path,
+    *,
+    long_duration_sec: int | None = None,
+) -> PingStats:
+    if long_duration_sec is not None and long_duration_sec > 0:
+        argv = ["ping", "-t", "-w", str(timeout_ms), host]
+        stem = "ping_long"
+        timeout_sec = float(long_duration_sec) + 15.0
+    else:
+        argv = ["ping", "-n", str(count), "-w", str(timeout_ms), host]
+        stem = "ping"
+        timeout_sec = max(30.0, count * (timeout_ms / 1000.0) + 10)
+    r = run_to_log_files(argv, log_dir, stem, timeout_sec=timeout_sec)
     text = read_text_best_effort(r.stdout_path)
     rtts: list[float] = []
-    samples: list[PingSample] = []
     for line in text.splitlines():
         ps = _parse_ping_line(line)
         if ps and ps.rtt_ms is not None:
-            samples.append(ps)
             rtts.append(ps.rtt_ms)
-    # Windows 汇总行: (4 丢失 = 100% 丢失) 或 Packets: Sent = 4, Received = 0, Lost = 4 (100% loss),
-    lost = 0
-    received = len(rtts)
-    attempted = count
-    m = re.search(r"Lost\s*=\s*(\d+)", text, re.I)
-    if m:
-        lost = int(m.group(1))
-        received = max(0, attempted - lost)
+
+    sent_s, recv_s, lost_s = _parse_ping_summary_stats(text)
+    if sent_s is not None:
+        attempted, received, lost = sent_s, recv_s or 0, lost_s or 0
     else:
-        m = re.search(r"丢失\s*=\s*(\d+)", text)
-        if m:
-            lost = int(m.group(1))
-            received = max(0, attempted - lost)
+        if long_duration_sec is None:
+            lost = 0
+            received = len(rtts)
+            attempted = count
+            m = re.search(r"Lost\s*=\s*(\d+)", text, re.I)
+            if m:
+                lost = int(m.group(1))
+                received = max(0, attempted - lost)
+            else:
+                m = re.search(r"丢失\s*=\s*(\d+)", text)
+                if m:
+                    lost = int(m.group(1))
+                    received = max(0, attempted - lost)
+        else:
+            timeouts = len(re.findall(r"Request timed out|请求超时", text, re.I))
+            received = len(rtts)
+            lost = timeouts
+            attempted = received + lost
+            if attempted == 0 and received == 0:
+                attempted = 1
+
     return PingStats(
         attempted=attempted,
         received=received,

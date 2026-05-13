@@ -102,9 +102,12 @@ def write_markdown_report(report: DiagnosticReport, path: Path) -> None:
         "## 2. 用户输入",
         "",
         f"- 目标: `{report.user_input.target_host}`",
-        f"- 端口: {report.user_input.ports}",
-        f"- 每端口采样次数: {report.user_input.samples_per_port}",
+        f"- 端口: {report.user_input.ports if report.user_input.ports else '（未填写）'}",
+        f"- 端口采样次数（有端口时）: {report.user_input.samples_per_port}",
         f"- TCP 连接超时 (ms): {report.user_input.tcp_connect_timeout_ms}",
+        f"- Ping 次数: {report.user_input.ping_count}",
+        f"- 长 Ping: {report.user_input.ping_long}（最长 {report.user_input.long_ping_seconds} 秒）",
+        f"- ICMP 单次等待 (ms): {report.user_input.ping_packet_timeout_ms}",
         f"- 启用 ping: {report.user_input.enable_ping}",
         f"- 启用抓包: {report.user_input.enable_capture}",
         f"- 优先 IPv6: {report.user_input.prefer_ipv6}",
@@ -158,6 +161,13 @@ def write_markdown_report(report: DiagnosticReport, path: Path) -> None:
             "",
         ]
     )
+    if cap.analysis_summary:
+        lines.append("### 抓包可读摘要（自动生成）")
+        lines.append("")
+        lines.append("```")
+        lines.append(cap.analysis_summary)
+        lines.append("```")
+        lines.append("")
     if cap.stdout_path:
         lines.append("### tshark 日志摘录")
         lines.append("")

@@ -57,6 +57,10 @@ class UserInputSnapshot:
     enable_ping: bool
     enable_capture: bool
     prefer_ipv6: bool
+    ping_count: int = 10
+    ping_long: bool = False
+    long_ping_seconds: int = 30
+    ping_packet_timeout_ms: int = 2000
 
 
 @dataclass
@@ -130,6 +134,7 @@ class CaptureInfo:
     stdout_path: Path | None
     stderr_path: Path | None
     notes: str = ""
+    analysis_summary: str = ""
 
 
 @dataclass

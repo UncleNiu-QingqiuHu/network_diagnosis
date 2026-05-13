@@ -93,8 +93,14 @@ def _gui_lines_ping(rep: DiagnosticReport) -> list[str]:
     p = rep.ping
     if p is None:
         return ["未获取到 Ping 统计数据。"]
+    ui = rep.user_input
+    mode = (
+        f"（长 Ping：最长约 {ui.long_ping_seconds} 秒，由程序结束后统计）"
+        if ui.ping_long
+        else f"（固定次数：{ui.ping_count} 次）"
+    )
     lines = [
-        f"探测统计：已发送 {p.attempted}，收到 {p.received}，丢失 {p.lost}。",
+        f"探测统计：已发送 {p.attempted}，收到 {p.received}，丢失 {p.lost}。{mode}",
     ]
     if p.rtts_ms:
         avg = sum(p.rtts_ms) / len(p.rtts_ms)
@@ -111,14 +117,17 @@ def _gui_lines_ping(rep: DiagnosticReport) -> list[str]:
 
 
 def _gui_lines_ports(rep: DiagnosticReport) -> list[str]:
+    ui = rep.user_input
     degrad_tcping = any(d.code == "tcping_missing" for d in rep.degradations)
+    if not ui.ports:
+        return ["未填写 TCP 端口，已跳过端口连通性探测。"]
     if not rep.ports:
         if degrad_tcping:
             return [
-                "未执行 TCP 端口探测：未找到同捆 tcping.exe。",
+                "已填写端口，但未找到 tcping.exe，无法执行探测。",
                 "请将 tcping.exe 置于 ThirdParty/tcping/ 后重试。",
             ]
-        return ["未执行 TCP 端口探测。"]
+        return ["未能得到端口探测结果。"]
     lines: list[str] = []
     for pr in rep.ports:
         ok_n = sum(1 for s in pr.samples if s.success)
@@ -152,6 +161,10 @@ def _gui_lines_capture(rep: DiagnosticReport) -> list[str]:
         ]
         if c.notes:
             lines.append(c.notes)
+        if c.analysis_summary:
+            lines.append("")
+            lines.append("（以下为抓包内容的通俗解读，由程序根据统计自动生成）")
+            lines.extend(c.analysis_summary.splitlines())
         return lines
     lines: list[str] = ["本次未能完成抓包。"]
     if c.notes:
@@ -232,16 +245,16 @@ class NetworkDiagnosisApp(ttk.Window):
             row=0, column=1, sticky=EW, pady=(0, 6)
         )
 
-        ttk.Label(lf_target, text="TCP 端口", bootstyle=SECONDARY).grid(
+        ttk.Label(lf_target, text="TCP 端口（可选）", bootstyle=SECONDARY).grid(
             row=1, column=0, sticky=W, padx=(0, 12), pady=(0, 2)
         )
-        self.var_ports = tk.StringVar(value="80,443")
+        self.var_ports = tk.StringVar(value="")
         ttk.Entry(lf_target, textvariable=self.var_ports, bootstyle=PRIMARY).grid(
             row=1, column=1, sticky=EW, pady=(0, 2)
         )
         ttk.Label(
             lf_target,
-            text="多个端口请用英文逗号分隔，例如 80,443,8080",
+            text="留空则不测端口；填写时用英文逗号分隔，例如 80,443",
             bootstyle=SECONDARY,
             font=("Microsoft YaHei UI", 10),
         ).grid(row=2, column=1, sticky=W)
@@ -251,13 +264,17 @@ class NetworkDiagnosisApp(ttk.Window):
         for c in (1, 3):
             lf_opts.columnconfigure(c, weight=1)
 
-        self.var_samples = tk.IntVar(value=4)
+        self.var_samples = tk.IntVar(value=10)
         self.var_timeout = tk.IntVar(value=1000)
+        self.var_ping_count = tk.IntVar(value=10)
+        self.var_ping_long = tk.BooleanVar(value=False)
+        self.var_long_ping_sec = tk.IntVar(value=30)
+        self.var_ping_wait_ms = tk.IntVar(value=2000)
         self.var_ping = tk.BooleanVar(value=True)
         self.var_capture = tk.BooleanVar(value=False)
         self.var_ipv6 = tk.BooleanVar(value=False)
 
-        ttk.Label(lf_opts, text="每端口采样次数").grid(row=0, column=0, sticky=W, padx=(0, 8), pady=4)
+        ttk.Label(lf_opts, text="端口采样次数").grid(row=0, column=0, sticky=W, padx=(0, 8), pady=4)
         sb_samples = ttk.Spinbox(lf_opts, from_=1, to=50, textvariable=self.var_samples, width=8)
         sb_samples.grid(row=0, column=1, sticky=W, pady=4)
 
@@ -271,8 +288,37 @@ class NetworkDiagnosisApp(ttk.Window):
             width=10,
         ).grid(row=0, column=3, sticky=W, pady=4)
 
+        ping_row = ttk.Frame(lf_opts)
+        ping_row.grid(row=1, column=0, columnspan=4, sticky=W, pady=(8, 0))
+        ttk.Label(ping_row, text="Ping 次数").pack(side=tk.LEFT)
+        ttk.Spinbox(ping_row, from_=1, to=300, textvariable=self.var_ping_count, width=6).pack(
+            side=tk.LEFT, padx=(4, 14)
+        )
+        ttk.Label(ping_row, text="ICMP 等待 (ms)").pack(side=tk.LEFT)
+        ttk.Spinbox(
+            ping_row,
+            from_=500,
+            to=20000,
+            increment=100,
+            textvariable=self.var_ping_wait_ms,
+            width=7,
+        ).pack(side=tk.LEFT, padx=(4, 14))
+
+        long_ping_row = ttk.Frame(lf_opts)
+        long_ping_row.grid(row=2, column=0, columnspan=4, sticky=W, pady=(6, 0))
+        ttk.Checkbutton(
+            long_ping_row,
+            text="长 Ping",
+            variable=self.var_ping_long,
+            bootstyle="round-toggle",
+        ).pack(side=tk.LEFT, padx=(0, 8))
+        ttk.Spinbox(
+            long_ping_row, from_=5, to=600, textvariable=self.var_long_ping_sec, width=5
+        ).pack(side=tk.LEFT, padx=(0, 4))
+        ttk.Label(long_ping_row, text="秒（覆盖上方「Ping 次数」）").pack(side=tk.LEFT)
+
         chk_row = ttk.Frame(lf_opts)
-        chk_row.grid(row=1, column=0, columnspan=4, sticky=EW, pady=(10, 0))
+        chk_row.grid(row=3, column=0, columnspan=4, sticky=EW, pady=(10, 0))
         chk_row.columnconfigure(0, weight=1)
         ttk.Checkbutton(
             chk_row,
@@ -551,9 +597,6 @@ class NetworkDiagnosisApp(ttk.Window):
         except ValueError:
             messagebox.showwarning("校验", "端口列表格式不正确。")
             return
-        if not ports:
-            messagebox.showwarning("校验", "请至少填写一个端口。")
-            return
 
         opts = RunOptions(
             target_host=host,
@@ -563,6 +606,10 @@ class NetworkDiagnosisApp(ttk.Window):
             enable_ping=bool(self.var_ping.get()),
             enable_capture=bool(self.var_capture.get()),
             prefer_ipv6=bool(self.var_ipv6.get()),
+            ping_count=int(self.var_ping_count.get()),
+            ping_packet_timeout_ms=int(self.var_ping_wait_ms.get()),
+            ping_long=bool(self.var_ping_long.get()),
+            long_ping_seconds=int(self.var_long_ping_sec.get()),
         )
 
         self.txt_log.delete("1.0", END)
