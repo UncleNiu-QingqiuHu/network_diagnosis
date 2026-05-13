@@ -28,11 +28,18 @@ from ttkbootstrap.constants import (
     W,
 )
 
+from network_diagnosis.model.report import DiagnosticReport, PortFailureClass
 from network_diagnosis.paths import find_tshark, iter_wireshark_installers, resolve_tcping_exe
+from network_diagnosis.probes.dns_probe import pick_tcp_target
 from network_diagnosis.runner import RunOptions, run_diagnostic
 
 
 def _parse_ports(text: str) -> list[int]:
+    """
+    解析端口列表，支持英文逗号分隔。
+    例如：80,443,8080
+    返回排序后的端口列表。
+    """
     out: list[int] = []
     for part in text.replace(";", ",").split(","):
         p = part.strip()
@@ -42,7 +49,122 @@ def _parse_ports(text: str) -> list[int]:
     return sorted(set(out))
 
 
+_PORT_CLASS_CN: dict[PortFailureClass, str] = {
+    PortFailureClass.OK: "连接正常",
+    PortFailureClass.TIMEOUT: "超时",
+    PortFailureClass.REFUSED: "连接被拒绝",
+    PortFailureClass.UNREACHABLE: "不可达或重置",
+    PortFailureClass.ERROR: "探测异常",
+    PortFailureClass.UNKNOWN: "结果不明确",
+}
+
+
+def _gui_lines_dns(rep: DiagnosticReport) -> list[str]:
+    ui = rep.user_input
+    dns = rep.dns
+    fam_cn = {"ipv4": "IPv4", "ipv6": "IPv6", "mixed": "IPv4 / IPv6 混合"}.get(
+        dns.family, dns.family
+    )
+    lines: list[str] = [
+        f"目标主机名：{ui.target_host}",
+        f"记录族别：{fam_cn}",
+        f"优先 IPv6：{'是' if ui.prefer_ipv6 else '否'}",
+        f"解析耗时：{dns.elapsed_ms:.1f} ms",
+    ]
+    if dns.error:
+        lines.append(f"解析失败：{dns.error}")
+        return lines
+    if not dns.addresses:
+        lines.append("未得到任何解析地址。")
+        return lines
+    lines.append("解析到的地址：" + "、".join(dns.addresses))
+    tcp_t = pick_tcp_target(dns, prefer_ipv6=ui.prefer_ipv6)
+    if tcp_t:
+        lines.append(f"本次 TCP / 抓包使用的 IP：{tcp_t}")
+    return lines
+
+
+def _gui_lines_ping(rep: DiagnosticReport) -> list[str]:
+    if not rep.user_input.enable_ping:
+        return [
+            "本轮未启用 ICMP Ping。",
+            "如需测试，请在左侧「探测选项」中勾选「ICMP Ping」。",
+        ]
+    p = rep.ping
+    if p is None:
+        return ["未获取到 Ping 统计数据。"]
+    lines = [
+        f"探测统计：已发送 {p.attempted}，收到 {p.received}，丢失 {p.lost}。",
+    ]
+    if p.rtts_ms:
+        avg = sum(p.rtts_ms) / len(p.rtts_ms)
+        mn = min(p.rtts_ms)
+        mx = max(p.rtts_ms)
+        lines.append(f"延迟：平均 {avg:.1f} ms，最小 {mn:.1f} ms，最大 {mx:.1f} ms。")
+    elif p.received > 0:
+        lines.append("延迟：成功样本中未能解析 RTT 数值。")
+    if p.attempted and p.received == 0:
+        lines.append(
+            "说明：无 ICMP 回复时，常见于对端禁 ping 或防火墙策略，不代表 TCP 端口一定不通。"
+        )
+    return lines
+
+
+def _gui_lines_ports(rep: DiagnosticReport) -> list[str]:
+    degrad_tcping = any(d.code == "tcping_missing" for d in rep.degradations)
+    if not rep.ports:
+        if degrad_tcping:
+            return [
+                "未执行 TCP 端口探测：未找到同捆 tcping.exe。",
+                "请将 tcping.exe 置于 ThirdParty/tcping/ 后重试。",
+            ]
+        return ["未执行 TCP 端口探测。"]
+    lines: list[str] = []
+    for pr in rep.ports:
+        ok_n = sum(1 for s in pr.samples if s.success)
+        tot = max(len(pr.samples), 1)
+        rtts = [s.rtt_ms for s in pr.samples if s.success and s.rtt_ms is not None]
+        verdict = _PORT_CLASS_CN.get(pr.failure_class, pr.failure_class.value)
+        if pr.failure_class == PortFailureClass.OK:
+            detail = f"{ok_n}/{tot} 次成功"
+            if rtts:
+                detail += f"，平均延迟 {sum(rtts) / len(rtts):.1f} ms"
+            lines.append(f"端口 {pr.port}：{verdict}（{detail}）。目标 {pr.target_used}")
+        else:
+            lines.append(
+                f"端口 {pr.port}：{verdict}（成功 {ok_n}/{tot}）。目标 {pr.target_used}"
+            )
+    return lines
+
+
+def _gui_lines_capture(rep: DiagnosticReport) -> list[str]:
+    ui = rep.user_input
+    c = rep.capture
+    if not ui.enable_capture:
+        return [
+            "本轮未启用抓包。",
+            "如需抓包，请勾选「抓包」，并确保本机已安装 Wireshark/tshark 与 Npcap。",
+        ]
+    if c.ran and c.pcap_path is not None:
+        lines = [
+            "抓包已完成。",
+            f"文件：{c.pcap_path}",
+        ]
+        if c.notes:
+            lines.append(c.notes)
+        return lines
+    lines: list[str] = ["本次未能完成抓包。"]
+    if c.notes:
+        lines.append(c.notes)
+    for d in rep.degradations:
+        if d.code in ("capture_unavailable", "tshark_start_failed") and d.detail:
+            lines.append(f"补充说明：{d.detail}")
+            break
+    return lines
+
+
 class NetworkDiagnosisApp(ttk.Window):
+    """网络诊断工具主界面"""
     def __init__(self) -> None:
         # 主题
         super().__init__(themename="flatly")
@@ -50,9 +172,8 @@ class NetworkDiagnosisApp(ttk.Window):
         self.title("网络诊断工具")
         # 最小窗口大小
         self.minsize(1260, 720)
-        # 默认窗口大小
-        # self.geometry("1380x840")
-        self.geometry("1800x1200")
+        # 默认窗口大小：每次启动在主屏居中（大于屏幕时先缩放到可放入再居中）
+        self.geometry(self._centered_geometry(1800, 1200))
 
         self._queue: queue.Queue[tuple[str, object]] = queue.Queue()
         self._worker: threading.Thread | None = None
@@ -167,7 +288,7 @@ class NetworkDiagnosisApp(ttk.Window):
         ).grid(row=0, column=1, sticky=W, padx=(0, 20))
         ttk.Checkbutton(
             chk_row,
-            text="优化 IPv6",
+            text="优先 IPv6",
             variable=self.var_ipv6,
             bootstyle="round-toggle",
         ).grid(row=0, column=2, sticky=W)
@@ -191,7 +312,7 @@ class NetworkDiagnosisApp(ttk.Window):
         self.btn_run.grid(row=0, column=0, sticky=EW, padx=(0, 6), pady=(0, 8))
         ttk.Button(
             actions,
-            text="Wireshark 安装包",
+            text="安装 Wireshark",
             command=self._open_wireshark_installer,
             bootstyle=INFO,
             **big_btn_kwargs,
@@ -257,7 +378,7 @@ class NetworkDiagnosisApp(ttk.Window):
         mid.rowconfigure(0, weight=1)
         mid.columnconfigure(0, weight=1)
 
-        lf_summary = ttk.Labelframe(mid, text="结论（非技术摘要）", padding=(10, 8, 10, 10))
+        lf_summary = ttk.Labelframe(mid, text="诊断结果", padding=(10, 8, 10, 10))
         lf_summary.grid(row=0, column=0, sticky=NSEW)
         lf_summary.rowconfigure(0, weight=1)
         lf_summary.columnconfigure(0, weight=1)
@@ -272,6 +393,7 @@ class NetworkDiagnosisApp(ttk.Window):
             pady=8,
         )
         self.txt_summary.grid(row=0, column=0, sticky=NSEW)
+        self._setup_summary_text_tags()
 
         # —— 右列：进度详情 ——
         right.rowconfigure(0, weight=1)
@@ -298,6 +420,21 @@ class NetworkDiagnosisApp(ttk.Window):
 
         self.after(200, self._poll_queue)
         self.after_idle(self._init_main_sash)
+
+    def _setup_summary_text_tags(self) -> None:
+        st = self.txt_summary
+        st.tag_configure("sec_title", font=("Microsoft YaHei UI", 12, "bold"))
+        st.tag_configure("headline", font=("Microsoft YaHei UI", 13, "bold"))
+        st.tag_configure("body", font=("Microsoft YaHei UI", 12))
+
+    def _centered_geometry(self, width: int, height: int) -> str:
+        sw = self.winfo_screenwidth()
+        sh = self.winfo_screenheight()
+        w = min(width, sw)
+        h = min(height, sh)
+        x = max(0, (sw - w) // 2)
+        y = max(0, (sh - h) // 2)
+        return f"{w}x{h}+{x}+{y}"
 
     def _init_main_sash(self) -> None:
         """初次分配三列宽度为 1:1:1（按 Panedwindow 实际宽度，而非整窗宽度）。"""
@@ -350,7 +487,7 @@ class NetworkDiagnosisApp(ttk.Window):
         else:
             messagebox.showwarning(
                 "Tcping",
-                "未找到同捆 tcping.exe。\n请将可执行文件置于 ThirdParty/tcping/tcping.exe。",
+                "未找到 tcping.exe。\n请将可执行文件置于 ThirdParty/tcping/tcping.exe。点击下方链接下载：\nhttps://www.elifulkerson.com/projects/tcping.php#google_vignette",
             )
 
     def _probe_tshark(self) -> None:
@@ -369,7 +506,7 @@ class NetworkDiagnosisApp(ttk.Window):
         if not cands:
             messagebox.showwarning(
                 "Wireshark",
-                "未在 ThirdParty/Wireshark/ 下找到 .exe 安装包。\n请将官方安装程序放入该目录。",
+                "未在 ThirdParty/Wireshark/ 下找到 .exe 安装包。\n请将官方安装程序放入该目录。点击下方链接下载：\nhttps://www.wireshark.org/",
             )
             return
         path = str(cands[0])
@@ -461,8 +598,6 @@ class NetworkDiagnosisApp(ttk.Window):
                     self.btn_run.configure(state=tk.NORMAL)
                     self.lbl_status.configure(text="失败", bootstyle=DANGER)
                 elif kind == "done":
-                    from network_diagnosis.model.report import DiagnosticReport
-
                     rep: DiagnosticReport = payload  # type: ignore[assignment]
                     self._render_report(rep)
                     self.btn_run.configure(state=tk.NORMAL)
@@ -470,19 +605,42 @@ class NetworkDiagnosisApp(ttk.Window):
             pass
         self.after(200, self._poll_queue)
 
-    def _render_report(self, rep) -> None:
-        from network_diagnosis.model.report import DiagnosticReport
-
+    def _render_report(self, rep: DiagnosticReport) -> None:
         assert isinstance(rep, DiagnosticReport)
         self._stop_running_ui()
         g = rep.gui
-        self.txt_summary.insert(END, g.headline + "\n\n", ("head",))
-        self.txt_summary.tag_configure("head", font=("Microsoft YaHei UI", 14, "bold"))
+        t = self.txt_summary
+
+        def sec(title: str) -> None:
+            t.insert(END, title + "\n", ("sec_title",))
+
+        def body_lines(lines: list[str]) -> None:
+            for line in lines:
+                t.insert(END, line + "\n", ("body",))
+            t.insert(END, "\n")
+
+        sec("整体结论")
+        t.insert(END, g.headline + "\n", ("headline",))
         for b in g.bullets:
-            self.txt_summary.insert(END, "• " + b + "\n")
-        self.txt_summary.insert(
+            t.insert(END, "• " + b + "\n", ("body",))
+        t.insert(END, "\n")
+
+        sec("DNS 解析结果")
+        body_lines(_gui_lines_dns(rep))
+
+        sec("Ping 结果")
+        body_lines(_gui_lines_ping(rep))
+
+        sec("端口测试结果")
+        body_lines(_gui_lines_ports(rep))
+
+        sec("抓包结果")
+        body_lines(_gui_lines_capture(rep))
+
+        t.insert(
             END,
-            "\n若需技术人员排查，请使用下方按钮打开 Markdown 报告（含完整路径与原始日志索引）。\n",
+            "若需技术人员排查，请使用下方按钮打开 Markdown 报告（含完整路径与原始日志索引）。\n",
+            ("body",),
         )
 
         md = str(g.markdown_path.resolve())
