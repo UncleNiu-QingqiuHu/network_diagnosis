@@ -12,7 +12,21 @@ from tkinter import messagebox
 from tkinter.scrolledtext import ScrolledText
 
 import ttkbootstrap as ttk
-from ttkbootstrap.constants import BOTH, DANGER, END, EW, INFO, LEFT, NSEW, SECONDARY, SUCCESS, WARNING, W
+from ttkbootstrap.constants import (
+    BOTH,
+    DANGER,
+    END,
+    EW,
+    INFO,
+    NSEW,
+    OUTLINE,
+    PRIMARY,
+    SECONDARY,
+    SUCCESS,
+    WARNING,
+    E,
+    W,
+)
 
 from network_diagnosis.paths import find_tshark, iter_wireshark_installers
 from network_diagnosis.runner import RunOptions, run_diagnostic
@@ -32,24 +46,57 @@ class NetworkDiagnosisApp(ttk.Window):
     def __init__(self) -> None:
         super().__init__(themename="flatly")
         self.title("网络诊断工具")
-        self.geometry("920x640")
+        self.minsize(820, 620)
+        self.geometry("980x720")
 
         self._queue: queue.Queue[tuple[str, object]] = queue.Queue()
         self._worker: threading.Thread | None = None
 
-        frm = ttk.Frame(self, padding=12)
-        frm.pack(fill=BOTH, expand=True)
+        outer = ttk.Frame(self, padding=(16, 14, 16, 12))
+        outer.pack(fill=BOTH, expand=True)
+        outer.rowconfigure(0, weight=1)
+        outer.columnconfigure(0, weight=1)
 
-        ttk.Label(frm, text="目标主机名或 IP", bootstyle=SECONDARY).grid(row=0, column=0, sticky=W, pady=(0, 4))
+        pw = ttk.Panedwindow(outer, orient=tk.VERTICAL)
+        pw.grid(row=0, column=0, sticky=NSEW)
+
+        top = ttk.Frame(pw, padding=(0, 0, 0, 4))
+        bottom = ttk.Frame(pw, padding=(0, 6, 0, 0))
+        pw.add(top, weight=3)
+        pw.add(bottom, weight=2)
+        # Tcl/Tk 9+ 的 ttk::panedwindow 不支持 paneconfigure；勿在此调用。
+
+        # —— 上栏：表单 + 状态 + 结论 ——
+        lf_target = ttk.Labelframe(top, text="探测目标", padding=(12, 10, 12, 10))
+        lf_target.pack(fill=tk.X, pady=(0, 8))
+        lf_target.columnconfigure(1, weight=1)
+
+        ttk.Label(lf_target, text="主机名或 IP", bootstyle=SECONDARY).grid(
+            row=0, column=0, sticky=W, padx=(0, 12), pady=(0, 6)
+        )
         self.var_host = tk.StringVar(value="www.baidu.com")
-        ttk.Entry(frm, textvariable=self.var_host, width=48).grid(row=1, column=0, columnspan=3, sticky=W)
+        ttk.Entry(lf_target, textvariable=self.var_host, bootstyle=PRIMARY).grid(
+            row=0, column=1, sticky=EW, pady=(0, 6)
+        )
 
-        ttk.Label(frm, text="端口（逗号分隔）", bootstyle=SECONDARY).grid(row=2, column=0, sticky=W, pady=(12, 4))
+        ttk.Label(lf_target, text="TCP 端口", bootstyle=SECONDARY).grid(
+            row=1, column=0, sticky=W, padx=(0, 12), pady=(0, 2)
+        )
         self.var_ports = tk.StringVar(value="80,443")
-        ttk.Entry(frm, textvariable=self.var_ports, width=48).grid(row=3, column=0, columnspan=3, sticky=W)
+        ttk.Entry(lf_target, textvariable=self.var_ports, bootstyle=PRIMARY).grid(
+            row=1, column=1, sticky=EW, pady=(0, 2)
+        )
+        ttk.Label(
+            lf_target,
+            text="多个端口请用英文逗号分隔，例如 80,443,8080",
+            bootstyle=SECONDARY,
+            font=("Microsoft YaHei UI", 8),
+        ).grid(row=2, column=1, sticky=W)
 
-        opts = ttk.Labelframe(frm, text="选项", padding=10)
-        opts.grid(row=4, column=0, columnspan=3, sticky=EW, pady=(14, 8))
+        lf_opts = ttk.Labelframe(top, text="探测选项", padding=(12, 10, 12, 12))
+        lf_opts.pack(fill=tk.X, pady=(0, 8))
+        for c in (1, 3):
+            lf_opts.columnconfigure(c, weight=1)
 
         self.var_samples = tk.IntVar(value=4)
         self.var_timeout = tk.IntVar(value=1000)
@@ -57,72 +104,148 @@ class NetworkDiagnosisApp(ttk.Window):
         self.var_capture = tk.BooleanVar(value=False)
         self.var_ipv6 = tk.BooleanVar(value=False)
 
-        ttk.Label(opts, text="每端口采样次数").grid(row=0, column=0, sticky=W)
-        sb_samples = ttk.Spinbox(opts, from_=1, to=50, textvariable=self.var_samples, width=8)
-        sb_samples.grid(row=0, column=1, sticky=W, padx=(8, 24))
+        ttk.Label(lf_opts, text="每端口采样次数").grid(row=0, column=0, sticky=W, padx=(0, 8), pady=4)
+        sb_samples = ttk.Spinbox(lf_opts, from_=1, to=50, textvariable=self.var_samples, width=8)
+        sb_samples.grid(row=0, column=1, sticky=W, pady=4)
 
-        ttk.Label(opts, text="TCP 超时 (ms)").grid(row=0, column=2, sticky=W)
-        ttk.Spinbox(opts, from_=200, to=60000, increment=100, textvariable=self.var_timeout, width=10).grid(
-            row=0, column=3, sticky=W, padx=(8, 0)
-        )
+        ttk.Label(lf_opts, text="TCP 超时 (ms)").grid(row=0, column=2, sticky=W, padx=(16, 8), pady=4)
+        ttk.Spinbox(
+            lf_opts,
+            from_=200,
+            to=60000,
+            increment=100,
+            textvariable=self.var_timeout,
+            width=10,
+        ).grid(row=0, column=3, sticky=W, pady=4)
 
-        ttk.Checkbutton(opts, text="启用 ICMP ping", variable=self.var_ping, bootstyle="round-toggle").grid(
-            row=1, column=0, columnspan=2, sticky=W, pady=(8, 0)
-        )
+        chk_row = ttk.Frame(lf_opts)
+        chk_row.grid(row=1, column=0, columnspan=4, sticky=EW, pady=(10, 0))
+        chk_row.columnconfigure((0, 1, 2), weight=1)
         ttk.Checkbutton(
-            opts,
-            text="启用抓包（需 tshark + Npcap）",
+            chk_row,
+            text="ICMP ping",
+            variable=self.var_ping,
+            bootstyle="round-toggle",
+        ).grid(row=0, column=0, sticky=W, padx=(0, 8))
+        ttk.Checkbutton(
+            chk_row,
+            text="抓包（需 tshark + Npcap）",
             variable=self.var_capture,
             bootstyle="round-toggle",
-        ).grid(row=1, column=2, columnspan=2, sticky=W, pady=(8, 0))
-        ttk.Checkbutton(opts, text="优先 IPv6", variable=self.var_ipv6, bootstyle="round-toggle").grid(
-            row=2, column=0, columnspan=2, sticky=W, pady=(8, 0)
+        ).grid(row=0, column=1, sticky=W, padx=(0, 8))
+        ttk.Checkbutton(
+            chk_row,
+            text="优先 IPv6",
+            variable=self.var_ipv6,
+            bootstyle="round-toggle",
+        ).grid(row=0, column=2, sticky=W)
+
+        ttk.Separator(top, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=(4, 10))
+
+        actions = ttk.Frame(top)
+        actions.pack(fill=tk.X, pady=(0, 6))
+        actions.columnconfigure(1, weight=1)
+
+        self.btn_run = ttk.Button(
+            actions,
+            text="开始诊断",
+            command=self._on_run,
+            bootstyle=SUCCESS,
+            width=14,
         )
+        self.btn_run.grid(row=0, column=0, sticky=W)
 
-        btn_row = ttk.Frame(frm)
-        btn_row.grid(row=5, column=0, columnspan=3, sticky=EW, pady=(8, 4))
-        self.btn_run = ttk.Button(btn_row, text="开始诊断", command=self._on_run, bootstyle=SUCCESS)
-        self.btn_run.pack(side=LEFT)
-        ttk.Button(btn_row, text="打开 Wireshark 安装包", command=self._open_wireshark_installer, bootstyle=INFO).pack(
-            side=LEFT, padx=(10, 0)
+        tools = ttk.Frame(actions)
+        tools.grid(row=0, column=1, sticky=E)
+        ttk.Button(
+            tools,
+            text="Wireshark 安装包",
+            command=self._open_wireshark_installer,
+            bootstyle=INFO,
+        ).pack(side=tk.LEFT, padx=(0, 8))
+        ttk.Button(
+            tools,
+            text="检测 tshark",
+            command=self._probe_tshark,
+            bootstyle=SECONDARY,
+        ).pack(side=tk.LEFT)
+
+        status_bar = ttk.Frame(top, bootstyle=SECONDARY)
+        status_bar.pack(fill=tk.X, pady=(0, 8))
+        self.lbl_status = ttk.Label(
+            status_bar,
+            text="就绪",
+            bootstyle=SECONDARY,
+            anchor=W,
+            padding=(10, 8),
         )
-        ttk.Button(btn_row, text="检测 tshark", command=self._probe_tshark, bootstyle=SECONDARY).pack(
-            side=LEFT, padx=(10, 0)
+        self.lbl_status.pack(fill=tk.X)
+
+        lf_summary = ttk.Labelframe(top, text="结论（非技术摘要）", padding=(10, 8, 10, 10))
+        lf_summary.pack(fill=BOTH, expand=True, pady=(0, 0))
+        lf_summary.rowconfigure(0, weight=1)
+        lf_summary.columnconfigure(0, weight=1)
+
+        self.txt_summary = ScrolledText(
+            lf_summary,
+            height=6,
+            wrap=tk.WORD,
+            font=("Microsoft YaHei UI", 10),
+            relief=tk.FLAT,
+            padx=6,
+            pady=6,
         )
+        self.txt_summary.grid(row=0, column=0, sticky=NSEW)
 
-        self.lbl_status = ttk.Label(frm, text="就绪", bootstyle=SECONDARY)
-        self.lbl_status.grid(row=6, column=0, columnspan=3, sticky=W, pady=(6, 4))
+        # —— 下栏：日志 + 报告操作 ——
+        lf_log = ttk.Labelframe(bottom, text="进度与详情", padding=(10, 8, 10, 10))
+        lf_log.pack(fill=BOTH, expand=True)
+        lf_log.rowconfigure(0, weight=1)
+        lf_log.columnconfigure(0, weight=1)
 
-        out = ttk.Labelframe(frm, text="结论（非技术摘要）", padding=8)
-        out.grid(row=7, column=0, columnspan=3, sticky=NSEW, pady=(4, 6))
-        frm.rowconfigure(7, weight=1)
-        frm.columnconfigure(0, weight=1)
+        self.txt_log = ScrolledText(
+            lf_log,
+            height=8,
+            wrap=tk.WORD,
+            font=("Consolas", 9),
+            relief=tk.FLAT,
+            padx=6,
+            pady=6,
+        )
+        self.txt_log.grid(row=0, column=0, sticky=NSEW)
 
-        self.txt_summary = ScrolledText(out, height=8, wrap=tk.WORD, font=("Microsoft YaHei UI", 10))
-        self.txt_summary.pack(fill=BOTH, expand=True)
-
-        detail = ttk.Labelframe(frm, text="进度与详情", padding=8)
-        detail.grid(row=8, column=0, columnspan=3, sticky=NSEW, pady=(0, 4))
-        frm.rowconfigure(8, weight=1)
-
-        self.txt_log = ScrolledText(detail, height=10, wrap=tk.WORD, font=("Consolas", 9))
-        self.txt_log.pack(fill=BOTH, expand=True)
-
-        btn2 = ttk.Frame(frm)
-        btn2.grid(row=9, column=0, columnspan=3, sticky="ew")
+        btn2 = ttk.Frame(bottom)
+        btn2.pack(fill=tk.X, pady=(10, 0))
         self.btn_open_md = ttk.Button(
-            btn2, text="打开技术报告 (Markdown)", command=self._open_last_md, state=tk.DISABLED
+            btn2,
+            text="打开技术报告 (Markdown)",
+            command=self._open_last_md,
+            state=tk.DISABLED,
+            bootstyle=PRIMARY,
         )
-        self.btn_open_md.pack(side=LEFT)
+        self.btn_open_md.pack(side=tk.LEFT)
         self.btn_open_dir = ttk.Button(
-            btn2, text="打开报告文件夹", command=self._open_last_dir, state=tk.DISABLED
+            btn2,
+            text="打开报告文件夹",
+            command=self._open_last_dir,
+            state=tk.DISABLED,
+            bootstyle=OUTLINE,
         )
-        self.btn_open_dir.pack(side=LEFT, padx=(10, 0))
+        self.btn_open_dir.pack(side=tk.LEFT, padx=(10, 0))
 
         self._last_md: str | None = None
         self._last_dir: str | None = None
 
         self.after(200, self._poll_queue)
+        self.after_idle(self._init_sash, pw)
+
+    def _init_sash(self, pw: ttk.Panedwindow) -> None:
+        """初次分配上下栏高度，避免默认 sash 把日志压得过扁。"""
+        try:
+            h = max(self.winfo_height(), 400)
+            pw.sashpos(0, int(h * 0.52))
+        except tk.TclError:
+            pass
 
     def _append_log(self, text: str) -> None:
         self.txt_log.insert(END, text + "\n")

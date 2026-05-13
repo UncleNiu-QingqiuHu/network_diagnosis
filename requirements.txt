@@ -1,0 +1,4 @@
+pillow==12.2.0
+-e git+https://gitcode.com/ibobcheung/qqhu_network_diagnosis.git@af7d57338365b7280ef317a2a889251d8c8cdd00#egg=qqhu_network_diagnosis
+ruff==0.15.12
+ttkbootstrap==1.20.3
