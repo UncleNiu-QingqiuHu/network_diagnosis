@@ -54,7 +54,8 @@ class StaticViewsMixin:
         ).grid(row=0, column=0, sticky=W, pady=(0, 10))
 
         intro = (
-            "左侧「功能导航」可在各模块间切换。下方按标签页分模块说明：「网络诊断」「子网计算」「交换机配置」「数据库诊断」。"
+            "左侧「功能导航」可在各模块间切换。下方按标签页分模块说明："
+            "「网络诊断」「子网计算」「交换机配置」「数据库诊断」「安全诊断」。"
         )
         ttk.Label(
             frm,
@@ -194,10 +195,27 @@ class StaticViewsMixin:
   • 请使用只读或专用诊断账号；勿在生产库上使用高权限账户做试验。
   • 本模块为连通性与轻量信息采集，非 SQL 性能压测或审计替代方案。"""
 
+        body_security = """一、定位
+  • 面向企业网管在授权范围内的轻量基线核对：本机为只读摘要；对 URL 的 TLS / HTTP 头与 DNS 对比须在勾选授权确认后执行。
+  • 方案说明见仓库内 **docs/network-security-diagnosis-design.md**。
+
+二、本机
+  • 「刷新 TCP 监听端口」：在 Windows 上通过 PowerShell 枚举 TCP 监听、绑定地址与进程名（依赖 Get-NetTCPConnection 等）。
+  • 「刷新防火墙摘要」：各配置文件启用状态 + 入站「允许」规则抽样；精细管理请使用「高级安全 Windows 防火墙」(wf.msc)。
+
+三、授权目标
+  • 必须勾选「我已确认对目标的测试已获得有效授权」后，方可点击 HTTPS / DNS 检查。
+  • 「检查 TLS 与安全响应头」：建立 TLS、读取服务端证书字段摘要，并用 GET 拉取响应中的常见安全头（如 HSTS、CSP 等）；**不是**漏洞扫描或渗透工具。
+  • 「DNS 对比」：将系统解析得到的 IPv4 与指定 DNS 服务器解析结果并列；若不一致可能为 split-DNS 设计或配置问题，需结合现网文档判断。
+
+四、导出
+  • 「导出当前结果为 Markdown…」将当前输出区已累积的段落写入 **reports/security_diagnosis/**，便于工单与审计。"""
+
         add_guide_tab("网络诊断", body_network)
         add_guide_tab("子网计算", body_subnet)
         add_guide_tab("交换机配置", body_switch)
         add_guide_tab("数据库诊断", body_database)
+        add_guide_tab("安全诊断", body_security)
 
     def _build_about_view(self) -> None:
         frm = ttk.Frame(self._content_host, padding=(28, 28, 32, 28))
