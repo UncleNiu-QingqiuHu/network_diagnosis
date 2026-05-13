@@ -138,6 +138,18 @@ class CaptureInfo:
 
 
 @dataclass
+class NetworkQualityAssessment:
+    """面向 GUI/Markdown 的网络质量摘要."""
+
+    grade: str
+    loss_pct: float | None
+    avg_latency_ms: float | None
+    jitter_ms: float | None
+    throughput_note: str
+    metric_lines: list[str]
+
+
+@dataclass
 class GuiSummary:
     overall: OverallStatus
     headline: str
@@ -156,3 +168,4 @@ class DiagnosticReport:
     capture: CaptureInfo
     degradations: list[DegradationEvent]
     gui: GuiSummary
+    network_quality: NetworkQualityAssessment

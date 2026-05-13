@@ -137,11 +137,21 @@ def write_markdown_report(report: DiagnosticReport, path: Path) -> None:
             "",
             _dns_section(report.dns),
             "",
-            "## 5. ICMP Ping",
+            "## 5. 网络质量与指标",
+            "",
+            f"- **综合评判**: **{report.network_quality.grade}**（极佳 / 正常 / 较差 / 堵塞）",
+        ]
+    )
+    for ml in report.network_quality.metric_lines:
+        lines.append(f"- {ml}")
+    lines.extend(
+        [
+            "",
+            "## 6. ICMP Ping",
             "",
             _ping_section(report.ping),
             "",
-            "## 6. 端口连通性（tcping）",
+            "## 7. 端口连通性（tcping）",
             "",
             _port_table(report.ports),
             "",
@@ -150,7 +160,7 @@ def write_markdown_report(report: DiagnosticReport, path: Path) -> None:
     cap: CaptureInfo = report.capture
     lines.extend(
         [
-            "## 7. 抓包",
+            "## 8. 抓包",
             "",
             f"- 用户请求: {cap.requested}",
             f"- 是否实际执行: {cap.ran}",
@@ -175,7 +185,7 @@ def write_markdown_report(report: DiagnosticReport, path: Path) -> None:
         lines.append(_tail_file(cap.stdout_path, 30))
         lines.append("```")
         lines.append("")
-    lines.append("## 8. 降级与异常")
+    lines.append("## 9. 降级与异常")
     lines.append("")
     if not report.degradations:
         lines.append("（无）")
@@ -185,7 +195,7 @@ def write_markdown_report(report: DiagnosticReport, path: Path) -> None:
             if ev.detail:
                 lines.append(f"  - 详情: {ev.detail}")
     lines.append("")
-    lines.append("## 9. GUI 摘要（交叉核对）")
+    lines.append("## 10. GUI 摘要（交叉核对）")
     lines.append("")
     lines.append(f"- 总览: **{report.gui.overall.value}** — {report.gui.headline}")
     for b in report.gui.bullets:

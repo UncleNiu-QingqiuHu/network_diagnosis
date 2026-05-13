@@ -36,6 +36,7 @@ from network_diagnosis.probes.tshark import (
     tshark_version_line,
 )
 from network_diagnosis.reporting.markdown import write_markdown_report
+from network_diagnosis.quality_assessment import compute_network_quality
 from network_diagnosis.version import APP_VERSION, DESIGN_DOC_REF
 
 
@@ -347,6 +348,13 @@ def run_diagnostic(options: RunOptions, progress: Callable[[str], None]) -> Diag
         md_path,
         user_configured_ports=bool(options.ports),
     )
+    nq = compute_network_quality(
+        dns,
+        ping_stats,
+        port_results,
+        user_configured_ports=bool(options.ports),
+        enable_ping=options.enable_ping,
+    )
     report = DiagnosticReport(
         meta=meta,
         user_input=user_snap,
@@ -357,6 +365,7 @@ def run_diagnostic(options: RunOptions, progress: Callable[[str], None]) -> Diag
         capture=capture,
         degradations=degradations,
         gui=gui,
+        network_quality=nq,
     )
     write_markdown_report(report, md_path)
     progress(f"Markdown 报告已写入: {md_path}")

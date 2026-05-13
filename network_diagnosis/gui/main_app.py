@@ -59,6 +59,16 @@ _PORT_CLASS_CN: dict[PortFailureClass, str] = {
 }
 
 
+def _gui_lines_network_quality(rep: DiagnosticReport) -> list[str]:
+    nq = rep.network_quality
+    lines = [
+        f"综合评判：{nq.grade}（四档：极佳、正常、较差、堵塞）。",
+        "",
+    ]
+    lines.extend(nq.metric_lines)
+    return lines
+
+
 def _gui_lines_dns(rep: DiagnosticReport) -> list[str]:
     ui = rep.user_input
     dns = rep.dns
@@ -182,7 +192,7 @@ class NetworkDiagnosisApp(ttk.Window):
         # 主题
         super().__init__(themename="flatly")
         # 窗口标题
-        self.title("网络诊断工具")
+        self.title("网络诊断工具v1.0.0（开发：Mr. Z /联系方式：mr.zed@qq.com /QQ：40061980）")
         # 最小窗口大小
         self.minsize(1260, 720)
         # 默认窗口大小：每次启动在主屏居中（大于屏幕时先缩放到可放入再居中）
@@ -614,6 +624,7 @@ class NetworkDiagnosisApp(ttk.Window):
 
         self.txt_log.delete("1.0", END)
         self.txt_summary.delete("1.0", END)
+        self._status_shell.configure(text="任务状态")
         self.btn_run.configure(state=tk.DISABLED)
         self._start_running_ui()
 
@@ -644,6 +655,7 @@ class NetworkDiagnosisApp(ttk.Window):
                     self._stop_running_ui()
                     self.btn_run.configure(state=tk.NORMAL)
                     self.lbl_status.configure(text="失败", bootstyle=DANGER)
+                    self._status_shell.configure(text="任务状态")
                 elif kind == "done":
                     rep: DiagnosticReport = payload  # type: ignore[assignment]
                     self._render_report(rep)
@@ -672,6 +684,9 @@ class NetworkDiagnosisApp(ttk.Window):
             t.insert(END, "• " + b + "\n", ("body",))
         t.insert(END, "\n")
 
+        sec("网络质量与指标")
+        body_lines(_gui_lines_network_quality(rep))
+
         sec("DNS 解析结果")
         body_lines(_gui_lines_dns(rep))
 
@@ -696,12 +711,24 @@ class NetworkDiagnosisApp(ttk.Window):
         self.btn_open_md.configure(state=tk.NORMAL)
         self.btn_open_dir.configure(state=tk.NORMAL)
 
+        q = rep.network_quality.grade
+        self._status_shell.configure(text=f"任务状态（网络质量：{q}）")
+
         if g.overall.value == "ok":
-            self.lbl_status.configure(text="完成（整体正常）", bootstyle=SUCCESS)
+            self.lbl_status.configure(
+                text=f"完成（整体正常）（网络质量：{q}）",
+                bootstyle=SUCCESS,
+            )
         elif g.overall.value == "degraded":
-            self.lbl_status.configure(text="完成（部分异常或已降级）", bootstyle=WARNING)
+            self.lbl_status.configure(
+                text=f"完成（部分异常或已降级）（网络质量：{q}）",
+                bootstyle=WARNING,
+            )
         else:
-            self.lbl_status.configure(text="完成（存在明显问题）", bootstyle=DANGER)
+            self.lbl_status.configure(
+                text=f"完成（存在明显问题）（网络质量：{q}）",
+                bootstyle=DANGER,
+            )
 
         self._append_log(f"报告: {md}")
 
