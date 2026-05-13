@@ -24,7 +24,6 @@ from ttkbootstrap.constants import (
     SECONDARY,
     SUCCESS,
     WARNING,
-    E,
     W,
 )
 
@@ -46,28 +45,30 @@ class NetworkDiagnosisApp(ttk.Window):
     def __init__(self) -> None:
         super().__init__(themename="flatly")
         self.title("网络诊断工具")
-        self.minsize(820, 620)
-        self.geometry("980x720")
+        self.minsize(960, 680)
+        self.geometry("1180x800")
 
         self._queue: queue.Queue[tuple[str, object]] = queue.Queue()
         self._worker: threading.Thread | None = None
+        self._status_font_normal = ("Microsoft YaHei UI", 10)
+        self._status_font_running = ("Microsoft YaHei UI", 14, "bold")
 
         outer = ttk.Frame(self, padding=(16, 14, 16, 12))
         outer.pack(fill=BOTH, expand=True)
         outer.rowconfigure(0, weight=1)
         outer.columnconfigure(0, weight=1)
 
-        pw = ttk.Panedwindow(outer, orient=tk.VERTICAL)
-        pw.grid(row=0, column=0, sticky=NSEW)
+        pw_main = ttk.Panedwindow(outer, orient=tk.HORIZONTAL)
+        pw_main.grid(row=0, column=0, sticky=NSEW)
 
-        top = ttk.Frame(pw, padding=(0, 0, 0, 4))
-        bottom = ttk.Frame(pw, padding=(0, 6, 0, 0))
-        pw.add(top, weight=3)
-        pw.add(bottom, weight=2)
-        # Tcl/Tk 9+ 的 ttk::panedwindow 不支持 paneconfigure；勿在此调用。
+        left = ttk.Frame(pw_main, padding=(0, 0, 10, 0))
+        right = ttk.Frame(pw_main, padding=(10, 0, 0, 0))
+        pw_main.add(left, weight=1)
+        pw_main.add(right, weight=3)
+        self._pw_main = pw_main
 
-        # —— 上栏：表单 + 状态 + 结论 ——
-        lf_target = ttk.Labelframe(top, text="探测目标", padding=(12, 10, 12, 10))
+        # —— 左侧：表单 + 状态 + 报告按钮 ——
+        lf_target = ttk.Labelframe(left, text="探测目标", padding=(12, 10, 12, 10))
         lf_target.pack(fill=tk.X, pady=(0, 8))
         lf_target.columnconfigure(1, weight=1)
 
@@ -93,7 +94,7 @@ class NetworkDiagnosisApp(ttk.Window):
             font=("Microsoft YaHei UI", 8),
         ).grid(row=2, column=1, sticky=W)
 
-        lf_opts = ttk.Labelframe(top, text="探测选项", padding=(12, 10, 12, 12))
+        lf_opts = ttk.Labelframe(left, text="探测选项", padding=(12, 10, 12, 12))
         lf_opts.pack(fill=tk.X, pady=(0, 8))
         for c in (1, 3):
             lf_opts.columnconfigure(c, weight=1)
@@ -120,29 +121,30 @@ class NetworkDiagnosisApp(ttk.Window):
 
         chk_row = ttk.Frame(lf_opts)
         chk_row.grid(row=1, column=0, columnspan=4, sticky=EW, pady=(10, 0))
-        chk_row.columnconfigure((0, 1, 2), weight=1)
+        chk_col = ttk.Frame(chk_row)
+        chk_col.pack(anchor=W)
         ttk.Checkbutton(
-            chk_row,
+            chk_col,
             text="ICMP ping",
             variable=self.var_ping,
             bootstyle="round-toggle",
-        ).grid(row=0, column=0, sticky=W, padx=(0, 8))
+        ).pack(anchor=W, pady=(0, 4))
         ttk.Checkbutton(
-            chk_row,
+            chk_col,
             text="抓包（需 tshark + Npcap）",
             variable=self.var_capture,
             bootstyle="round-toggle",
-        ).grid(row=0, column=1, sticky=W, padx=(0, 8))
+        ).pack(anchor=W, pady=(0, 4))
         ttk.Checkbutton(
-            chk_row,
+            chk_col,
             text="优先 IPv6",
             variable=self.var_ipv6,
             bootstyle="round-toggle",
-        ).grid(row=0, column=2, sticky=W)
+        ).pack(anchor=W)
 
-        ttk.Separator(top, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=(4, 10))
+        ttk.Separator(left, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=(4, 10))
 
-        actions = ttk.Frame(top)
+        actions = ttk.Frame(left)
         actions.pack(fill=tk.X, pady=(0, 6))
         actions.columnconfigure(1, weight=1)
 
@@ -156,7 +158,7 @@ class NetworkDiagnosisApp(ttk.Window):
         self.btn_run.grid(row=0, column=0, sticky=W)
 
         tools = ttk.Frame(actions)
-        tools.grid(row=0, column=1, sticky=E)
+        tools.grid(row=1, column=0, columnspan=2, sticky=W, pady=(8, 0))
         ttk.Button(
             tools,
             text="Wireshark 安装包",
@@ -170,52 +172,30 @@ class NetworkDiagnosisApp(ttk.Window):
             bootstyle=SECONDARY,
         ).pack(side=tk.LEFT)
 
-        status_bar = ttk.Frame(top, bootstyle=SECONDARY)
-        status_bar.pack(fill=tk.X, pady=(0, 8))
+        status_shell = ttk.Labelframe(left, text="任务状态", padding=(12, 10, 12, 10), bootstyle=SECONDARY)
+        self._status_shell = status_shell
+        status_shell.pack(fill=BOTH, expand=True, pady=(8, 8))
+        status_bar = ttk.Frame(status_shell)
+        status_bar.pack(fill=tk.X)
         self.lbl_status = ttk.Label(
             status_bar,
             text="就绪",
             bootstyle=SECONDARY,
             anchor=W,
-            padding=(10, 8),
+            font=self._status_font_normal,
+            wraplength=280,
+            justify=tk.LEFT,
         )
         self.lbl_status.pack(fill=tk.X)
-
-        lf_summary = ttk.Labelframe(top, text="结论（非技术摘要）", padding=(10, 8, 10, 10))
-        lf_summary.pack(fill=BOTH, expand=True, pady=(0, 0))
-        lf_summary.rowconfigure(0, weight=1)
-        lf_summary.columnconfigure(0, weight=1)
-
-        self.txt_summary = ScrolledText(
-            lf_summary,
-            height=6,
-            wrap=tk.WORD,
-            font=("Microsoft YaHei UI", 10),
-            relief=tk.FLAT,
-            padx=6,
-            pady=6,
+        self._run_progress = ttk.Progressbar(
+            status_shell,
+            mode="indeterminate",
+            bootstyle=WARNING,
+            length=280,
         )
-        self.txt_summary.grid(row=0, column=0, sticky=NSEW)
 
-        # —— 下栏：日志 + 报告操作 ——
-        lf_log = ttk.Labelframe(bottom, text="进度与详情", padding=(10, 8, 10, 10))
-        lf_log.pack(fill=BOTH, expand=True)
-        lf_log.rowconfigure(0, weight=1)
-        lf_log.columnconfigure(0, weight=1)
-
-        self.txt_log = ScrolledText(
-            lf_log,
-            height=8,
-            wrap=tk.WORD,
-            font=("Consolas", 9),
-            relief=tk.FLAT,
-            padx=6,
-            pady=6,
-        )
-        self.txt_log.grid(row=0, column=0, sticky=NSEW)
-
-        btn2 = ttk.Frame(bottom)
-        btn2.pack(fill=tk.X, pady=(10, 0))
+        btn2 = ttk.Frame(left)
+        btn2.pack(fill=tk.X, pady=(0, 0))
         self.btn_open_md = ttk.Button(
             btn2,
             text="打开技术报告 (Markdown)",
@@ -233,19 +213,75 @@ class NetworkDiagnosisApp(ttk.Window):
         )
         self.btn_open_dir.pack(side=tk.LEFT, padx=(10, 0))
 
+        # —— 右侧：结论（上）+ 进度与详情（下，占更大垂直空间）——
+        right.rowconfigure(0, weight=1)
+        right.rowconfigure(1, weight=4)
+        right.columnconfigure(0, weight=1)
+
+        lf_summary = ttk.Labelframe(right, text="结论（非技术摘要）", padding=(10, 8, 10, 10))
+        lf_summary.grid(row=0, column=0, sticky=NSEW, pady=(0, 8))
+        lf_summary.rowconfigure(0, weight=1)
+        lf_summary.columnconfigure(0, weight=1)
+
+        self.txt_summary = ScrolledText(
+            lf_summary,
+            height=5,
+            wrap=tk.WORD,
+            font=("Microsoft YaHei UI", 10),
+            relief=tk.FLAT,
+            padx=6,
+            pady=6,
+        )
+        self.txt_summary.grid(row=0, column=0, sticky=NSEW)
+
+        lf_log = ttk.Labelframe(right, text="进度与详情", padding=(10, 8, 10, 10))
+        lf_log.grid(row=1, column=0, sticky=NSEW)
+        lf_log.rowconfigure(0, weight=1)
+        lf_log.columnconfigure(0, weight=1)
+
+        self.txt_log = ScrolledText(
+            lf_log,
+            height=22,
+            wrap=tk.WORD,
+            font=("Consolas", 9),
+            relief=tk.FLAT,
+            padx=6,
+            pady=6,
+        )
+        self.txt_log.grid(row=0, column=0, sticky=NSEW)
+
         self._last_md: str | None = None
         self._last_dir: str | None = None
 
         self.after(200, self._poll_queue)
-        self.after_idle(self._init_sash, pw)
+        self.after_idle(self._init_main_sash)
 
-    def _init_sash(self, pw: ttk.Panedwindow) -> None:
-        """初次分配上下栏高度，避免默认 sash 把日志压得过扁。"""
+    def _init_main_sash(self) -> None:
+        """初次分配左右栏宽度（左侧约 34%）。"""
         try:
-            h = max(self.winfo_height(), 400)
-            pw.sashpos(0, int(h * 0.52))
+            w = max(self.winfo_width(), 700)
+            self._pw_main.sashpos(0, int(w * 0.34))
         except tk.TclError:
             pass
+
+    def _start_running_ui(self) -> None:
+        self._status_shell.configure(bootstyle=WARNING)
+        self.lbl_status.configure(
+            text="正在运行诊断\n请留意右侧「进度与详情」中的实时输出。",
+            bootstyle=WARNING,
+            font=self._status_font_running,
+        )
+        self._run_progress.pack(fill=tk.X, pady=(10, 0))
+        self._run_progress.start(14)
+
+    def _stop_running_ui(self) -> None:
+        try:
+            self._run_progress.stop()
+        except tk.TclError:
+            pass
+        self._run_progress.pack_forget()
+        self._status_shell.configure(bootstyle=SECONDARY)
+        self.lbl_status.configure(font=self._status_font_normal)
 
     def _append_log(self, text: str) -> None:
         self.txt_log.insert(END, text + "\n")
@@ -329,7 +365,7 @@ class NetworkDiagnosisApp(ttk.Window):
         self.txt_log.delete("1.0", END)
         self.txt_summary.delete("1.0", END)
         self.btn_run.configure(state=tk.DISABLED)
-        self.lbl_status.configure(text="正在运行…", bootstyle=WARNING)
+        self._start_running_ui()
 
         def work() -> None:
             try:
@@ -355,6 +391,7 @@ class NetworkDiagnosisApp(ttk.Window):
                     self._append_log(str(payload))
                 elif kind == "error":
                     messagebox.showerror("诊断失败", str(payload))
+                    self._stop_running_ui()
                     self.btn_run.configure(state=tk.NORMAL)
                     self.lbl_status.configure(text="失败", bootstyle=DANGER)
                 elif kind == "done":
@@ -371,6 +408,7 @@ class NetworkDiagnosisApp(ttk.Window):
         from network_diagnosis.model.report import DiagnosticReport
 
         assert isinstance(rep, DiagnosticReport)
+        self._stop_running_ui()
         g = rep.gui
         self.txt_summary.insert(END, g.headline + "\n\n", ("head",))
         self.txt_summary.tag_configure("head", font=("Microsoft YaHei UI", 11, "bold"))
