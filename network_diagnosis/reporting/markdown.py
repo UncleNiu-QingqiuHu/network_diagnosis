@@ -33,7 +33,8 @@ def _rtt_summary(values: list[float]) -> str:
         return "无有效 RTT 样本"
     return (
         f"n={len(values)}, min={min(values):.1f}ms, max={max(values):.1f}ms, "
-        f"avg={statistics.mean(values):.1f}ms, jitter(极差)={max(values)-min(values):.1f}ms"
+        f"avg={statistics.mean(values):.1f}ms, "
+        f"抖动={max(values)-min(values):.1f}ms（简易度量：RTT 极差，即 max−min）"
     )
 
 
@@ -223,8 +224,8 @@ def _egress_subsection(e: EgressProbeResult | None, enabled: bool) -> list[str]:
         return out
     out.extend(
         [
-            f"- 公网 IPv4（ipify）: `{e.public_ip or '—'}`",
-            f"- ipify 错误: {e.ipify_error or '—'}",
+            f"- 公网 IPv4（国内接口）: `{e.public_ip or '—'}`",
+            f"- 查询错误: {e.ipify_error or '—'}",
             f"- HTTP_PROXY: `{e.http_proxy or '—'}`",
             f"- HTTPS_PROXY: `{e.https_proxy or '—'}`",
             f"- ALL_PROXY: `{e.all_proxy or '—'}`",

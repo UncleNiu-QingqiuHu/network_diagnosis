@@ -489,7 +489,7 @@ def _gui_lines_advanced(rep: DiagnosticReport) -> list[str]:
         else:
             out.append(f"出口公网 IPv4：{e.public_ip or '（未获取）'}")
             if e.ipify_error:
-                out.append(f"  ipify：{e.ipify_error}")
+                out.append(f"  查询：{e.ipify_error}")
             proxy_bits = [
                 ("HTTP_PROXY", e.http_proxy),
                 ("HTTPS_PROXY", e.https_proxy),
