@@ -5,7 +5,7 @@
 """
 
 APP_VERSION = "1.0.0"
-DESIGN_DOC_REF = "network-diagnostic-tool-design_v1.4"
+DESIGN_DOC_REF = "network-diagnostic-tool-design_v1.5"
 
 APP_DISPLAY_NAME = "网络诊断工具"
 APP_DISPLAY_NAME_EN = "QQHU Network Diagnosis"

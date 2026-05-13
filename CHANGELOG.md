@@ -1,5 +1,10 @@
 # 变更日志
 
+## [2026-05-13] [文档] 设计方案 v1.5
+
+- 新增 `docs/network-diagnostic-tool-design_v1.5.md`：主窗口多模块（子网计算、交换机、数据库诊断）、扩展依赖与 `reports/db_diagnosis/`、`switch_console/` 路径约定；`v1.4` 文档保留并标注归档。
+- README、`pyproject.toml`、`network_diagnosis.version.DESIGN_DOC_REF` 引用已同步至 v1.5。
+
 ## [2026-05-13] [优化] GUI 左右分栏与运行态
 
 - 主界面改为左右分割（`Panedwindow` 水平）：左侧为探测表单、工具按钮、任务状态与报告入口；右侧为「结论」与「进度与详情」，右侧纵向约 1:4 分配以加高日志区。
