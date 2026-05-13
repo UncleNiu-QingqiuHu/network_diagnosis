@@ -1,0 +1,309 @@
+"""编排一次完整诊断任务，填充 DiagnosticReport。"""
+
+from __future__ import annotations
+
+import ipaddress
+import platform
+import socket
+import uuid
+from collections.abc import Callable
+from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
+
+from network_diagnosis.model.report import (
+    CaptureInfo,
+    DegradationEvent,
+    DiagnosticReport,
+    DnsAnswer,
+    GuiSummary,
+    OverallStatus,
+    PortFailureClass,
+    PortProbeResult,
+    TaskMeta,
+    UserInputSnapshot,
+)
+from network_diagnosis.paths import find_tshark, resolve_tcping_exe
+from network_diagnosis.probes.dns_probe import pick_tcp_target, resolve_dns
+from network_diagnosis.probes.local_context import collect_local_context
+from network_diagnosis.probes.ping_probe import run_ping
+from network_diagnosis.probes.tcping_probe import probe_tcping_version, run_tcping_port
+from network_diagnosis.probes.tshark import (
+    TsharkCaptureSession,
+    pick_capture_interface_index,
+    tshark_version_line,
+)
+from network_diagnosis.reporting.markdown import write_markdown_report
+from network_diagnosis.version import APP_VERSION, DESIGN_DOC_REF
+
+
+def default_report_root() -> Path:
+    return Path.home() / "Documents" / "QQHuNetworkDiagnosis"
+
+
+@dataclass
+class RunOptions:
+    target_host: str
+    ports: list[int]
+    samples_per_port: int
+    tcp_timeout_ms: int
+    enable_ping: bool
+    enable_capture: bool
+    prefer_ipv6: bool
+    ping_count: int = 4
+    ping_packet_timeout_ms: int = 2000
+
+
+def _is_ip_literal(addr: str) -> bool:
+    a = addr.strip().rstrip(".")
+    try:
+        ipaddress.ip_address(a)
+    except ValueError:
+        return False
+    return True
+
+
+def _build_capture_filter(target_ip_or_host: str, ports: list[int]) -> str:
+    port_expr = " or ".join(f"tcp port {p}" for p in ports)
+    if _is_ip_literal(target_ip_or_host):
+        a = target_ip_or_host.strip().rstrip(".")
+        if ":" in a:
+            return f"ip6 and host {a} and ({port_expr})"
+        return f"ip and host {a} and ({port_expr})"
+    # 主机名在 BPF 中不一定可解析；降级为仅按 TCP 端口过滤（体积可能较大）。
+    return f"tcp and ({port_expr})"
+
+
+def _build_gui_summary(
+    dns: DnsAnswer,
+    ping_okish: bool | None,
+    ports: list[PortProbeResult],
+    degradations: list[DegradationEvent],
+    md_path: Path,
+) -> GuiSummary:
+    bullets: list[str] = []
+    status = OverallStatus.OK
+
+    if dns.error or not dns.addresses:
+        status = OverallStatus.FAILED
+        bullets.append("域名解析失败或没有可用地址，后续 TCP 探测可能不可靠。")
+    else:
+        bullets.append("域名可以解析到可用地址。")
+
+    if ping_okish is False:
+        bullets.append(
+            "ICMP ping 不通或严重丢包：常见于对端禁 ping 或防火墙策略，"
+            "不代表 TCP 端口一定不通。"
+        )
+        if status == OverallStatus.OK:
+            status = OverallStatus.DEGRADED
+    elif ping_okish is True:
+        bullets.append("ICMP ping 有响应，基础连通性大致正常。")
+
+    if not ports:
+        bullets.append("未执行 TCP 端口探测（可能缺少内置 tcping.exe）。")
+        status = OverallStatus.FAILED if status == OverallStatus.OK else status
+    else:
+        bad = [p for p in ports if p.failure_class != PortFailureClass.OK]
+        if not bad:
+            bullets.append("所测 TCP 端口均可建立连接。")
+        elif len(bad) == len(ports):
+            status = OverallStatus.FAILED
+            bullets.append("所测 TCP 端口均异常，更像对端或路径上的网络/策略问题。")
+        else:
+            status = OverallStatus.DEGRADED
+            bullets.append(
+                f"部分端口异常：{', '.join(str(p.port) for p in bad)}。"
+                "建议由技术人员查看 Markdown 报告中的逐端口明细。"
+            )
+
+    for d in degradations:
+        if d.code in ("capture_unavailable", "tshark_start_failed"):
+            if status == OverallStatus.OK:
+                status = OverallStatus.DEGRADED
+            bullets.append(d.message)
+
+    if any(d.code == "tcping_missing" for d in degradations):
+        status = OverallStatus.FAILED
+
+    headline = {
+        OverallStatus.OK: "整体：正常",
+        OverallStatus.DEGRADED: "整体：存在问题（部分项异常或已降级）",
+        OverallStatus.FAILED: "整体：存在明显问题或关键依赖缺失",
+    }[status]
+    return GuiSummary(overall=status, headline=headline, bullets=bullets, markdown_path=md_path)
+
+
+def run_diagnostic(options: RunOptions, progress: Callable[[str], None]) -> DiagnosticReport:
+    task_id = uuid.uuid4().hex[:12]
+    started = datetime.now().astimezone()
+    root = default_report_root()
+    report_dir = root / f"{task_id}_{started.strftime('%Y%m%d_%H%M%S')}"
+    report_dir.mkdir(parents=True, exist_ok=True)
+    progress(f"工作目录: {report_dir}")
+
+    degradations: list[DegradationEvent] = []
+
+    local = collect_local_context(report_dir)
+    progress("已采集本机网络上下文（ipconfig）。")
+
+    dns = resolve_dns(options.target_host, prefer_ipv6=options.prefer_ipv6)
+    progress("DNS 解析完成。")
+
+    tcp_target = pick_tcp_target(dns, prefer_ipv6=options.prefer_ipv6)
+    probe_host = tcp_target or options.target_host
+
+    tcping_exe = resolve_tcping_exe()
+    tcping_path_str = str(tcping_exe) if tcping_exe else None
+    tcping_ver = probe_tcping_version(tcping_exe, report_dir) if tcping_exe else None
+
+    if tcping_exe is None:
+        degradations.append(
+            DegradationEvent(
+                code="tcping_missing",
+                message="未找到内置 tcping.exe。",
+                detail="请将 tcping.exe 放入 ThirdParty/tcping/ 后重试。",
+            )
+        )
+
+    tshark_path = find_tshark()
+    tshark_ver = tshark_version_line(tshark_path, report_dir) if tshark_path else None
+
+    capture = CaptureInfo(
+        requested=options.enable_capture,
+        ran=False,
+        tshark_cmd=None,
+        pcap_path=None,
+        stdout_path=None,
+        stderr_path=None,
+        notes="",
+    )
+    cap_session = TsharkCaptureSession()
+    pcap_path = report_dir / f"capture_{task_id}.pcapng"
+
+    if options.enable_capture:
+        if tshark_path is None:
+            capture.notes = "未检测到 tshark；本轮未抓包。可通过 GUI 打开同捆 Wireshark 安装包完成安装。"
+            degradations.append(
+                DegradationEvent(
+                    code="capture_unavailable",
+                    message="抓包不可用：未找到 tshark。",
+                    detail="安装 Wireshark（含 Npcap）后可启用自动抓包。",
+                )
+            )
+        else:
+            try:
+                if_idx = pick_capture_interface_index(tshark_path, report_dir)
+                bpf = _build_capture_filter(probe_host, options.ports)
+                cmd = [
+                    str(tshark_path),
+                    "-i",
+                    if_idx,
+                    "-w",
+                    str(pcap_path),
+                    "-f",
+                    bpf,
+                ]
+                out_p, err_p = cap_session.start(tshark_path, if_idx, pcap_path, bpf, report_dir)
+                capture = CaptureInfo(
+                    requested=True,
+                    ran=True,
+                    tshark_cmd=cmd,
+                    pcap_path=pcap_path,
+                    stdout_path=out_p,
+                    stderr_path=err_p,
+                    notes=f"捕获过滤器 (BPF): `{bpf}`",
+                )
+                progress("tshark 抓包已启动。")
+            except OSError as e:
+                capture = CaptureInfo(
+                    requested=True,
+                    ran=False,
+                    tshark_cmd=None,
+                    pcap_path=None,
+                    stdout_path=None,
+                    stderr_path=None,
+                    notes=str(e),
+                )
+                degradations.append(
+                    DegradationEvent(
+                        code="tshark_start_failed",
+                        message="抓包启动失败。",
+                        detail=str(e),
+                    )
+                )
+
+    ping_stats = None
+    ping_okish: bool | None = None
+    if options.enable_ping:
+        progress("正在执行 ICMP ping…")
+        ping_stats = run_ping(
+            options.target_host,
+            options.ping_count,
+            options.ping_packet_timeout_ms,
+            report_dir,
+        )
+        if ping_stats.attempted:
+            ping_okish = ping_stats.received > 0
+
+    port_results: list[PortProbeResult] = []
+    if tcping_exe is not None and options.ports:
+        for p in options.ports:
+            progress(f"正在 tcping 端口 {p} …")
+            port_results.append(
+                run_tcping_port(
+                    tcping_exe,
+                    probe_host,
+                    p,
+                    options.samples_per_port,
+                    options.tcp_timeout_ms,
+                    report_dir,
+                )
+            )
+
+    if capture.ran:
+        progress("正在停止抓包…")
+        cap_session.stop()
+        progress("抓包已停止。")
+
+    finished = datetime.now().astimezone()
+    md_path = report_dir / f"network_diagnosis_{task_id}.md"
+
+    meta = TaskMeta(
+        task_id=task_id,
+        started_at=started,
+        finished_at=finished,
+        app_version=APP_VERSION,
+        design_doc_ref=DESIGN_DOC_REF,
+        hostname=socket.gethostname(),
+        os_summary=platform.platform(),
+        tcping_path=tcping_path_str,
+        tcping_version_line=tcping_ver,
+        tshark_path=str(tshark_path) if tshark_path else None,
+        tshark_version_line=tshark_ver,
+        report_dir=report_dir,
+    )
+    user_snap = UserInputSnapshot(
+        target_host=options.target_host,
+        ports=list(options.ports),
+        samples_per_port=options.samples_per_port,
+        tcp_connect_timeout_ms=options.tcp_timeout_ms,
+        enable_ping=options.enable_ping,
+        enable_capture=options.enable_capture,
+        prefer_ipv6=options.prefer_ipv6,
+    )
+    gui = _build_gui_summary(dns, ping_okish, port_results, degradations, md_path)
+    report = DiagnosticReport(
+        meta=meta,
+        user_input=user_snap,
+        local=local,
+        dns=dns,
+        ping=ping_stats,
+        ports=port_results,
+        capture=capture,
+        degradations=degradations,
+        gui=gui,
+    )
+    write_markdown_report(report, md_path)
+    progress(f"Markdown 报告已写入: {md_path}")
+    return report
