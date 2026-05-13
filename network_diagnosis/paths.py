@@ -15,6 +15,16 @@ def bundle_root() -> Path:
     return Path(__file__).resolve().parent.parent
 
 
+def switch_console_data_dir() -> Path:
+    """交换机 Console（SSH known_hosts 等）可写目录：与报告目录并列， frozen 时在 exe 旁。"""
+    if getattr(sys, "frozen", False):
+        p = Path(sys.executable).resolve().parent / "switch_console"
+    else:
+        p = bundle_root() / "switch_console"
+    p.mkdir(parents=True, exist_ok=True)
+    return p
+
+
 def report_root() -> Path:
     """诊断报告与任务产物默认根目录（项目下 `reports/`，可写）。
 

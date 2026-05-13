@@ -32,6 +32,8 @@ backups/
 logs/
 # 网络诊断工具默认输出（项目目录 reports/）
 reports/
+# 交换机 Console 本地数据（SSH known_hosts 等）
+switch_console/
 _bmad/
 .cursor/commands/
 media/
