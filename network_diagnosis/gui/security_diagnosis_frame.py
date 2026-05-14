@@ -16,7 +16,10 @@ import ttkbootstrap as ttk
 from ttkbootstrap.constants import END, EW, INFO, NSEW, PRIMARY, SECONDARY, SUCCESS, WARNING, W
 
 from network_diagnosis.gui.main_app_common import bind_label_wraplength
-from network_diagnosis.gui.simple_markdown_text import append_simple_markdown, configure_simple_markdown_tags
+from network_diagnosis.gui.simple_markdown_text import (
+    append_simple_markdown,
+    configure_simple_markdown_tags,
+)
 from network_diagnosis.paths import iter_nmap_installers, report_root, resolve_nmap_exe_path
 from network_diagnosis.runtime_log import get_logger
 from network_diagnosis.security_diag.collect import (

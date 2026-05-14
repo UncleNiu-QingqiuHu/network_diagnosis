@@ -22,6 +22,8 @@ class SubnetCalcResult:
     usable_hosts: int
     first_host: str
     last_host: str
+    scope_note: str
+    host_role_note: str
 
 
 _IPV4_RE = re.compile(
@@ -51,6 +53,88 @@ def _first_last_host_ip(net: ipaddress.IPv4Network) -> tuple[str, str]:
         a = str(net.network_address)
         return a, a
     return str(hosts[0]), str(hosts[-1])
+
+
+def ipv4_network_scope_zh(net: ipaddress.IPv4Network) -> str:
+    """本网段网络地址所属 IPv4 分类（运维可读摘要）。"""
+    a = net.network_address
+    if not isinstance(a, ipaddress.IPv4Address):
+        return "非 IPv4"
+    if a.is_loopback:
+        return "环回（127.0.0.0/8）"
+    if a.is_link_local:
+        return "链路本地（169.254.0.0/16）"
+    if a.is_multicast:
+        return "组播"
+    if a.is_reserved:
+        return "保留地址"
+    shared = ipaddress.ip_network("100.64.0.0/10")
+    if a in shared:
+        return "运营商共享地址空间（RFC 6598，常见 CGNAT，100.64.0.0/10）"
+    if a.is_private:
+        return "私有单播（RFC 1918）"
+    if a.is_global:
+        return "全局单播（公网）"
+    return "其它"
+
+
+def ipv4_host_role_zh(ip: ipaddress.IPv4Address, net: ipaddress.IPv4Network) -> str:
+    """输入 IP 相对本网的角色说明。"""
+    pl = net.prefixlen
+    if pl >= 32:
+        return "/32 单主机前缀"
+    if pl == 31:
+        return "/31 点对点段内地址（RFC 3021）"
+    if ip == net.network_address:
+        return "网络地址（通常不可分配给主机）"
+    if ip == net.broadcast_address:
+        return "定向广播地址（通常不可分配给主机）"
+    try:
+        if ip in net.hosts():
+            return "可用主机地址"
+    except ValueError:
+        pass
+    return "不在本网可用主机集合内（请检查输入）"
+
+
+def subdivide_ipv4_equal_children(parent_spec: str, child_prefix: int, *, max_list: int = 64) -> str:
+    """
+    将父 IPv4 网等长子网划分为 ``child_prefix`` 长度的子网列表文本。
+
+    ``max_list`` 控制最多列出的条数，超出部分以摘要行说明。
+    """
+    s = parent_spec.strip()
+    if not s:
+        raise ValueError("请填写父网 CIDR。")
+    try:
+        net = ipaddress.ip_network(s, strict=False)
+    except ValueError as e:
+        raise ValueError(f"父网 CIDR 无效：{e}") from e
+    if not isinstance(net, ipaddress.IPv4Network):
+        raise ValueError("当前仅支持 IPv4 父网。")
+    if not 0 <= child_prefix <= 32:
+        raise ValueError("子网前缀须在 0–32 之间。")
+    if child_prefix <= net.prefixlen:
+        raise ValueError(f"子网前缀须大于父网前缀 /{net.prefixlen}。")
+
+    subs = tuple(net.subnets(new_prefix=child_prefix))
+    total = len(subs)
+    lines: list[str] = [
+        "=== 等长子网划分 ===",
+        "",
+        f"父网：{net.with_prefixlen}",
+        f"划至前缀：/{child_prefix}",
+        f"子网数量：{total}",
+        "",
+    ]
+    cap = max(1, max_list)
+    shown = subs[:cap]
+    for i, sn in enumerate(shown, 1):
+        lines.append(f"{i:>4}. {sn.with_prefixlen}")
+    if total > len(shown):
+        lines.append(f"... 省略其余 {total - len(shown)} 条（共 {total} 个子网）")
+    lines.append("")
+    return "\n".join(lines)
 
 
 def calc_subnet(
@@ -86,6 +170,11 @@ def calc_subnet(
         raise ValueError("当前仅支持 IPv4。")
 
     first_s, last_s = _first_last_host_ip(net)
+    hip = iface.ip
+    if not isinstance(hip, ipaddress.IPv4Address):
+        raise ValueError("当前仅支持 IPv4。")
+    scope = ipv4_network_scope_zh(net)
+    role = ipv4_host_role_zh(hip, net)
     return SubnetCalcResult(
         input_interface=spec,
         network_cidr=f"{net.network_address}/{net.prefixlen}",
@@ -98,6 +187,8 @@ def calc_subnet(
         usable_hosts=usable_host_count(net),
         first_host=first_s,
         last_host=last_s,
+        scope_note=scope,
+        host_role_note=role,
     )
 
 

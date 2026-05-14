@@ -38,7 +38,10 @@ from network_diagnosis.gui.main_app_common import (
     fix_primary_notebook_selected_tab_colors,
     scaled_photo_from_png,
 )
-from network_diagnosis.gui.simple_markdown_text import append_simple_markdown, configure_simple_markdown_tags
+from network_diagnosis.gui.simple_markdown_text import (
+    append_simple_markdown,
+    configure_simple_markdown_tags,
+)
 from network_diagnosis.paths import db_diagnosis_report_dir, refresh_catalog_icon_png, report_root
 from network_diagnosis.runtime_log import get_logger
 

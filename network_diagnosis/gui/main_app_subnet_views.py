@@ -11,11 +11,20 @@ import ttkbootstrap as ttk
 from ttkbootstrap.constants import END, EW, NSEW, PRIMARY, SECONDARY, SUCCESS, W
 
 from network_diagnosis.gui.main_app_common import bind_label_wraplength
-from network_diagnosis.host_l3_info import AdapterIPv4Block, list_local_ipv4_adapters, local_hostname
+from network_diagnosis.host_l3_info import (
+    AdapterIPv4Block,
+    list_local_ipv4_adapters,
+    local_hostname,
+)
 from network_diagnosis.model.report import EgressProbeResult
 from network_diagnosis.probes.egress_probe import run_egress
 from network_diagnosis.runtime_log import get_logger
-from network_diagnosis.subnet_calc import SubnetCalcResult, calc_from_cidr_combo, calc_subnet
+from network_diagnosis.subnet_calc import (
+    SubnetCalcResult,
+    calc_from_cidr_combo,
+    calc_subnet,
+    subdivide_ipv4_equal_children,
+)
 
 _log = get_logger(__name__)
 
@@ -39,7 +48,7 @@ class SubnetViewsMixin:
 
         left.columnconfigure(0, weight=1)
 
-        lf_cidr = ttk.Labelframe(left, text="CIDR 快捷输入", padding=(12, 10, 12, 10))
+        lf_cidr = ttk.Labelframe(left, text="方式一(推荐)", padding=(12, 10, 12, 10))
         lf_cidr.grid(row=0, column=0, sticky=EW, pady=(0, 10))
         lf_cidr.columnconfigure(0, weight=1)
         self.var_subnet_combo = tk.StringVar(value="192.168.1.10/24")
@@ -56,7 +65,7 @@ class SubnetViewsMixin:
             row=1, column=0, sticky=EW, pady=(8, 0)
         )
 
-        lf_split = ttk.Labelframe(left, text="或：IPv4 + 前缀 / 掩码", padding=(12, 10, 12, 10))
+        lf_split = ttk.Labelframe(left, text="方式二(仅当方式一不含「/」时使用)", padding=(12, 10, 12, 10))
         lf_split.grid(row=1, column=0, sticky=EW, pady=(0, 10))
         lf_split.columnconfigure(1, weight=1)
         self.var_subnet_ip = tk.StringVar(value="192.168.1.10")
@@ -69,7 +78,7 @@ class SubnetViewsMixin:
         )
         row1 = ttk.Frame(lf_split)
         row1.grid(row=1, column=0, columnspan=2, sticky=W, pady=(10, 0))
-        ttk.Label(row1, text="前缀长度 /24", bootstyle=SECONDARY).pack(side=tk.LEFT)
+        ttk.Label(row1, text="前缀长度", bootstyle=SECONDARY).pack(side=tk.LEFT)
         ttk.Spinbox(row1, from_=0, to=32, textvariable=self.var_subnet_prefix, width=5).pack(
             side=tk.LEFT, padx=(6, 16)
         )
@@ -79,7 +88,7 @@ class SubnetViewsMixin:
         )
         lbl_split_hint = ttk.Label(
             lf_split,
-            text="填写点分掩码时将优先用掩码；留空则使用前缀。上一栏含 “/” 时忽略本组。",
+            text="须填 IPv4; 掩码非空时只按掩码计算（前缀 Spinbox 不参与）；掩码留空时才按前缀。方式一含「/」时本组会被忽略。",
             bootstyle=SECONDARY,
             font=("Microsoft YaHei UI", 10),
             justify=tk.LEFT,
@@ -92,9 +101,39 @@ class SubnetViewsMixin:
         ttk.Button(btn_row, text="计算子网", command=self._subnet_on_compute, bootstyle=SUCCESS).pack(
             side=tk.LEFT
         )
+        ttk.Button(btn_row, text="复制结果", command=self._subnet_copy_result, bootstyle=SECONDARY).pack(
+            side=tk.LEFT, padx=(8, 0)
+        )
+
+        lf_div = ttk.Labelframe(left, text="可选：等长子网划分", padding=(12, 10, 12, 10))
+        lf_div.grid(row=3, column=0, sticky=EW, pady=(0, 10))
+        lbl_div_hint = ttk.Label(
+            lf_div,
+            text="将父网均匀划分成更小前缀的子网；下列最多列出 64 条，可与上方「计算子网」结果同时保留在结果框内。",
+            bootstyle=SECONDARY,
+            font=("Microsoft YaHei UI", 10),
+            justify=tk.LEFT,
+        )
+        lbl_div_hint.pack(fill=tk.X)
+        bind_label_wraplength(lbl_div_hint, inset=6)
+        row_pa = ttk.Frame(lf_div)
+        row_pa.pack(fill=tk.X, pady=(8, 0))
+        ttk.Label(row_pa, text="父网 CIDR", bootstyle=SECONDARY).pack(side=tk.LEFT)
+        self.var_subnet_parent = tk.StringVar(value="192.168.0.0/16")
+        ttk.Entry(row_pa, textvariable=self.var_subnet_parent).pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(8, 0))
+        row_pb = ttk.Frame(lf_div)
+        row_pb.pack(fill=tk.X, pady=(10, 0))
+        ttk.Label(row_pb, text="划至前缀 /", bootstyle=SECONDARY).pack(side=tk.LEFT)
+        self.var_subnet_child_prefix = tk.IntVar(value=24)
+        ttk.Spinbox(row_pb, from_=1, to=32, textvariable=self.var_subnet_child_prefix, width=5).pack(
+            side=tk.LEFT, padx=(6, 12)
+        )
+        ttk.Button(row_pb, text="生成子网列表", command=self._subnet_on_subdivide, bootstyle=SECONDARY).pack(
+            side=tk.LEFT
+        )
 
         lf_out = ttk.Labelframe(left, text="计算结果", padding=(10, 8, 10, 10))
-        lf_out.grid(row=3, column=0, sticky=NSEW)
+        lf_out.grid(row=4, column=0, sticky=NSEW)
         lf_out.rowconfigure(0, weight=1)
         lf_out.columnconfigure(0, weight=1)
         self.txt_subnet_result = ScrolledText(
@@ -108,7 +147,7 @@ class SubnetViewsMixin:
         )
         self.txt_subnet_result.grid(row=0, column=0, sticky=NSEW)
 
-        left.rowconfigure(3, weight=1)
+        left.rowconfigure(4, weight=1)
 
         right.columnconfigure(0, weight=1)
         right.rowconfigure(1, weight=1)
@@ -163,11 +202,13 @@ class SubnetViewsMixin:
         return "\n".join(
             [
                 f"输入：{r.input_interface}",
+                f"地址空间归类：{r.scope_note}",
+                f"输入 IP 角色：{r.host_role_note}",
                 f"所属网络（CIDR）：{r.network_cidr}",
                 f"网络地址：{r.network_address}",
                 f"广播地址：{r.broadcast_address}",
                 f"子网掩码：{r.netmask}",
-                f"通配符掩码：{r.wildcard_mask}",
+                f"通配符掩码（ACL）：{r.wildcard_mask}",
                 f"前缀长度：/{r.prefix_len}",
                 f"总地址数：{r.total_addresses}",
                 f"可用主机数：{r.usable_hosts}",
@@ -205,6 +246,43 @@ class SubnetViewsMixin:
         st.configure(state=tk.NORMAL)
         st.delete("1.0", END)
         st.insert(END, txt)
+        st.configure(state=tk.DISABLED)
+
+    def _subnet_copy_result(self) -> None:
+        st = self.txt_subnet_result
+        st.configure(state=tk.NORMAL)
+        txt = st.get("1.0", END).strip()
+        st.configure(state=tk.DISABLED)
+        if not txt:
+            messagebox.showinfo("子网计算", "暂无结果可复制。")
+            return
+        try:
+            self.clipboard_clear()
+            self.clipboard_append(txt)
+            self.update()
+        except tk.TclError as e:
+            messagebox.showwarning("子网计算", f"复制失败：{e}")
+
+    def _subnet_on_subdivide(self) -> None:
+        parent = self.var_subnet_parent.get().strip()
+        try:
+            child_pf = int(self.var_subnet_child_prefix.get())
+        except (tk.TclError, ValueError):
+            messagebox.showwarning("子网划分", "划至前缀无效。")
+            return
+        try:
+            block = subdivide_ipv4_equal_children(parent, child_pf)
+        except ValueError as e:
+            messagebox.showwarning("子网划分", str(e))
+            return
+        _log.info("子网划分 parent=%s child_prefix=%s", parent, child_pf)
+        st = self.txt_subnet_result
+        st.configure(state=tk.NORMAL)
+        cur = st.get("1.0", END).strip()
+        if cur:
+            st.insert(END, "\n\n")
+        st.insert(END, block)
+        st.see(END)
         st.configure(state=tk.DISABLED)
 
     def _subnet_refresh_host_info(self) -> None:

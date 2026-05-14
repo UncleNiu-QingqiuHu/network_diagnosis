@@ -82,11 +82,15 @@ pyinstaller --noconfirm --windowed --onedir `
   --paths . `
   --collect-all ttkbootstrap `
   --add-data "ThirdParty/tcping/tcping.exe;ThirdParty/tcping" `
-  --add-data "network_diagnosis/images/qqhu_black2.ico;network_diagnosis/images" `
+  --add-data "network_diagnosis/images;network_diagnosis/images" `
   network_diagnosis/__main__.py
 ```
 
 产物目录：`dist\qqhu-network-workbench\`，其中 `qqhu-network-workbench.exe` 为可执行文件。首次分发前请在本机实际运行一遍，确认杀毒/策略未拦截。
+
+（**图片资源**：上例对 **`network_diagnosis/images` 使用整目录 `--add-data`**，目录内现有及后续新增的 PNG、ICO 等会一并打入，一般不必对每个文件单独写一行。）
+
+**Wheel / sdist**：`pyproject.toml` 中 `[tool.setuptools.package-data]` 已写 `network_diagnosis = ["images/*"]`，`python -m build` 时会一次性收录包内 `images/` **下一层**文件；若日后把图片放到 `images/` 的子目录里，需相应扩展 glob（例如增加递归匹配）。
 
 **建议与 tcping 一并打入（路径须已存在；缺一可先删掉对应 `--add-data` 行）**
 

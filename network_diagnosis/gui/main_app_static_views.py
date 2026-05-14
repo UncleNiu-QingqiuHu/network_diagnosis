@@ -9,7 +9,10 @@ from tkinter.scrolledtext import ScrolledText
 import ttkbootstrap as ttk
 from ttkbootstrap.constants import EW, NSEW, PRIMARY, SECONDARY, W
 
-from network_diagnosis.gui.main_app_common import bind_label_wraplength, fix_primary_notebook_selected_tab_colors
+from network_diagnosis.gui.main_app_common import (
+    bind_label_wraplength,
+    fix_primary_notebook_selected_tab_colors,
+)
 from network_diagnosis.gui.simple_markdown_text import (
     append_simple_markdown,
     configure_simple_markdown_tags,
@@ -258,25 +261,29 @@ class StaticViewsMixin:
   • 功能演进与字段释义以仓库内设计文档及界面版本为准；若与本文措辞不一致，以当前界面标签为准。"""
 
         body_subnet = """一、界面布局
-  • 左侧：输入区与「计算子网」「计算结果」文本框。
-  • 右侧：本机 IPv4、网关、DNS 与公网地址等参考信息；点「刷新」异步拉取（与一次完整「网络诊断」报告不等价）。
+  • 左侧任选「方式一 / 方式二」输入（不必两组都填），「计算结果」在下；可选「等长子网划分」生成的列表可追加到同一结果框。
+  • 右侧为本机 IPv4、网关、DNS 与公网地址参考（点「刷新」异步拉取，不等价于完整「网络诊断」）。
 
-二、CIDR 快捷输入
+二、方式一：一行输入（推荐）
   • 支持「IP/前缀」，例如 192.168.1.10/24。
   • 支持「IP/点分掩码」，例如 192.168.1.10/255.255.255.0。
-  • 本栏有有效输入时，以本栏为准，下方「IPv4 + 前缀/掩码」一组可被界面说明忽略。
+  • 本框的内容只要含有「/」，就以本框为准，下方拆分一组不参与计算。
 
-三、IPv4 + 前缀 / 掩码（分拆输入）
-  • 填写 IPv4 地址；前缀长度用 Spinbox 选 0～32；或填写「或掩码」点分十进制掩码。
-  • 若「或掩码」非空，优先按掩码计算；掩码留空则使用前缀。
-  • 若上方 CIDR 栏已含「/」，请优先用上方栏，避免两套输入混用。
+三、方式二：拆分输入（仅当方式一不含「/」时）
+  • 填写 IPv4；前缀长度用 Spinbox 选 0～32。
+  • 「或掩码」非空时仅按点分掩码计算，前缀 Spinbox 无效；掩码留空时才按前缀。
+  • 勿与方式一混填两套口径。
 
-四、计算与结果
-  • 点「计算子网」后，「计算结果」区展示网络地址、广播、掩码、wildcard、可用主机区间等。
-  • 仅用于运维辅助；生产割接请以官方工具与变更流程为准。
+四、计算与增强输出
+  • 「计算子网」给出所属网络、掩码、通配符、可用主机区间；并附带地址空间归类（如 RFC1918 / 公网 / CGNAT 等）以及输入 IP 相对本网的角色说明。
+  • 「复制结果」将当前结果框全文写入剪贴板。
 
-五、注意
-  • IPv6、非点分掩码的特例不在本页展开；错误输入会弹窗提示。"""
+五、可选：等长子网划分
+  • 填写父网 IPv4 CIDR 及更大的「划至前缀」（例如父网 /16、划至 /24），生成若干等长子网；单次至多列出 64 条，其余以省略提示。
+  • 「生成子网列表」会在现有结果后追加一段划分结果；重新点击「计算子网」会清空结果框。
+
+六、注意
+  • IPv6 不在本页展开；错误输入会弹窗提示。"""
 
         body_switch = """一、模式
   • 「串口 (COM)」：经 RS-232/USB 转串口连接设备 Console。
@@ -505,13 +512,9 @@ class StaticViewsMixin:
     def _build_license_view(self) -> None:
         frm = ttk.Frame(self._content_host, padding=(20, 20, 20, 16))
         self._view_frames["license"] = frm
-        frm.rowconfigure(1, weight=1)
         frm.columnconfigure(0, weight=1)
 
-        intro = (
-            "以下为本仓库根目录中 LICENSE 文件的原文。若以可执行包发布，请一并附带许可证文件；"
-            "第三方组件权利见下方说明。"
-        )
+        intro = "上栏为本项目 MIT 许可证原文；若以可执行包分发，请一并附带。"
         ttk.Label(
             frm,
             text=intro,
@@ -522,8 +525,7 @@ class StaticViewsMixin:
         ).grid(row=0, column=0, sticky=EW, pady=(0, 10))
 
         lf = ttk.Labelframe(frm, text="LICENSE（MIT）", padding=(10, 8, 10, 10))
-        lf.grid(row=1, column=0, sticky=NSEW, pady=(0, 14))
-        lf.rowconfigure(0, weight=1)
+        lf.grid(row=1, column=0, sticky=EW, pady=(0, 14))
         lf.columnconfigure(0, weight=1)
 
         lic_path = bundle_root() / "LICENSE"
@@ -538,24 +540,24 @@ class StaticViewsMixin:
 
         txt = ScrolledText(
             lf,
-            height=16,
+            height=11,
             wrap=tk.WORD,
             font=("Consolas", 10),
             relief=tk.FLAT,
             padx=10,
             pady=10,
         )
-        txt.grid(row=0, column=0, sticky=NSEW)
+        txt.grid(row=0, column=0, sticky=EW)
         txt.insert(tk.END, body)
         txt.configure(state=tk.DISABLED)
 
-        lf2 = ttk.Labelframe(frm, text="第三方组件与外部工具（节选说明）", padding=(12, 10))
+        lf2 = ttk.Labelframe(frm, text="第三方组件与外部工具", padding=(12, 10))
         lf2.grid(row=2, column=0, sticky=EW)
         third_party = (
-            "• GUI 库 ttkbootstrap：MIT License，参见 https://github.com/israel-dryer/ttkbootstrap\n"
-            "• 诊断流程可选用 Eli Fulkerson tcping、Wireshark/tshark、iperf3 等；"
-            "均为各自版权方软件，再分发或打包时请遵守其许可与商标要求。\n"
-            "• 本程序按需调用上述可执行文件，不代表与之存在隶属或担保关系。"
+            "• ttkbootstrap（GUI）：MIT，https://github.com/israel-dryer/ttkbootstrap\n"
+            "• 所有依赖均为开源可商用; \n"
+            "• 可选 Wireshark/tshark、iperf3、Nmap 为开源工具，tcping为免费工具, 遵守各自许可证即可（含商用）。\n"
+            "• 外部工具仅按需调用，与其项目方无隶属或担保关系。"
         )
         ttk.Label(
             lf2,
