@@ -166,14 +166,31 @@ def _embed_md_table_widget(text_w: tk.Text, headers: list[str], rows: list[list[
         fw = tkfont.Font(family="Microsoft YaHei UI", size=10)
 
     n = len(plain_h)
-    max_each = min(420, max(100, 680 // max(n, 1)))
+    try:
+        tw_px = int(text_w.winfo_width())
+    except tk.TclError:
+        tw_px = 0
+    if tw_px <= 100:
+        try:
+            tw_px = int(text_w.winfo_reqwidth())
+        except tk.TclError:
+            tw_px = 0
+    if tw_px <= 100:
+        try:
+            top_w = int(text_w.winfo_toplevel().winfo_width())
+            tw_px = max(tw_px, top_w - 280)
+        except tk.TclError:
+            pass
+    # 与输出区 Text 同宽（减去内边距）；未完成布局时用较高默认值，避免表格外观过扁
+    budget = max(1280, tw_px - 96) if tw_px > 100 else 1520
+    max_each = min(720, max(140, budget // max(n, 1)))
     widths: list[int] = []
     for ci in range(n):
         mx = fw.measure(plain_h[ci])
         for r in plain_r:
             if ci < len(r):
                 mx = max(mx, fw.measure(r[ci]))
-        widths.append(min(max(mx + 28, 72), max_each))
+        widths.append(min(max(mx + 36, 96), max_each))
 
     col_ids = [f"c{k}" for k in range(n)]
     max_vis = 14
@@ -182,7 +199,7 @@ def _embed_md_table_widget(text_w: tk.Text, headers: list[str], rows: list[list[
 
     for k, cid in enumerate(col_ids):
         tv.heading(cid, text=plain_h[k])
-        tv.column(cid, width=widths[k], anchor="w", stretch=False)
+        tv.column(cid, width=widths[k], anchor="w", stretch=(k == n - 1))
 
     for r in plain_r:
         tv.insert("", tk.END, values=tuple(r))

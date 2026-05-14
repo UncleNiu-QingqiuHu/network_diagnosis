@@ -12,7 +12,7 @@ from tkinter import messagebox
 from urllib.parse import urlparse
 
 import ttkbootstrap as ttk
-from ttkbootstrap.constants import END, EW, INFO, NSEW, PRIMARY, SECONDARY, SUCCESS, W
+from ttkbootstrap.constants import END, EW, INFO, NSEW, PRIMARY, SECONDARY, SUCCESS, WARNING, W
 
 from network_diagnosis.gui.main_app_common import bind_label_wraplength
 from network_diagnosis.gui.simple_markdown_text import append_simple_markdown, configure_simple_markdown_tags
@@ -23,6 +23,13 @@ from network_diagnosis.security_diag.collect import (
     collect_tcp_listeners_markdown,
     compare_dns_markdown,
     full_report_preamble,
+)
+from network_diagnosis.security_diag.local_machine import (
+    collect_cpu_gpu_markdown,
+    collect_memory_markdown,
+    collect_users_policies_markdown,
+    junk_cleanup_execute_markdown,
+    junk_cleanup_preview_markdown,
 )
 
 
@@ -48,7 +55,8 @@ class SecurityDiagnosisFrame(ttk.Frame):
         lbl_hint = ttk.Label(
             hint,
             text=(
-                "本模块用于授权范围内的基线检查：本机监听与防火墙为只读摘要；"
+                "本模块用于授权范围内的基线检查：本机可刷新监听端口、防火墙、CPU/GPU/内存、"
+                "本地用户与密码策略；临时文件清理请先预览再谨慎执行。"
                 "远程 HTTPS / DNS 检查前请确认您对目标拥有书面测试授权。"
             ),
             bootstyle=SECONDARY,
@@ -60,19 +68,41 @@ class SecurityDiagnosisFrame(ttk.Frame):
 
         lf_local = ttk.Labelframe(self, text="本机", padding=(12, 10, 12, 10))
         lf_local.grid(row=1, column=0, sticky=EW, padx=(14, 14), pady=(0, 8))
-        row_local = ttk.Frame(lf_local)
-        row_local.pack(fill=tk.X)
+
+        row_main = ttk.Frame(lf_local)
+        row_main.pack(fill=tk.X)
+        ttk.Button(row_main, text="刷新 TCP 监听端口", command=self._on_listeners, bootstyle=PRIMARY).pack(
+            side=tk.LEFT, padx=(0, 8)
+        )
+        ttk.Button(row_main, text="刷新防火墙摘要", command=self._on_firewall, bootstyle=PRIMARY).pack(
+            side=tk.LEFT, padx=(0, 8)
+        )
+        ttk.Button(row_main, text="刷新 CPU / GPU", command=self._on_cpu_gpu, bootstyle=PRIMARY).pack(
+            side=tk.LEFT, padx=(0, 8)
+        )
+        ttk.Button(row_main, text="刷新内存", command=self._on_memory, bootstyle=PRIMARY).pack(
+            side=tk.LEFT, padx=(0, 8)
+        )
         ttk.Button(
-            row_local,
-            text="刷新 TCP 监听端口",
-            command=self._on_listeners,
+            row_main,
+            text="刷新本地用户与密码策略",
+            command=self._on_users_policies,
             bootstyle=PRIMARY,
         ).pack(side=tk.LEFT, padx=(0, 8))
+
+        row_clean = ttk.Frame(lf_local)
+        row_clean.pack(fill=tk.X, pady=(8, 0))
         ttk.Button(
-            row_local,
-            text="刷新防火墙摘要",
-            command=self._on_firewall,
-            bootstyle=PRIMARY,
+            row_clean,
+            text="临时文件：预览可清理空间",
+            command=self._on_junk_preview,
+            bootstyle=SECONDARY,
+        ).pack(side=tk.LEFT, padx=(0, 8))
+        ttk.Button(
+            row_clean,
+            text="临时文件：执行清理（用户 TEMP）",
+            command=self._on_junk_execute,
+            bootstyle=WARNING,
         ).pack(side=tk.LEFT, padx=(0, 8))
 
         lf_remote = ttk.Labelframe(self, text="授权目标", padding=(12, 10, 12, 10))
@@ -187,6 +217,34 @@ class SecurityDiagnosisFrame(ttk.Frame):
 
     def _on_firewall(self) -> None:
         self._run_bg("防火墙摘要", collect_firewall_summary_markdown)
+
+    def _on_cpu_gpu(self) -> None:
+        self._run_bg("CPU / GPU", collect_cpu_gpu_markdown)
+
+    def _on_memory(self) -> None:
+        self._run_bg("内存", collect_memory_markdown)
+
+    def _on_users_policies(self) -> None:
+        self._run_bg("本地用户与密码策略", collect_users_policies_markdown)
+
+    def _on_junk_preview(self) -> None:
+        self._run_bg("临时文件清理（预览）", junk_cleanup_preview_markdown)
+
+    def _on_junk_execute(self) -> None:
+        if self._busy:
+            messagebox.showinfo("安全诊断", "上一项任务仍在运行，请稍候。")
+            return
+        if sys.platform != "win32":
+            messagebox.showwarning("安全诊断", "临时文件清理当前仅支持 Windows。")
+            return
+        if not messagebox.askyesno(
+            "确认清理",
+            "将尝试删除当前用户 TEMP、LOCALAPPDATA\\Temp 目录下的文件。\n"
+            "已锁定或无权删除的文件会自动跳过。\n\n"
+            "不包含系统目录 Windows\\Temp。\n\n是否继续？",
+        ):
+            return
+        self._run_bg("临时文件清理（已执行）", junk_cleanup_execute_markdown)
 
     def _on_https(self) -> None:
         if not self.var_auth.get():
