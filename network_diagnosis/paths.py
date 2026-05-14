@@ -44,6 +44,23 @@ def report_root() -> Path:
     return bundle_root() / "reports"
 
 
+def logs_root() -> Path:
+    """运行日志根目录：`logs/`（与 ``reports/`` 同级，可写）。
+
+    - 开发模式：仓库根下 ``logs/``。
+    - PyInstaller：可执行文件所在目录下 ``logs/``。
+    """
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent / "logs"
+    return bundle_root() / "logs"
+
+
+def ensure_logs_dir() -> Path:
+    d = logs_root()
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
 def third_party_tcping() -> Path:
     return bundle_root() / "ThirdParty" / "tcping" / "tcping.exe"
 

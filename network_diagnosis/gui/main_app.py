@@ -60,6 +60,7 @@ from network_diagnosis.paths import (
     resolve_tcping_exe,
 )
 from network_diagnosis.runner import RunOptions, run_diagnostic
+from network_diagnosis.runtime_log import get_logger, setup_runtime_logging
 from network_diagnosis.version import APP_DISPLAY_NAME, APP_VERSION, AUTHOR_SUMMARY
 
 
@@ -587,5 +588,18 @@ class NetworkDiagnosisApp(NetworkViewsMixin, SubnetViewsMixin, StaticViewsMixin,
 
 
 def main_gui() -> None:
-    app = NetworkDiagnosisApp()
-    app.mainloop()
+    log_dir = setup_runtime_logging()
+    log = get_logger("main")
+    log.info(
+        "启动 %s v%s pid=%s argv=%s log_dir=%s",
+        APP_DISPLAY_NAME,
+        APP_VERSION,
+        os.getpid(),
+        sys.argv,
+        str(log_dir) if log_dir else "(文件日志未启用)",
+    )
+    try:
+        app = NetworkDiagnosisApp()
+        app.mainloop()
+    finally:
+        log.info("主循环结束")
