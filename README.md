@@ -43,7 +43,7 @@ python -m venv .venv
 pip install -e .
 ```
 
-启动 GUI（注意模块名以 **`n`** 开头）：
+启动 GUI：
 
 ```powershell
 python -m network_diagnosis

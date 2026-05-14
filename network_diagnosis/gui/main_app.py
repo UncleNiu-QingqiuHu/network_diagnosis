@@ -68,6 +68,11 @@ class NetworkDiagnosisApp(NetworkViewsMixin, SubnetViewsMixin, StaticViewsMixin,
     def __init__(self) -> None:
         # 主题
         super().__init__(themename="flatly")
+        # 初始化完成前先隐藏根窗口，避免短暂出现空白主窗口（易被误认为「多了一个 GUI 窗口」）
+        try:
+            self.withdraw()
+        except tk.TclError:
+            pass
         try_set_window_icon(self)
         # 窗口标题
         self.title(f"{APP_DISPLAY_NAME} v{APP_VERSION}（{AUTHOR_SUMMARY}）")
@@ -164,7 +169,6 @@ class NetworkDiagnosisApp(NetworkViewsMixin, SubnetViewsMixin, StaticViewsMixin,
         self._build_network_diagnosis_view()
 
         self.after(200, self._poll_queue)
-        self.after_idle(self._init_main_sash)
 
         self._build_subnet_view()
         self._switch_console = SwitchConsoleFrame(self._content_host)
@@ -179,6 +183,16 @@ class NetworkDiagnosisApp(NetworkViewsMixin, SubnetViewsMixin, StaticViewsMixin,
 
         self._active_module: str | None = None
         self._select_module("network")
+        self.after_idle(self._finish_startup_display)
+
+    def _finish_startup_display(self) -> None:
+        """布局就绪后再显示主窗口，并初始化分割条（withdraw 期间 winfo_width 不可靠）。"""
+        try:
+            self.update_idletasks()
+            self.deiconify()
+        except tk.TclError:
+            pass
+        self.after_idle(self._init_main_sash)
 
     def _select_module(self, module_key: str) -> None:
         if self._active_module == module_key:
