@@ -10,12 +10,15 @@ from tkinter.scrolledtext import ScrolledText
 import ttkbootstrap as ttk
 from ttkbootstrap.constants import DANGER, EW, INFO, NSEW, SECONDARY, SUCCESS, WARNING, W
 
+from network_diagnosis.runtime_log import get_logger
 from network_diagnosis.switch_console.session import (
     SerialBackend,
     SSHPtyBackend,
     SwitchConsoleSession,
     iter_serial_port_labels,
 )
+
+_log = get_logger(__name__)
 
 
 class SwitchConsoleFrame(ttk.Frame):
@@ -299,6 +302,7 @@ class SwitchConsoleFrame(ttk.Frame):
             else:
                 self._connect_ssh()
         except Exception as e:
+            _log.exception("交换机连接失败 mode=%s", mode)
             self._append_notice(f"\r\n[连接失败] {e}\r\n")
             self.lbl_switch_status.configure(text="连接失败", bootstyle=DANGER)
             messagebox.showerror("交换机 Console", str(e))
@@ -371,6 +375,7 @@ class SwitchConsoleFrame(ttk.Frame):
         self.btn_connect.configure(state=tk.DISABLED)
         self.btn_disconnect.configure(state=tk.NORMAL)
         self.lbl_switch_status.configure(text=f"已连接 — {status}", bootstyle=SUCCESS)
+        _log.info("交换机会话已建立 %s", status)
         self._drain_output_loop()
         self.txt_term.focus_set()
 
@@ -388,6 +393,7 @@ class SwitchConsoleFrame(ttk.Frame):
             pass
 
     def _disconnect(self) -> None:
+        had_session = self._session is not None
         self._disconnect_queue_only()
         if self._session is not None:
             self._session.stop()
@@ -396,6 +402,8 @@ class SwitchConsoleFrame(ttk.Frame):
         self.btn_connect.configure(state=tk.NORMAL)
         self.btn_disconnect.configure(state=tk.DISABLED)
         self.lbl_switch_status.configure(text="未连接", bootstyle=SECONDARY)
+        if had_session:
+            _log.info("交换机会话已断开")
 
     def _drain_output_loop(self) -> None:
         try:

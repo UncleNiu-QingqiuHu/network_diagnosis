@@ -18,6 +18,7 @@ from ttkbootstrap.constants import END, EW, INFO, NSEW, PRIMARY, SECONDARY, SUCC
 from network_diagnosis.gui.main_app_common import bind_label_wraplength
 from network_diagnosis.gui.simple_markdown_text import append_simple_markdown, configure_simple_markdown_tags
 from network_diagnosis.paths import iter_nmap_installers, report_root, resolve_nmap_exe_path
+from network_diagnosis.runtime_log import get_logger
 from network_diagnosis.security_diag.collect import (
     check_https_target_markdown,
     collect_firewall_summary_markdown,
@@ -36,6 +37,8 @@ from network_diagnosis.security_diag.port_scan import (
     TCP_SCAN_PRESET_ITEMS,
     authorized_tcp_port_scan_markdown,
 )
+
+_log = get_logger(__name__)
 
 
 class SecurityDiagnosisFrame(ttk.Frame):
@@ -373,11 +376,13 @@ class SecurityDiagnosisFrame(ttk.Frame):
                 out = fn()
                 self._q.put(("ok", (title, out)))
             except Exception as e:  # noqa: BLE001 — 将采集异常展示到输出区
+                _log.exception("安全诊断后台任务失败 title=%s", title)
                 self._q.put(("err", str(e)))
             finally:
                 self._q.put(("done", None))
 
         self._busy = True
+        _log.info("安全诊断后台任务开始 title=%s", title)
         self._set_task_status(f"运行中：{title}", running=True)
         threading.Thread(target=work, daemon=True).start()
 
@@ -387,10 +392,13 @@ class SecurityDiagnosisFrame(ttk.Frame):
                 kind, payload = self._q.get_nowait()
                 if kind == "ok":
                     title, text = payload
+                    _log.info("安全诊断任务完成 title=%s chars=%s", title, len(text))
                     self._append_md(f"## 〉{title}\n\n{text}\n")
                 elif kind == "err":
+                    _log.debug("安全诊断界面展示错误摘要: %s", payload)
                     self._append_md(f"## 〉错误\n\n```\n{payload}\n```\n")
                 elif kind == "done":
+                    _log.debug("安全诊断任务队列 done")
                     self._busy = False
                     self._set_task_status("就绪", running=False)
         except queue.Empty:

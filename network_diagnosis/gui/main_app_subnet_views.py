@@ -14,7 +14,10 @@ from network_diagnosis.gui.main_app_common import bind_label_wraplength
 from network_diagnosis.host_l3_info import AdapterIPv4Block, list_local_ipv4_adapters, local_hostname
 from network_diagnosis.model.report import EgressProbeResult
 from network_diagnosis.probes.egress_probe import run_egress
+from network_diagnosis.runtime_log import get_logger
 from network_diagnosis.subnet_calc import SubnetCalcResult, calc_from_cidr_combo, calc_subnet
+
+_log = get_logger(__name__)
 
 
 class SubnetViewsMixin:
@@ -193,6 +196,11 @@ class SubnetViewsMixin:
             return
 
         txt = self._format_subnet_calc(r)
+        _log.info(
+            "子网计算完成 network_cidr=%s prefix=%s",
+            r.network_cidr,
+            r.prefix_len,
+        )
         st = self.txt_subnet_result
         st.configure(state=tk.NORMAL)
         st.delete("1.0", END)
@@ -209,12 +217,15 @@ class SubnetViewsMixin:
         self.txt_subnet_host.insert(END, "正在读取本机配置与公网地址，请稍候…")
         self.txt_subnet_host.configure(state=tk.DISABLED)
 
+        _log.info("子网页刷新本机与出口信息（后台线程）")
+
         def work() -> None:
             adapters, warn = list_local_ipv4_adapters()
             try:
                 egress = run_egress()
             except Exception as e:
                 err_s = str(e)
+                _log.warning("出口探测 run_egress 异常", exc_info=True)
                 self.after(
                     0,
                     lambda ad=adapters, w=warn, err=err_s: self._subnet_apply_host_info(
@@ -225,6 +236,11 @@ class SubnetViewsMixin:
             self.after(
                 0,
                 lambda ad=adapters, w=warn, eg=egress: self._subnet_apply_host_info(ad, w, eg, None),
+            )
+            _log.info(
+                "子网页本机适配器与出口探测完成 adapter_blocks=%s warn=%s",
+                len(adapters),
+                bool(warn),
             )
 
         threading.Thread(target=work, daemon=True).start()

@@ -54,7 +54,10 @@ from network_diagnosis.probes.tshark import (
 from network_diagnosis.quality_assessment import compute_network_quality
 from network_diagnosis.reporting.history_store import HistoryEntry, append_history, build_history_compare
 from network_diagnosis.reporting.markdown import write_markdown_report
+from network_diagnosis.runtime_log import get_logger
 from network_diagnosis.version import APP_VERSION, DESIGN_DOC_REF
+
+_log = get_logger(__name__)
 
 
 @dataclass
@@ -305,6 +308,23 @@ def run_diagnostic(options: RunOptions, progress: Callable[[str], None]) -> Diag
     report_dir = root / f"{task_id}_{started.strftime('%Y%m%d_%H%M%S')}"
     report_dir.mkdir(parents=True, exist_ok=True)
     progress(f"工作目录: {report_dir}")
+    _log.info(
+        "诊断编排开始 task_id=%s host=%s ports=%s ping=%s capture=%s traceroute=%s bw=%s "
+        "adv(pathping=%s tcp_trace=%s http_tls=%s egress=%s mtu=%s) report_dir=%s",
+        task_id,
+        options.target_host,
+        options.ports,
+        options.enable_ping,
+        options.enable_capture,
+        options.enable_traceroute,
+        _normalize_bw_mode(options.bandwidth_mode),
+        options.enable_pathping,
+        options.enable_tcp_traceroute,
+        options.enable_http_tls_probe,
+        options.enable_egress_probe,
+        options.enable_mtu_probe,
+        report_dir,
+    )
 
     degradations: list[DegradationEvent] = []
 
@@ -392,6 +412,7 @@ def run_diagnostic(options: RunOptions, progress: Callable[[str], None]) -> Diag
                 progress("tshark 抓包已启动。")
                 time.sleep(1.0)
             except OSError as e:
+                _log.warning("抓包启动失败", exc_info=True)
                 capture = CaptureInfo(
                     requested=True,
                     ran=False,
@@ -617,6 +638,13 @@ def run_diagnostic(options: RunOptions, progress: Callable[[str], None]) -> Diag
     )
     write_markdown_report(report, md_path)
     progress(f"Markdown 报告已写入: {md_path}")
+    _log.info(
+        "诊断编排完成 task_id=%s overall=%s grade=%s markdown=%s",
+        task_id,
+        gui.overall.value,
+        nq.grade,
+        md_path,
+    )
     if options.enable_history_compare:
         append_history(
             HistoryEntry(

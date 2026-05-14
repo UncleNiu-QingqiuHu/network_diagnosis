@@ -63,6 +63,8 @@ from network_diagnosis.runner import RunOptions, run_diagnostic
 from network_diagnosis.runtime_log import get_logger, setup_runtime_logging
 from network_diagnosis.version import APP_DISPLAY_NAME, APP_VERSION, AUTHOR_SUMMARY
 
+_log = get_logger(__name__)
+
 
 class NetworkDiagnosisApp(NetworkViewsMixin, SubnetViewsMixin, StaticViewsMixin, ttk.Window):
     """网络与运维相关工具（左侧导航 + 右侧内容区）。"""
@@ -218,6 +220,7 @@ class NetworkDiagnosisApp(NetworkViewsMixin, SubnetViewsMixin, StaticViewsMixin,
         fr_new = self._view_frames.get(module_key)
         if fr_new is not None:
             fr_new.grid(row=0, column=0, sticky=NSEW)
+        _log.info("切换导航模块 %s -> %s", prev, module_key)
 
     def _configure_sidebar_nav_styles(self) -> None:
         c = self.style.colors
@@ -317,8 +320,10 @@ class NetworkDiagnosisApp(NetworkViewsMixin, SubnetViewsMixin, StaticViewsMixin,
     def _probe_tcping(self) -> None:
         p = resolve_tcping_exe()
         if p:
+            _log.info("依赖探测 tcping：已找到 path=%s", p)
             messagebox.showinfo("Tcping", f"已找到:\n{p}")
         else:
+            _log.warning("依赖探测 tcping：未找到")
             messagebox.showwarning(
                 "Tcping",
                 "未找到 tcping.exe。\n请将可执行文件置于 ThirdParty/tcping/tcping.exe。点击下方链接下载：\nhttps://www.elifulkerson.com/projects/tcping.php#google_vignette",
@@ -327,8 +332,10 @@ class NetworkDiagnosisApp(NetworkViewsMixin, SubnetViewsMixin, StaticViewsMixin,
     def _probe_tshark(self) -> None:
         p = find_tshark()
         if p:
+            _log.info("依赖探测 tshark：已找到 path=%s", p)
             messagebox.showinfo("tshark", f"已找到:\n{p}")
         else:
+            _log.warning("依赖探测 tshark：未找到")
             messagebox.showwarning(
                 "tshark",
                 "未找到 tshark。请先安装 Wireshark（含 Npcap），"
@@ -338,8 +345,10 @@ class NetworkDiagnosisApp(NetworkViewsMixin, SubnetViewsMixin, StaticViewsMixin,
     def _probe_iperf3(self) -> None:
         p = resolve_iperf3_exe()
         if p:
+            _log.info("依赖探测 iperf3：已找到 path=%s", p)
             messagebox.showinfo("Iperf3", f"已找到:\n{p}")
         else:
+            _log.warning("依赖探测 iperf3：未找到")
             messagebox.showwarning(
                 "Iperf3",
                 "未找到 iperf3。\n请将 iperf3.exe 置于 ThirdParty/iperf3/，"
@@ -349,6 +358,7 @@ class NetworkDiagnosisApp(NetworkViewsMixin, SubnetViewsMixin, StaticViewsMixin,
     def _open_wireshark_installer(self) -> None:
         cands = iter_wireshark_installers()
         if not cands:
+            _log.warning("打开 Wireshark 安装包：目录内未找到安装程序")
             messagebox.showwarning(
                 "Wireshark",
                 "未在 ThirdParty/Wireshark/ 下找到 .exe 安装包。\n请将官方安装程序放入该目录。点击下方链接下载：\nhttps://www.wireshark.org/",
@@ -361,6 +371,7 @@ class NetworkDiagnosisApp(NetworkViewsMixin, SubnetViewsMixin, StaticViewsMixin,
             else:
                 subprocess.Popen(["xdg-open", path])  # noqa: S603, S607
         except OSError as e:
+            _log.exception("打开 Wireshark 安装包失败 path=%s", path)
             messagebox.showerror("Wireshark", f"无法打开安装包: {e}")
 
     def _open_last_md(self) -> None:
@@ -381,6 +392,7 @@ class NetworkDiagnosisApp(NetworkViewsMixin, SubnetViewsMixin, StaticViewsMixin,
             else:
                 subprocess.Popen(["xdg-open", path])  # noqa: S603, S607
         except OSError as e:
+            _log.exception("打开路径失败 path=%s", path)
             messagebox.showerror("打开失败", str(e))
 
     def _on_run(self) -> None:
@@ -444,6 +456,23 @@ class NetworkDiagnosisApp(NetworkViewsMixin, SubnetViewsMixin, StaticViewsMixin,
             enable_history_compare=bool(self.var_adv_history.get()),
         )
 
+        _log.info(
+            "发起网络诊断 host=%s ports=%s ping=%s capture=%s traceroute=%s bw=%s "
+            "adv(pathping=%s tcp_trace=%s http_tls=%s egress=%s mtu=%s history=%s)",
+            host,
+            ports,
+            opts.enable_ping,
+            opts.enable_capture,
+            opts.enable_traceroute,
+            bw_mode,
+            opts.enable_pathping,
+            opts.enable_tcp_traceroute,
+            opts.enable_http_tls_probe,
+            opts.enable_egress_probe,
+            opts.enable_mtu_probe,
+            opts.enable_history_compare,
+        )
+
         self.txt_log.delete("1.0", END)
         self.txt_summary.delete("1.0", END)
         self._status_shell.configure(text="任务状态")
@@ -461,6 +490,11 @@ class NetworkDiagnosisApp(NetworkViewsMixin, SubnetViewsMixin, StaticViewsMixin,
             except BaseException as e:
                 if isinstance(e, (KeyboardInterrupt, SystemExit)):
                     raise
+                _log.exception(
+                    "诊断工作线程异常 host=%s ports=%s",
+                    opts.target_host,
+                    opts.ports,
+                )
                 self._queue.put(("error", str(e)))
 
         self._worker = threading.Thread(target=work, daemon=True)
@@ -473,6 +507,7 @@ class NetworkDiagnosisApp(NetworkViewsMixin, SubnetViewsMixin, StaticViewsMixin,
                 if kind == "log":
                     self._append_log(str(payload))
                 elif kind == "error":
+                    _log.error("诊断失败（已向用户提示）: %s", payload)
                     messagebox.showerror("诊断失败", str(payload))
                     self._stop_running_ui()
                     self.btn_run.configure(state=tk.NORMAL)
@@ -567,6 +602,14 @@ class NetworkDiagnosisApp(NetworkViewsMixin, SubnetViewsMixin, StaticViewsMixin,
 
         q = rep.network_quality.grade
         self._status_shell.configure(text=f"任务状态（网络质量：{q}）")
+
+        _log.info(
+            "网络诊断界面汇总完成 task_id=%s overall=%s grade=%s markdown=%s",
+            rep.meta.task_id,
+            g.overall.value,
+            q,
+            md,
+        )
 
         if g.overall.value == "ok":
             self.lbl_status.configure(

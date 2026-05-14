@@ -21,6 +21,9 @@ from network_diagnosis.db_diagnosis.model import DbDiagnosisReport
 from network_diagnosis.db_diagnosis.runner import DbConnectConfig, run_full_diagnosis
 from network_diagnosis.db_diagnosis.snapshot import collect_monitor_snapshot
 from network_diagnosis.paths import db_diagnosis_report_dir
+from network_diagnosis.runtime_log import get_logger
+
+_log = get_logger(__name__)
 
 
 class DbDiagnosisFrame(ttk.Frame):
@@ -164,7 +167,10 @@ class DbDiagnosisFrame(ttk.Frame):
             self.sp_port.configure(state=tk.DISABLED)
         else:
             self.lbl_db_hint.configure(
-                text="MySQL/PostgreSQL/SQL Server/Oracle：填写可达主机与库名；SQL Server 需本机 ODBC 驱动；Oracle「库名」填 Service Name。"
+                text=(
+                    "MySQL/PostgreSQL/SQL Server/Oracle：填写可达主机与库名；"
+                    "SQL Server 需本机 ODBC 驱动；Oracle「库名」填 Service Name。"
+                )
             )
             self.sp_port.configure(state=tk.NORMAL)
 
@@ -195,6 +201,15 @@ class DbDiagnosisFrame(ttk.Frame):
             messagebox.showwarning("校验", str(e))
             return
 
+        _log.info(
+            "数据库诊断开始 engine=%s host=%s port=%s database=%s user=%s",
+            cfg.engine,
+            cfg.host,
+            cfg.port,
+            cfg.database or "",
+            cfg.user or "",
+        )
+
         self.btn_diag.configure(state=tk.DISABLED)
         self.lbl_status.configure(text="正在诊断…", bootstyle=WARNING)
         self.txt_diag.delete("1.0", tk.END)
@@ -207,6 +222,11 @@ class DbDiagnosisFrame(ttk.Frame):
                 rep = run_full_diagnosis(cfg)
                 self._q.put(("diag_done", rep))
             except Exception as e:
+                _log.exception(
+                    "数据库诊断失败 engine=%s host=%s",
+                    cfg.engine,
+                    cfg.host,
+                )
                 self._q.put(("diag_err", str(e)))
 
         self._diag_worker = threading.Thread(target=work, daemon=True)
@@ -240,6 +260,14 @@ class DbDiagnosisFrame(ttk.Frame):
         interval = max(1, int(self.var_interval.get()))
         cfg = self._cfg()
 
+        _log.info(
+            "数据库监控开始 engine=%s host=%s port=%s interval_sec=%s",
+            cfg.engine,
+            cfg.host,
+            cfg.port,
+            interval,
+        )
+
         def mon_loop() -> None:
             from network_diagnosis.db_diagnosis.connection import open_database_connection
 
@@ -258,6 +286,7 @@ class DbDiagnosisFrame(ttk.Frame):
                     snap = collect_monitor_snapshot(cfg.engine, conn)
                     self._q.put(("mon_snap", (snap, datetime.now())))
                 except Exception as e:
+                    _log.warning("数据库监控采样异常", exc_info=True)
                     self._q.put(("mon_err", str(e)))
                 finally:
                     if conn is not None:
@@ -296,6 +325,7 @@ class DbDiagnosisFrame(ttk.Frame):
             ended=datetime.now(),
         )
         path.write_text(body, encoding="utf-8")
+        _log.info("数据库监控导出 markdown=%s report_dir=%s", path, d)
         messagebox.showinfo("导出", f"已保存：\n{path}")
         self._last_report_dir = str(d)
 
@@ -327,6 +357,11 @@ class DbDiagnosisFrame(ttk.Frame):
         p = rep.markdown_path
         self._last_md_path = str(p.resolve()) if p else None
         self._last_report_dir = str(rep.report_dir.resolve()) if rep.report_dir else None
+        _log.info(
+            "数据库诊断完成 task_id=%s markdown=%s",
+            rep.task_id,
+            self._last_md_path or "",
+        )
         if p:
             self.btn_open_md.configure(state=tk.NORMAL)
         lines = [
@@ -346,6 +381,7 @@ class DbDiagnosisFrame(ttk.Frame):
     def _apply_diag_err(self, msg: str) -> None:
         self.btn_diag.configure(state=tk.NORMAL)
         self.lbl_status.configure(text="诊断失败", bootstyle=DANGER)
+        _log.error("数据库诊断界面提示失败: %s", msg)
         self.txt_diag.insert(tk.END, f"\n失败: {msg}\n")
 
     def _apply_mon_snap(self, snap: str) -> None:
