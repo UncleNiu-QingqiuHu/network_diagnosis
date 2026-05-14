@@ -9,7 +9,6 @@ import threading
 import tkinter as tk
 from datetime import datetime
 from tkinter import messagebox
-from tkinter.scrolledtext import ScrolledText
 from urllib.parse import urlparse
 
 import ttkbootstrap as ttk
@@ -112,10 +111,17 @@ class SecurityDiagnosisFrame(ttk.Frame):
         btn_save = ttk.Frame(out_f)
         btn_save.grid(row=0, column=0, sticky=EW, pady=(0, 8))
         ttk.Button(btn_save, text="导出当前结果为 Markdown…", command=self._save_md, bootstyle=INFO).pack(side=tk.LEFT)
-        ttk.Button(btn_save, text="清空输出", command=self._clear_out, bootstyle=SECONDARY).pack(side=tk.LEFT, padx=(8, 0))
+        ttk.Button(btn_save, text="清空输出", command=self._clear_out, bootstyle=SECONDARY).pack(
+            side=tk.LEFT, padx=(8, 0)
+        )
 
-        self.txt = ScrolledText(
-            out_f,
+        text_wrap = ttk.Frame(out_f)
+        text_wrap.grid(row=1, column=0, sticky=NSEW)
+        text_wrap.rowconfigure(0, weight=1)
+        text_wrap.columnconfigure(0, weight=1)
+
+        self.txt = tk.Text(
+            text_wrap,
             height=18,
             wrap=tk.WORD,
             font=("Microsoft YaHei UI", 10),
@@ -123,7 +129,10 @@ class SecurityDiagnosisFrame(ttk.Frame):
             padx=8,
             pady=8,
         )
-        self.txt.grid(row=1, column=0, sticky=NSEW)
+        vsb = ttk.Scrollbar(text_wrap, orient=tk.VERTICAL, command=self.txt.yview)
+        self.txt.configure(yscrollcommand=vsb.set)
+        self.txt.grid(row=0, column=0, sticky=NSEW)
+        vsb.grid(row=0, column=1, sticky=tk.NS)
         configure_simple_markdown_tags(self.txt, base_font=("Microsoft YaHei UI", 10))
 
     def _clear_out(self) -> None:

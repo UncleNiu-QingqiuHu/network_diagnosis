@@ -411,56 +411,57 @@ def run_diagnostic(options: RunOptions, progress: Callable[[str], None]) -> Diag
 
     ping_stats = None
     ping_okish: bool | None = None
-    if options.enable_ping:
-        progress("正在执行 ICMP ping…")
-        if options.ping_long:
-            ping_stats = run_ping(
-                options.target_host,
-                options.ping_count,
-                options.ping_packet_timeout_ms,
-                report_dir,
-                long_duration_sec=max(5, int(options.long_ping_seconds)),
-            )
-        else:
-            ping_stats = run_ping(
-                options.target_host,
-                options.ping_count,
-                options.ping_packet_timeout_ms,
-                report_dir,
-            )
-        if ping_stats.attempted:
-            ping_okish = ping_stats.received > 0
-
     tr_stats: TracerouteStats | None = None
-    if options.enable_traceroute:
-        progress("正在执行路由追踪…")
-        tr_stats = run_traceroute(
-            options.target_host,
-            prefer_ipv6=options.prefer_ipv6,
-            max_hops=options.traceroute_max_hops,
-            hop_timeout_ms=options.traceroute_hop_timeout_ms,
-            log_dir=report_dir,
-        )
-
     port_results: list[PortProbeResult] = []
-    if tcping_exe is not None and options.ports:
-        for p in options.ports:
-            progress(f"正在 tcping 端口 {p} …")
-            port_results.append(
-                run_tcping_port(
-                    tcping_exe,
-                    probe_host,
-                    p,
-                    options.samples_per_port,
-                    options.tcp_timeout_ms,
+    try:
+        if options.enable_ping:
+            progress("正在执行 ICMP ping…")
+            if options.ping_long:
+                ping_stats = run_ping(
+                    options.target_host,
+                    options.ping_count,
+                    options.ping_packet_timeout_ms,
+                    report_dir,
+                    long_duration_sec=max(5, int(options.long_ping_seconds)),
+                )
+            else:
+                ping_stats = run_ping(
+                    options.target_host,
+                    options.ping_count,
+                    options.ping_packet_timeout_ms,
                     report_dir,
                 )
+            if ping_stats.attempted:
+                ping_okish = ping_stats.received > 0
+
+        if options.enable_traceroute:
+            progress("正在执行路由追踪…")
+            tr_stats = run_traceroute(
+                options.target_host,
+                prefer_ipv6=options.prefer_ipv6,
+                max_hops=options.traceroute_max_hops,
+                hop_timeout_ms=options.traceroute_hop_timeout_ms,
+                log_dir=report_dir,
             )
 
-    if capture.ran:
-        progress("正在停止抓包…")
-        cap_session.stop()
-        progress("抓包已停止。")
+        if tcping_exe is not None and options.ports:
+            for p in options.ports:
+                progress(f"正在 tcping 端口 {p} …")
+                port_results.append(
+                    run_tcping_port(
+                        tcping_exe,
+                        probe_host,
+                        p,
+                        options.samples_per_port,
+                        options.tcp_timeout_ms,
+                        report_dir,
+                    )
+                )
+    finally:
+        if capture.ran:
+            progress("正在停止抓包…")
+            cap_session.stop()
+            progress("抓包已停止。")
         if capture.stderr_path is not None and capture.stderr_path.is_file():
             err_blob = read_text_best_effort(capture.stderr_path, max_bytes=16_384)
             if err_blob.strip():

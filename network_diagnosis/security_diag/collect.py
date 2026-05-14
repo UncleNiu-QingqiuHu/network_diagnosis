@@ -82,16 +82,18 @@ def collect_tcp_listeners_markdown() -> str:
         return "## TCP 监听端口\n\n当前实现依赖 Windows `Get-NetTCPConnection`，请在 Windows 上运行本模块。\n"
 
     ps = r"""
+$ProgressPreference = 'SilentlyContinue'
 $ErrorActionPreference = 'SilentlyContinue'
 $list = @(Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | ForEach-Object {
-  $pid = $_.OwningProcess
-  $proc = ''
-  try { $proc = (Get-Process -Id $pid -ErrorAction Stop).ProcessName } catch { $proc = '' }
+  # 禁用 $pid：与只读自动变量 $PID 同名，赋值会抛错并导致整段采集失败
+  $ownPid = [int]$_.OwningProcess
+  $procName = ''
+  try { $procName = (Get-Process -Id $ownPid -ErrorAction Stop).ProcessName } catch { $procName = '' }
   [PSCustomObject]@{
     LocalAddress = [string]$_.LocalAddress
     LocalPort = [int]$_.LocalPort
-    OwningProcess = [int]$pid
-    ProcessName = [string]$proc
+    OwningProcess = $ownPid
+    ProcessName = [string]$procName
   }
 })
 $list | Sort-Object LocalPort, LocalAddress | ConvertTo-Json -Depth 4 -Compress

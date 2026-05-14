@@ -180,23 +180,25 @@ class TsharkCaptureSession:
 
     def stop(self) -> int | None:
         proc = self._proc
-        if proc is None:
-            return None
-        if proc.poll() is None:
-            _request_tshark_stop(proc)
-            try:
-                proc.wait(timeout=45)
-            except subprocess.TimeoutExpired:
-                proc.kill()
-                proc.wait(timeout=20)
-        rc = proc.returncode
         self._proc = None
-        if self._stdout_f:
-            self._stdout_f.close()
-            self._stdout_f = None
-        if self._stderr_f:
-            self._stderr_f.close()
-            self._stderr_f = None
+        rc: int | None = None
+        if proc is not None:
+            if proc.poll() is None:
+                _request_tshark_stop(proc)
+                try:
+                    proc.wait(timeout=45)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                    proc.wait(timeout=20)
+            rc = proc.returncode
+        for attr in ("_stdout_f", "_stderr_f"):
+            fh = getattr(self, attr)
+            if fh is not None:
+                try:
+                    fh.close()
+                except OSError:
+                    pass
+                setattr(self, attr, None)
         return rc
 
 
@@ -388,7 +390,9 @@ def summarize_pcap(
     )
 
     if rc_v4 not in (0, None) and rc_v6 not in (0, None):
-        out.append(f"● 会话归纳：按四元组统计 TCP 流时 tshark 报错（IPv4 退出码 {rc_v4}，IPv6 {rc_v6}），跳过会话列表。")
+        out.append(
+            f"● 会话归纳：按四元组统计 TCP 流时 tshark 报错（IPv4 退出码 {rc_v4}，IPv6 {rc_v6}），跳过会话列表。"
+        )
     elif not v4_top and not v6_top:
         if tcp_f is not None and tcp_f > 0:
             out.append(
@@ -410,18 +414,22 @@ def summarize_pcap(
             )
             for i, (endpoints, cnt) in enumerate(v4_top[:top_n_flows], 1):
                 (h1, p1), (h2, p2) = endpoints
-                out.append(
-                    f"    {i}. {_fmt_endpoint(h1, p1)} ↔ {_fmt_endpoint(h2, p2)}：约 {cnt} 个 TCP 帧（仅在抽样范围内）。"
+                line = (
+                    f"    {i}. {_fmt_endpoint(h1, p1)} ↔ {_fmt_endpoint(h2, p2)}："
+                    f"约 {cnt} 个 TCP 帧（仅在抽样范围内）。"
                 )
+                out.append(line)
         if v6_top:
             out.append(
                 f"  - IPv6：至少能数出 {n_v6_sess} 组不同的双向 TCP 会话。"
             )
             for i, (endpoints, cnt) in enumerate(v6_top[:top_n_flows], 1):
                 (h1, p1), (h2, p2) = endpoints
-                out.append(
-                    f"    {i}. {_fmt_endpoint(h1, p1)} ↔ {_fmt_endpoint(h2, p2)}：约 {cnt} 个 TCP 帧（仅在抽样范围内）。"
+                line = (
+                    f"    {i}. {_fmt_endpoint(h1, p1)} ↔ {_fmt_endpoint(h2, p2)}："
+                    f"约 {cnt} 个 TCP 帧（仅在抽样范围内）。"
                 )
+                out.append(line)
 
     out.append(
         "● 说明：以上是自动生成的「快速可读结论」，方便非技术人员理解："
