@@ -50,19 +50,21 @@ def _run_powershell(script: str, *, timeout: int = 120) -> str:
     full = _PS_UTF8_PREFIX + script.strip()
     raw = full.encode("utf-16-le")
     enc = base64.b64encode(raw).decode("ascii")
-    r = subprocess.run(
-        [
-            "powershell",
-            "-NoProfile",
-            "-NonInteractive",
-            "-ExecutionPolicy",
-            "Bypass",
-            "-EncodedCommand",
-            enc,
-        ],
-        capture_output=True,
-        timeout=timeout,
-    )
+    cmd = [
+        "powershell",
+        "-NoProfile",
+        "-NonInteractive",
+        "-WindowStyle",
+        "Hidden",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-EncodedCommand",
+        enc,
+    ]
+    kwargs: dict[str, Any] = dict(capture_output=True, timeout=timeout)
+    if sys.platform == "win32":
+        kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW  # type: ignore[assignment]
+    r = subprocess.run(cmd, **kwargs)
     out = _decode_console_bytes(r.stdout or b"").strip()
     err = _decode_console_bytes(r.stderr or b"").strip()
     if r.returncode != 0:
