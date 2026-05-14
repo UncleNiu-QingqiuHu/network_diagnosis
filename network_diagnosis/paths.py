@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import shutil
 import sys
 from pathlib import Path
@@ -77,8 +78,6 @@ def iter_wireshark_installers() -> list[Path]:
 
 
 def find_tshark() -> Path | None:
-    import os
-
     candidates = [
         Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "Wireshark" / "tshark.exe",
         Path(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)"))
@@ -88,4 +87,40 @@ def find_tshark() -> Path | None:
     for c in candidates:
         if c.is_file():
             return c
+    return None
+
+
+def third_party_nmap_dir() -> Path:
+    return bundle_root() / "ThirdParty" / "Nmap"
+
+
+def iter_nmap_installers() -> list[Path]:
+    """ThirdParty/Nmap 目录下官方安装包（*.exe），按修改时间新在前。"""
+    d = third_party_nmap_dir()
+    if not d.is_dir():
+        return []
+    exes = sorted(d.glob("*.exe"), key=lambda x: x.stat().st_mtime, reverse=True)
+    return [p for p in exes if p.is_file()]
+
+
+def resolve_nmap_exe_path() -> str | None:
+    """探测 nmap 可执行文件：PATH → 常见 Windows 安装目录 → ThirdParty/Nmap/nmap.exe。"""
+    w = shutil.which("nmap") or (shutil.which("nmap.exe") if sys.platform == "win32" else None)
+    if w:
+        return w
+    candidates: list[Path] = []
+    if sys.platform == "win32":
+        candidates.extend(
+            [
+                Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "Nmap" / "nmap.exe",
+                Path(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)")) / "Nmap" / "nmap.exe",
+            ]
+        )
+    candidates.append(third_party_nmap_dir() / "nmap.exe")
+    for c in candidates:
+        try:
+            if c.is_file():
+                return str(c.resolve())
+        except OSError:
+            continue
     return None

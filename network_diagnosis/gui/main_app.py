@@ -16,10 +16,10 @@ import ttkbootstrap as ttk
 from ttkbootstrap.constants import (
     BOTH,
     DANGER,
+    DARK,
     END,
     INVERSE,
     NSEW,
-    PRIMARY,
     SECONDARY,
     SUCCESS,
     WARNING,
@@ -67,7 +67,7 @@ class NetworkDiagnosisApp(NetworkViewsMixin, SubnetViewsMixin, StaticViewsMixin,
     """网络与运维相关工具（左侧导航 + 右侧内容区）。"""
     def __init__(self) -> None:
         # 主题
-        super().__init__(themename="flatly")
+        super().__init__(themename="solar")
         # 初始化完成前先隐藏根窗口，避免短暂出现空白主窗口（易被误认为「多了一个 GUI 窗口」）
         try:
             self.withdraw()
@@ -115,18 +115,18 @@ class NetworkDiagnosisApp(NetworkViewsMixin, SubnetViewsMixin, StaticViewsMixin,
         root_layout.columnconfigure(0, weight=0, minsize=212)
         root_layout.columnconfigure(1, weight=1)
 
-        # 左侧整列主色底铺满；导航项用自定义样式，避免 LIGHT 白块与默认焦点虚线框
-        sidebar = ttk.Frame(root_layout, bootstyle=PRIMARY, padding=(12, 16, 12, 16))
+        # 左侧整列深色底（DARK）；导航项同色系深色自定义样式，避免 LIGHT 白块与默认焦点虚线框
+        sidebar = ttk.Frame(root_layout, bootstyle=DARK, padding=(12, 16, 12, 16))
         sidebar.grid(row=0, column=0, sticky=NSEW)
 
         ttk.Label(
             sidebar,
             text="功能导航",
             font=("Microsoft YaHei UI", 12, "bold"),
-            bootstyle=(INVERSE, PRIMARY),
+            bootstyle=(INVERSE, DARK),
         ).pack(anchor=W, pady=(0, 14))
 
-        action_frame = ttk.Frame(sidebar, bootstyle=PRIMARY)
+        action_frame = ttk.Frame(sidebar, bootstyle=DARK)
         action_frame.pack(fill=BOTH, expand=True)
 
         self._configure_sidebar_nav_styles()
@@ -216,14 +216,20 @@ class NetworkDiagnosisApp(NetworkViewsMixin, SubnetViewsMixin, StaticViewsMixin,
             )
 
     def _configure_sidebar_nav_styles(self) -> None:
-        pri = getattr(self.style.colors, "primary", "#0d6efd")
-        if not isinstance(pri, str) or len(pri.strip().lstrip("#")) != 6:
-            pri = "#0d6efd"
-        pri = pri if pri.startswith("#") else f"#{pri}"
-        hover = _blend_hex(pri, "#ffffff", 0.14)
-        pressed = _blend_hex(pri, "#000000", 0.12)
-        active_bg = _blend_hex(pri, "#ffffff", 0.22)
-        idle_fg = "#e8f1fc"
+        c = self.style.colors
+        dark_bg = getattr(c, "dark", "#073642")
+        if not isinstance(dark_bg, str) or len(dark_bg.strip().lstrip("#")) != 6:
+            dark_bg = "#073642"
+        dark_bg = dark_bg if dark_bg.startswith("#") else f"#{dark_bg}"
+        idle_fg = c.get_foreground(dark_bg)
+        if not isinstance(idle_fg, str):
+            idle_fg = "#ffffff"
+        hover = _blend_hex(dark_bg, "#ffffff", 0.12)
+        pressed = _blend_hex(dark_bg, "#000000", 0.15)
+        active_bg = _blend_hex(dark_bg, "#ffffff", 0.22)
+        disabled_fg = _blend_hex(idle_fg, dark_bg, 0.45)
+        disabled_fg_active = _blend_hex(idle_fg, dark_bg, 0.35)
+
         for name in ("SidebarNav.TButton", "SidebarNavActive.TButton"):
             self.style.configure(
                 name,
@@ -232,26 +238,26 @@ class NetworkDiagnosisApp(NetworkViewsMixin, SubnetViewsMixin, StaticViewsMixin,
                 borderwidth=0,
                 relief="flat",
                 padding=(14, 11),
-                background=pri,
+                background=dark_bg,
                 foreground=idle_fg,
-                focuscolor=pri,
+                focuscolor=dark_bg,
             )
             self.style.map(
                 name,
                 background=[("active", hover), ("pressed", pressed)],
-                foreground=[("disabled", "#a8bdd9")],
+                foreground=[("disabled", disabled_fg)],
             )
         self.style.configure(
             "SidebarNavActive.TButton",
             font=("Microsoft YaHei UI", 11, "bold"),
             background=active_bg,
-            foreground="#ffffff",
+            foreground=idle_fg,
             focuscolor=active_bg,
         )
         self.style.map(
             "SidebarNavActive.TButton",
             background=[("active", hover), ("pressed", pressed)],
-            foreground=[("disabled", "#c8d9ef")],
+            foreground=[("disabled", disabled_fg_active)],
         )
 
     def _centered_geometry(self, width: int, height: int) -> str:

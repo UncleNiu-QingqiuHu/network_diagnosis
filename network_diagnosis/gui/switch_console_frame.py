@@ -8,7 +8,7 @@ from tkinter import filedialog, messagebox
 from tkinter.scrolledtext import ScrolledText
 
 import ttkbootstrap as ttk
-from ttkbootstrap.constants import DANGER, EW, NSEW, SECONDARY, SUCCESS, WARNING, W
+from ttkbootstrap.constants import DANGER, EW, INFO, NSEW, SECONDARY, SUCCESS, WARNING, W
 
 from network_diagnosis.switch_console.session import (
     SerialBackend,
@@ -77,7 +77,7 @@ class SwitchConsoleFrame(ttk.Frame):
         ttk.Label(r0, text="端口", bootstyle=SECONDARY).pack(side=tk.LEFT)
         self.cmb_port = ttk.Combobox(r0, textvariable=self.var_port, width=18)
         self.cmb_port.pack(side=tk.LEFT, padx=(6, 10))
-        ttk.Button(r0, text="刷新端口列表", command=self._refresh_ports, bootstyle=SECONDARY).pack(
+        ttk.Button(r0, text="刷新端口列表", command=self._refresh_ports, bootstyle=INFO).pack(
             side=tk.LEFT, padx=(0, 16)
         )
         ttk.Label(r0, text="波特率", bootstyle=SECONDARY).pack(side=tk.LEFT)
@@ -156,7 +156,7 @@ class SwitchConsoleFrame(ttk.Frame):
         kf.grid(row=0, column=1, sticky=EW, padx=(0, 14))
         kf.columnconfigure(0, weight=1)
         ttk.Entry(kf, textvariable=self.var_ssh_key).grid(row=0, column=0, sticky=EW)
-        ttk.Button(kf, text="浏览…", command=self._browse_key, bootstyle=SECONDARY, width=8).grid(
+        ttk.Button(kf, text="浏览…", command=self._browse_key, bootstyle=INFO, width=8).grid(
             row=0, column=1, padx=(8, 0)
         )
         ttk.Label(ssh_row2, text="私钥口令", bootstyle=SECONDARY).grid(row=0, column=2, sticky=W, padx=(0, 6))

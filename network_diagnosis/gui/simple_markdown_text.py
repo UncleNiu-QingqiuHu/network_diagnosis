@@ -11,11 +11,16 @@ from tkinter import font as tkfont
 # 行内 **粗体** 与 `代码`
 _INLINE_TOKEN = re.compile(r"\*\*.+?\*\*|`[^`]+`")
 
+_MD_THEME_ATTR = "_qqhu_md_theme_colors"
 
-def configure_simple_markdown_tags(widget: tk.Text, *, base_font: tuple[str, int] | None = None) -> None:
-    ff, fs = base_font or ("Microsoft YaHei UI", 10)
-    mono_fn = "Consolas" if sys.platform == "win32" else "Courier New"
-    mono_fs = max(fs - 1, 9)
+
+def _configure_md_tags_light(
+    widget: tk.Text,
+    ff: str,
+    fs: int,
+    mono_fn: str,
+    mono_fs: int,
+) -> None:
     widget.tag_configure("md_h2", font=(ff, fs + 4, "bold"), spacing3=6, foreground="#1a5276")
     widget.tag_configure("md_h3", font=(ff, fs + 2, "bold"), spacing3=4, foreground="#2c3e50")
     widget.tag_configure("md_h4", font=(ff, fs + 1, "bold"), spacing3=2)
@@ -28,7 +33,6 @@ def configure_simple_markdown_tags(widget: tk.Text, *, base_font: tuple[str, int
         lmargin1=16,
         lmargin2=16,
     )
-    # 孤儿表格行（无法解析为整块 GFM 表时）回退为等宽文本
     widget.tag_configure("md_table", font=(mono_fn, fs), background="#fafafa")
     widget.tag_configure(
         "md_table_sep",
@@ -45,6 +49,103 @@ def configure_simple_markdown_tags(widget: tk.Text, *, base_font: tuple[str, int
     )
     widget.tag_configure("md_quote", font=(ff, fs), foreground="#566573", lmargin1=12, lmargin2=12)
     widget.tag_configure("md_li", font=(ff, fs))
+
+
+def _configure_md_tags_dark(
+    widget: tk.Text,
+    ff: str,
+    fs: int,
+    mono_fn: str,
+    mono_fs: int,
+    tc: object,
+) -> None:
+    def g(name: str, fallback: str) -> str:
+        v = getattr(tc, name, fallback)
+        return v if isinstance(v, str) and v else fallback
+
+    deepest = g("bg", "#002b36")
+    surface = g("dark", "#073642")
+    fg_hi = g("light", "#A9BDBD")
+    muted = g("secondary", "#94a2a4")
+    accent_i = g("info", "#3f98d7")
+    accent_s = g("success", "#44aca4")
+    warn = g("warning", "#d05e2f")
+    widget.tag_configure("md_h2", font=(ff, fs + 4, "bold"), spacing3=6, foreground=accent_i)
+    widget.tag_configure("md_h3", font=(ff, fs + 2, "bold"), spacing3=4, foreground=accent_s)
+    widget.tag_configure("md_h4", font=(ff, fs + 1, "bold"), spacing3=2, foreground=fg_hi)
+    widget.tag_configure("md_bold", font=(ff, fs, "bold"), foreground=g("fg", "#fdf6e3"))
+    widget.tag_configure(
+        "md_code",
+        font=(ff, max(fs - 1, 8)),
+        background=surface,
+        foreground=warn,
+    )
+    widget.tag_configure(
+        "md_code_block",
+        font=(ff, max(fs - 1, 8)),
+        background=deepest,
+        foreground=fg_hi,
+        lmargin1=16,
+        lmargin2=16,
+    )
+    widget.tag_configure("md_table", font=(mono_fn, fs), background=surface, foreground=fg_hi)
+    widget.tag_configure(
+        "md_table_sep",
+        font=(mono_fn, mono_fs),
+        foreground=muted,
+        background=surface,
+    )
+    widget.tag_configure("md_table_bold", font=(mono_fn, fs, "bold"), background=surface, foreground=fg_hi)
+    widget.tag_configure(
+        "md_table_code",
+        font=(mono_fn, max(fs - 1, 8)),
+        background=deepest,
+        foreground=warn,
+    )
+    widget.tag_configure("md_quote", font=(ff, fs), foreground=muted, lmargin1=12, lmargin2=12)
+    widget.tag_configure("md_li", font=(ff, fs), foreground=fg_hi)
+
+
+def configure_simple_markdown_tags(
+    widget: tk.Text,
+    *,
+    base_font: tuple[str, int] | None = None,
+    theme_colors: object | None = None,
+) -> None:
+    ff, fs = base_font or ("Microsoft YaHei UI", 10)
+    mono_fn = "Consolas" if sys.platform == "win32" else "Courier New"
+    mono_fs = max(fs - 1, 9)
+
+    lum = 1.0
+    if theme_colors is not None:
+        setattr(widget, _MD_THEME_ATTR, theme_colors)
+        bg = getattr(theme_colors, "inputbg", None) or "#ffffff"
+        fg = getattr(theme_colors, "inputfg", None) or "#2b2b2b"
+        sel_bg = getattr(theme_colors, "selectbg", "#347083")
+        sel_fg = getattr(theme_colors, "selectfg", "#ffffff")
+        widget.configure(
+            background=bg,
+            foreground=fg,
+            insertbackground=fg,
+            selectbackground=sel_bg,
+            selectforeground=sel_fg,
+        )
+        gl = getattr(theme_colors, "get_luminance", None)
+        if callable(gl):
+            try:
+                lum = float(gl(bg))
+            except (TypeError, ValueError):
+                lum = 1.0
+    else:
+        try:
+            delattr(widget, _MD_THEME_ATTR)
+        except AttributeError:
+            pass
+
+    if lum < 0.45 and theme_colors is not None:
+        _configure_md_tags_dark(widget, ff, fs, mono_fn, mono_fs, theme_colors)
+    else:
+        _configure_md_tags_light(widget, ff, fs, mono_fn, mono_fs)
 
 
 def _as_tags(base: tuple[str, ...] | None, *more: str) -> tuple[str, ...] | None:
@@ -156,7 +257,9 @@ def _embed_md_table_widget(text_w: tk.Text, headers: list[str], rows: list[list[
     plain_h = [_strip_inline_md_cell(h) for h in headers]
     plain_r = [[_strip_inline_md_cell(c) for c in row] for row in rows]
 
-    outer = tk.Frame(text_w, highlightthickness=1, highlightbackground="#cfd8dc")
+    tc = getattr(text_w, _MD_THEME_ATTR, None)
+    border = getattr(tc, "border", "#cfd8dc") if tc is not None else "#cfd8dc"
+    outer = tk.Frame(text_w, highlightthickness=1, highlightbackground=border)
     inner = tk.Frame(outer)
     inner.pack(fill=tk.X, padx=2, pady=(6, 10))
 
