@@ -136,12 +136,15 @@ python -m nuitka `
   --standalone `
   --assume-yes-for-downloads `
   --windows-console-mode=disable `
+  --windows-icon-from-ico=network_diagnosis/images/qqhu_blue2.ico `
   --enable-plugin=tk-inter `
   --include-package-data=ttkbootstrap `
   --include-data-dir=ThirdParty/tcping=ThirdParty/tcping `
   --include-data-dir=network_diagnosis/images=network_diagnosis/images `
   network_diagnosis/__main__.py
 ```
+
+**exe 图标**：使用 **`--windows-icon-from-ico=…`** 指定 **`.ico`** 文件，写入生成的 exe 的 **PE 图标资源**（资源管理器 / 任务栏展示）。与 **`--include-data-dir=network_diagnosis/images/...`** 无关：后者供运行时 `try_set_window_icon` 等读取 ICO。**`--onefile`** 打包时同样可带上该参数。路径相对于执行 `nuitka` 时的当前目录（上例为仓库根）。可用 `python -m nuitka --help | findstr /i icon` 核对本机 Nuitka 选项名称。
 
 默认生成 **`__main__.dist`** 目录，内含 **`__main__.exe`** 及依赖 DLL。分发时将整个 **`__main__.dist`** 打成 zip 即可。
 

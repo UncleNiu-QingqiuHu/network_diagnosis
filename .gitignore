@@ -39,3 +39,5 @@ _bmad/
 media/
 Wireshark*.exe
 nmap*.exe
+__main__.*/
+__main__.*
