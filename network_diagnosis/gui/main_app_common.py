@@ -69,6 +69,30 @@ def bind_label_wraplength(label: tk.Misc, *, inset: int = 4) -> None:
     label.after_idle(after_idle_sync)
 
 
+def scaled_photo_from_png(master: tk.Misc, path: Path, *, size_px: int) -> tk.PhotoImage | None:
+    """将 PNG 统一缩放为 ``size_px × size_px`` 像素后再装入 Tk（便于与高 DPI / 任意素材尺寸解耦）。
+
+    依赖 Pillow（``ttkbootstrap`` 已间接引入）。若缩放失败则退回原始 ``PhotoImage`` 加载。
+    """
+    if not path.is_file() or size_px <= 0:
+        return None
+    try:
+        from PIL import Image, ImageTk
+
+        img = Image.open(path).convert("RGBA")
+        try:
+            resample = Image.Resampling.LANCZOS
+        except AttributeError:
+            resample = Image.LANCZOS  # Pillow 旧版
+        img = img.resize((size_px, size_px), resample)
+        return ImageTk.PhotoImage(img, master=master)
+    except Exception:
+        try:
+            return tk.PhotoImage(master=master, file=str(path))
+        except tk.TclError:
+            return None
+
+
 def fix_primary_notebook_selected_tab_colors(nb: tk.Misc) -> None:
     """修正 ``bootstyle=PRIMARY`` 的 Notebook：仅「当前选中」Tab 使用主色底，未选中 Tab 使用输入区底色。
 

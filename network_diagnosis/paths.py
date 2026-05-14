@@ -61,6 +61,11 @@ def ensure_logs_dir() -> Path:
     return d
 
 
+def refresh_catalog_icon_png() -> Path:
+    """数据库诊断「刷新库列表」图标（PNG，矢量稿为 ``images/fa--refresh.svg``，Tk 无法直接加载 SVG）。"""
+    return Path(__file__).resolve().parent / "images" / "fa--refresh.png"
+
+
 def third_party_tcping() -> Path:
     return bundle_root() / "ThirdParty" / "tcping" / "tcping.exe"
 

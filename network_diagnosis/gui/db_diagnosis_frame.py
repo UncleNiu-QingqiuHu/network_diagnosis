@@ -15,18 +15,37 @@ from tkinter import messagebox
 from tkinter.scrolledtext import ScrolledText
 
 import ttkbootstrap as ttk
-from ttkbootstrap.constants import DANGER, EW, INFO, NSEW, PRIMARY, SECONDARY, SUCCESS, WARNING, W
+from ttkbootstrap.constants import (
+    DANGER,
+    EW,
+    INFO,
+    NSEW,
+    PRIMARY,
+    SECONDARY,
+    SUCCESS,
+    TOOLBUTTON,
+    WARNING,
+    W,
+)
+from ttkbootstrap.widgets.tooltip import ToolTip
 
+from network_diagnosis.db_diagnosis.catalog import list_database_names
 from network_diagnosis.db_diagnosis.markdown_report import render_monitor_snapshot_markdown
 from network_diagnosis.db_diagnosis.model import DbDiagnosisReport
 from network_diagnosis.db_diagnosis.runner import DbConnectConfig, run_full_diagnosis
 from network_diagnosis.db_diagnosis.snapshot import collect_monitor_snapshot
-from network_diagnosis.gui.main_app_common import fix_primary_notebook_selected_tab_colors
+from network_diagnosis.gui.main_app_common import (
+    fix_primary_notebook_selected_tab_colors,
+    scaled_photo_from_png,
+)
 from network_diagnosis.gui.simple_markdown_text import append_simple_markdown, configure_simple_markdown_tags
-from network_diagnosis.paths import db_diagnosis_report_dir
+from network_diagnosis.paths import db_diagnosis_report_dir, refresh_catalog_icon_png, report_root
 from network_diagnosis.runtime_log import get_logger
 
 _log = get_logger(__name__)
+
+# 数据库诊断「刷新库列表」图标在界面上的统一像素边长（与 PNG 原始分辨率无关）
+REFRESH_DB_ICON_PX = 20
 
 
 class DbDiagnosisFrame(ttk.Frame):
@@ -36,10 +55,11 @@ class DbDiagnosisFrame(ttk.Frame):
         self._diag_worker: threading.Thread | None = None
         self._mon_stop = threading.Event()
         self._mon_worker: threading.Thread | None = None
-        self._last_report_dir: str | None = None
-        self._last_md_path: str | None = None
+        self._last_diag_md_path: str | None = None
+        self._last_monitor_md_path: str | None = None
         self._monitor_chunks: list[str] = []
         self._mon_started: datetime | None = None
+        self._catalog_worker: threading.Thread | None = None
         self._build_ui()
         self.after(200, self._poll_queue)
 
@@ -92,7 +112,32 @@ class DbDiagnosisFrame(ttk.Frame):
             row=1, column=4, sticky=W, pady=(10, 0), padx=(0, 6)
         )
         self.var_db = tk.StringVar(value="")
-        ttk.Entry(top, textvariable=self.var_db).grid(row=1, column=5, sticky=EW, pady=(10, 0))
+        frm_db = ttk.Frame(top)
+        frm_db.grid(row=1, column=5, sticky=EW, pady=(10, 0))
+        frm_db.columnconfigure(0, weight=1)
+        self.cmb_db = ttk.Combobox(
+            frm_db,
+            textvariable=self.var_db,
+            values=[],
+            state="normal",
+        )
+        self.cmb_db.grid(row=0, column=0, sticky=EW)
+        png_path = refresh_catalog_icon_png()
+        self._photo_refresh_db = scaled_photo_from_png(
+            self, png_path, size_px=REFRESH_DB_ICON_PX
+        )
+        btn_refresh_kw: dict[str, object] = {
+            "command": self._on_refresh_db_list,
+            "bootstyle": TOOLBUTTON,
+            "padding": (4, 4),
+        }
+        if self._photo_refresh_db is not None:
+            btn_refresh_kw["image"] = self._photo_refresh_db
+        else:
+            btn_refresh_kw["text"] = "↻"
+        self.btn_refresh_db = ttk.Button(frm_db, **btn_refresh_kw)
+        ToolTip(self.btn_refresh_db, text="刷新库列表")
+        self.btn_refresh_db.grid(row=0, column=1, sticky=tk.E, padx=(8, 0))
 
         self.lbl_db_hint = ttk.Label(
             top,
@@ -117,10 +162,25 @@ class DbDiagnosisFrame(ttk.Frame):
         ttk.Spinbox(btnf, from_=1, to=120, textvariable=self.var_interval, width=5).pack(side=tk.LEFT, padx=(0, 8))
         self.btn_open_dir = ttk.Button(btnf, text="打开报告目录", command=self._open_report_dir, bootstyle=INFO)
         self.btn_open_dir.pack(side=tk.LEFT, padx=(0, 8))
-        self.btn_open_md = ttk.Button(
-            btnf, text="打开上次报告", command=self._open_last_md, bootstyle=SECONDARY, state=tk.DISABLED
+        ToolTip(self.btn_open_dir, text="打开 reports/db_diagnosis（诊断与监控产出均在此汇总）")
+        self.btn_open_diag_md = ttk.Button(
+            btnf,
+            text="诊断报告",
+            command=self._open_diag_md,
+            bootstyle=SECONDARY,
+            state=tk.DISABLED,
         )
-        self.btn_open_md.pack(side=tk.LEFT)
+        self.btn_open_diag_md.pack(side=tk.LEFT, padx=(0, 8))
+        ToolTip(self.btn_open_diag_md, text="打开最近一次完整诊断生成的 Markdown")
+        self.btn_open_monitor_md = ttk.Button(
+            btnf,
+            text="监控报告",
+            command=self._open_monitor_md,
+            bootstyle=SECONDARY,
+            state=tk.DISABLED,
+        )
+        self.btn_open_monitor_md.pack(side=tk.LEFT)
+        ToolTip(self.btn_open_monitor_md, text="打开最近一次监控结束后自动保存的 Markdown")
 
         self.lbl_status = ttk.Label(btnf, text="就绪", bootstyle=SECONDARY)
         self.lbl_status.pack(side=tk.RIGHT, padx=(12, 0))
@@ -159,7 +219,7 @@ class DbDiagnosisFrame(ttk.Frame):
         lines_md: list[str] = [
             f"- **任务 ID**：{rep.task_id}",
             f"- **版本摘要**：{rep.version_line}",
-            f"- **Markdown**：{self._last_md_path or '—'}",
+            f"- **Markdown**：{self._last_diag_md_path or '—'}",
             "",
         ]
         if rep.errors:
@@ -195,14 +255,22 @@ class DbDiagnosisFrame(ttk.Frame):
                 text="SQLite：在「主机」或「库名」填写 .db / .sqlite 文件完整路径；用户名密码可留空。"
             )
             self.sp_port.configure(state=tk.DISABLED)
+            self.btn_refresh_db.configure(state=tk.DISABLED)
         else:
-            self.lbl_db_hint.configure(
-                text=(
-                    "MySQL/PostgreSQL/SQL Server/Oracle：填写可达主机与库名；"
-                    "SQL Server 需本机 ODBC 驱动；Oracle「库名」填 Service Name。"
-                )
-            )
             self.sp_port.configure(state=tk.NORMAL)
+            if eng == "oracle":
+                self.lbl_db_hint.configure(
+                    text="Oracle：「库名」栏填写 Service Name；不提供在线枚举，请手动输入或与 DBA 核对。"
+                )
+                self.btn_refresh_db.configure(state=tk.DISABLED)
+            else:
+                self.lbl_db_hint.configure(
+                    text=(
+                        "MySQL / PostgreSQL / SQL Server：填写主机、端口、用户名与密码后，点击「库名」旁的刷新图标"
+                        "可枚举实例库名并在下拉中选择（仍可手动输入）；SQL Server 需本机 ODBC 驱动。"
+                    )
+                )
+                self.btn_refresh_db.configure(state=tk.NORMAL)
 
     def _cfg(self) -> DbConnectConfig:
         return DbConnectConfig(
@@ -213,6 +281,49 @@ class DbDiagnosisFrame(ttk.Frame):
             password=self.var_pass.get(),
             database=self.var_db.get().strip(),
         )
+
+    def _on_refresh_db_list(self) -> None:
+        if self._catalog_worker and self._catalog_worker.is_alive():
+            messagebox.showinfo("请稍候", "正在读取库列表。")
+            return
+        try:
+            cfg = self._cfg()
+            if cfg.engine == "sqlite":
+                raise ValueError("SQLite 不适用库列表刷新。")
+            if cfg.engine == "oracle":
+                raise ValueError("Oracle 不适用库列表刷新。")
+            if not cfg.host:
+                raise ValueError("请填写主机。")
+        except ValueError as e:
+            messagebox.showwarning("校验", str(e))
+            return
+
+        cfg = self._cfg()
+
+        def work() -> None:
+            try:
+                names = list_database_names(
+                    cfg.engine,
+                    cfg.host,
+                    cfg.port,
+                    cfg.user,
+                    cfg.password,
+                    timeout_sec=15,
+                )
+                self._q.put(("db_catalog_ok", names))
+            except Exception as e:
+                _log.warning(
+                    "枚举数据库名失败 engine=%s host=%s",
+                    cfg.engine,
+                    cfg.host,
+                    exc_info=True,
+                )
+                self._q.put(("db_catalog_err", str(e)))
+
+        self.btn_refresh_db.configure(state=tk.DISABLED)
+        self.lbl_status.configure(text="正在读取库列表…", bootstyle=INFO)
+        self._catalog_worker = threading.Thread(target=work, daemon=True)
+        self._catalog_worker.start()
 
     def _on_diagnose(self) -> None:
         if self._diag_worker and self._diag_worker.is_alive():
@@ -361,10 +472,9 @@ class DbDiagnosisFrame(ttk.Frame):
         )
         path.write_text(body, encoding="utf-8")
         _log.info("数据库监控已自动生成 Markdown path=%s report_dir=%s", path, d)
-        self._last_report_dir = str(d.resolve())
-        self._last_md_path = str(path.resolve())
+        self._last_monitor_md_path = str(path.resolve())
         try:
-            self.btn_open_md.configure(state=tk.NORMAL)
+            self.btn_open_monitor_md.configure(state=tk.NORMAL)
         except tk.TclError:
             pass
         return path
@@ -377,6 +487,30 @@ class DbDiagnosisFrame(ttk.Frame):
                     self._apply_diag_done(payload)  # type: ignore[arg-type]
                 elif kind == "diag_err":
                     self._apply_diag_err(str(payload))
+                elif kind == "db_catalog_ok":
+                    names = payload  # type: ignore[assignment]
+                    if isinstance(names, list):
+                        self.cmb_db.configure(values=names)
+                        self.lbl_status.configure(text=f"库列表已刷新（{len(names)} 项）", bootstyle=SUCCESS)
+                        _log.info("库列表刷新成功 count=%s", len(names))
+                    try:
+                        eng = self.var_engine.get().lower()
+                        if eng not in ("sqlite", "oracle"):
+                            self.btn_refresh_db.configure(state=tk.NORMAL)
+                        else:
+                            self.btn_refresh_db.configure(state=tk.DISABLED)
+                    except tk.TclError:
+                        pass
+                elif kind == "db_catalog_err":
+                    try:
+                        eng = self.var_engine.get().lower()
+                        self.btn_refresh_db.configure(
+                            state=tk.DISABLED if eng in ("sqlite", "oracle") else tk.NORMAL
+                        )
+                    except tk.TclError:
+                        pass
+                    self.lbl_status.configure(text="库列表刷新失败", bootstyle=DANGER)
+                    messagebox.showwarning("库列表", str(payload))
                 elif kind == "mon_snap":
                     snap, _ts = payload  # type: ignore[misc]
                     self._apply_mon_snap(str(snap))
@@ -405,15 +539,23 @@ class DbDiagnosisFrame(ttk.Frame):
         self.btn_diag.configure(state=tk.NORMAL)
         self.lbl_status.configure(text="诊断完成", bootstyle=SUCCESS)
         p = rep.markdown_path
-        self._last_md_path = str(p.resolve()) if p else None
-        self._last_report_dir = str(rep.report_dir.resolve()) if rep.report_dir else None
+        if p:
+            self._last_diag_md_path = str(p.resolve())
+            try:
+                self.btn_open_diag_md.configure(state=tk.NORMAL)
+            except tk.TclError:
+                pass
+        else:
+            self._last_diag_md_path = None
+            try:
+                self.btn_open_diag_md.configure(state=tk.DISABLED)
+            except tk.TclError:
+                pass
         _log.info(
             "数据库诊断完成 task_id=%s markdown=%s",
             rep.task_id,
-            self._last_md_path or "",
+            self._last_diag_md_path or "",
         )
-        if p:
-            self.btn_open_md.configure(state=tk.NORMAL)
         if p and p.is_file():
             try:
                 self._render_diag_md(p.read_text(encoding="utf-8"))
@@ -436,15 +578,28 @@ class DbDiagnosisFrame(ttk.Frame):
         self.txt_mon.see(tk.END)
 
     def _open_report_dir(self) -> None:
-        d = self._last_report_dir
-        if not d:
-            messagebox.showinfo("打开目录", "尚无报告目录，请先运行诊断或完成一轮监控（结束后会自动生成报告）。")
+        d = report_root() / "db_diagnosis"
+        try:
+            d.mkdir(parents=True, exist_ok=True)
+        except OSError as e:
+            messagebox.showinfo("打开目录", f"无法创建或打开目录：{e}")
             return
-        self._startfile(d)
+        self._startfile(str(d.resolve()))
 
-    def _open_last_md(self) -> None:
-        p = self._last_md_path
+    def _open_diag_md(self) -> None:
+        p = self._last_diag_md_path
         if not p:
+            messagebox.showinfo("诊断报告", "尚无诊断 Markdown，请先运行「运行诊断（生成 Markdown）」并成功完成。")
+            return
+        self._startfile(p)
+
+    def _open_monitor_md(self) -> None:
+        p = self._last_monitor_md_path
+        if not p:
+            messagebox.showinfo(
+                "监控报告",
+                "尚无监控 Markdown：请先完成一轮监控并在停止后有成功采样（结束后会自动生成）。",
+            )
             return
         self._startfile(p)
 
