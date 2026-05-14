@@ -1,8 +1,7 @@
-"""使用说明、关于、许可、占位页等静态视图。"""
+"""使用帮助、关于、许可、占位页等静态视图。"""
 
 from __future__ import annotations
 
-import sys
 import tkinter as tk
 import webbrowser
 from tkinter.scrolledtext import ScrolledText
@@ -11,13 +10,20 @@ import ttkbootstrap as ttk
 from ttkbootstrap.constants import EW, NSEW, PRIMARY, SECONDARY, W
 
 from network_diagnosis.gui.main_app_common import bind_label_wraplength
+from network_diagnosis.gui.simple_markdown_text import (
+    append_simple_markdown,
+    configure_simple_markdown_tags,
+)
 from network_diagnosis.paths import bundle_root
 from network_diagnosis.version import (
     APP_DESCRIPTION,
     APP_DISPLAY_NAME,
     APP_DISPLAY_NAME_EN,
     APP_VERSION,
-    AUTHOR_SUMMARY,
+    AUTHOR_EMAIL,
+    AUTHOR_NAME,
+    AUTHOR_QQ_DISPLAY,
+    AUTHOR_QQ_GROUP_DISPLAY,
     COMMUNITY_DISPLAY,
     COMMUNITY_URL,
     DESIGN_DOC_REF,
@@ -27,6 +33,15 @@ from network_diagnosis.version import (
 
 
 class StaticViewsMixin:
+    def _ensure_static_module_built(self, module_key: str) -> None:
+        """使用帮助 / 关于 / 许可体量较大，延后到首次进入时再构建，缩短启动与切换耗时。"""
+        if module_key == "guide" and "guide" not in self._view_frames:
+            self._build_guide_view()
+        elif module_key == "about" and "about" not in self._view_frames:
+            self._build_about_view()
+        elif module_key == "license" and "license" not in self._view_frames:
+            self._build_license_view()
+
     def _add_placeholder_view(self, module_key: str, title: str) -> None:
         frm = ttk.Frame(self._content_host, padding=(32, 48))
         self._view_frames[module_key] = frm
@@ -49,7 +64,7 @@ class StaticViewsMixin:
 
         ttk.Label(
             frm,
-            text="使用说明",
+            text="使用帮助",
             font=("Microsoft YaHei UI", 18, "bold"),
         ).grid(row=0, column=0, sticky=W, pady=(0, 10))
 
@@ -82,9 +97,16 @@ class StaticViewsMixin:
                 relief=tk.FLAT,
                 padx=10,
                 pady=10,
+                highlightthickness=0,
             )
             st.grid(row=0, column=0, sticky=NSEW)
-            st.insert(tk.END, body)
+            configure_simple_markdown_tags(
+                st,
+                base_font=("Microsoft YaHei UI", 11),
+                theme_colors=ttk.Style().colors,
+            )
+            st.configure(state=tk.NORMAL)
+            append_simple_markdown(st, body.rstrip() + "\n")
             st.configure(state=tk.DISABLED)
 
         body_network = """【本模块用途】
@@ -128,6 +150,19 @@ class StaticViewsMixin:
   5）HTTP 测速（可选）
   • 用途：从填写的 URL 拉取数据以估算下载吞吐；会消耗目标站点与本机出口流量。
   • 准备：无需额外 exe；请使用合规、稳定的测速 URL（默认示例仅供演示，生产环境请替换为授权地址）。
+
+  6）外部工具路径说明（与程序探测顺序一致）
+  • **根目录约定**：源码运行时 **`ThirdParty`** 位于 **仓库根目录**（与 `network_diagnosis` 包目录同级）；
+    打包 exe 时以实际解压/附带目录为准，原则同上。
+  • **Tcping**：仅使用 **`ThirdParty\\tcping\\tcping.exe`**；**不会**从系统 PATH 查找。
+    请将官方获取的 **tcping.exe** 放入该目录。
+  • **tshark（抓包）**：程序探测 **`%ProgramFiles%\\Wireshark\\tshark.exe`**，
+    其次 **`%ProgramFiles(x86)%\\Wireshark\\tshark.exe`**。
+    请先安装 Wireshark（安装向导勾选 **Npcap**）；路径与权限不足会导致抓包失败。
+  • **安装 Wireshark**：将官方 Windows **安装包 `.exe`** 放入 **`ThirdParty\\Wireshark\\`** 后，
+    「安装 Wireshark」会启动该目录下 **最新** 的安装程序。
+  • **iperf3**：先查找 **`ThirdParty\\iperf3\\iperf3.exe`**；若不存在，再在系统 **PATH** 中查找
+    **`iperf3`** 或 **`iperf3.exe`**。
 
 ══════════════════════════════════════
 二、「探测目标」——用途与填写说明
@@ -296,41 +331,52 @@ class StaticViewsMixin:
   • 请使用只读或专用诊断账号；勿在生产库上使用高权限账户做试验。
   • 本模块为连通性与轻量信息采集，非 SQL 性能压测或审计替代方案。"""
 
-        body_security = """一、定位
-  • 面向企业网管在授权范围内的轻量基线核对：本机多数项为只读摘要；
-    **临时文件清理**会在您确认后删除文件，请先预览再谨慎执行。
-  • 对 URL 的 TLS / HTTP 头、DNS 对比与 **TCP 端口扫描**须在勾选授权确认后执行。
-  • 界面为 **左右两列**：左列为全部操作，右列为 **输出结果**（导出与 Markdown 渲染）。
-  • 方案说明见仓库内 **docs/network-security-diagnosis-design.md**。
+        body_security = """一、定位与合规
+  • 面向企业网管在 **授权范围内** 的轻量基线核对：本机多数操作为只读摘要；
+    **临时文件清理**会在您确认后删除文件，请先 **预览** 再执行。
+  • 对 URL 的 TLS/响应头、DNS 对比与 **TCP 端口扫描**须在勾选「我已确认对目标的测试已获得有效授权」后方可执行。
+  • 详细设计与字段说明见仓库 **docs/network-security-diagnosis-design.md**。
 
-二、本机
-  • 「刷新 TCP 监听端口」：在 Windows 上通过 PowerShell 枚举 TCP 监听、绑定地址与进程名（依赖 Get-NetTCPConnection
-    等）。
-  • 「刷新防火墙摘要」：各配置文件启用状态 + 入站「允许」规则抽样；精细管理请使用「高级安全 Windows 防火墙」(wf.msc)。
-  • 「刷新 CPU / GPU」：处理器型号与摘要；**每个逻辑核心**的利用率（性能计数器 WMI）；显卡摘要；
-    若本机存在 NVIDIA 驱动并可在 PATH 中调用 nvidia-smi，则追加 GPU 利用率与显存等字段。
-  • 「刷新内存」：操作系统可见内存、占用与空闲；物理内存总量；已安装的物理内存条明细（容量、厂商、速率等，
-    受 WMI 可读字段限制）。
-  • 「刷新本地用户与密码策略」与临时文件按钮在同一行：**net accounts**、**whoami /groups**、本地账户与 GPO 说明等。
-  • 「临时文件：预览可清理空间」：扫描当前用户 TEMP、LOCALAPPDATA\\Temp 等路径并估算体积；
-    界面中会标注 **系统目录 Windows\\Temp** 的统计通常仅供对照，**默认策略不清理该目录**。
-  • 「临时文件：执行清理（用户 TEMP）」：经二次确认后，尝试删除上述**当前用户临时目录**下的文件；
-    被占用或无权限的文件会自动跳过；**不包含 Windows\\Temp**；建议在关闭无关大型软件后再执行。
+二、界面布局
+  • **左右两列**：左侧为全部操作区；右侧 **输出结果** 使用 Markdown 渲染（粗体、行内代码、表格等），
+    导出与清空在输出区上方。
+  • 顶部 **警告** 分组为必读提示（同样支持 Markdown 样式）。
+  • **任务状态** 位于 **TCP 端口扫描** 区块下方：就绪时显示文案摘要；
+    后台任务运行中会显示 **滚动不定进度条**（与「网络诊断」任务状态类似）。
+    上一项任务未完成时不应重复发起。
 
-三、授权目标
-  • 必须勾选「我已确认对目标的测试已获得有效授权」后，方可执行 HTTPS / DNS / TCP 端口扫描。
-  • 「检查 TLS 与安全响应头」：建立 TLS、读取服务端证书字段摘要，并用 GET 拉取响应中的常见安全头（如 HSTS、CSP 等）；
-    **不是**漏洞扫描或渗透工具。
-  • 「DNS 对比」：将系统解析得到的 IPv4 与指定 DNS 服务器解析结果并列；若不一致可能为 split-DNS 设计或配置问题，
-    需结合现网文档判断。
-  • 「执行 TCP 端口扫描」：**单主机**（默认示例 **127.0.0.1**）、**仅 IPv4**；默认 **Python socket** 连接探测；
-    可选勾选 **nmap（-sT）**。**检测 Nmap** 自动探测并填入路径；**安装 Nmap** 可启动 `ThirdParty/Nmap/` 下已放置的
-    官方安装包。
-    支持端口预设与自定义列表（含区间）、并发与单端口超时；可选抓取开放端口的 **Banner**（轻量只读）。
-    扫描可能被对端记录；规格见 **docs/network-security-diagnosis-design.md** §3.4.1。
+三、本机
+  • 「刷新 TCP 监听端口」：Windows 下通过 PowerShell 枚举 TCP 监听、绑定地址与进程名（依赖 Get-NetTCPConnection 等）。
+  • 「刷新防火墙摘要」：各配置文件启用状态与入站「允许」规则抽样；
+    精细策略请使用「高级安全 Windows 防火墙」(wf.msc)。
+  • 「刷新 CPU / GPU」「刷新内存」「刷新本地用户与密码策略」：型号与利用率、内存条、账户与密码策略等摘要
+    （依赖 WMI/CIM；独显显存等字段可能不完整）。
+  • 「临时文件：预览可清理空间」「临时文件：执行清理（用户 TEMP）」：针对当前用户 TEMP、LOCALAPPDATA\\Temp 等；
+    **不含** Windows\\Temp；执行清理前须二次确认。
 
-四、导出
-  • 「导出当前结果为 Markdown…」将当前输出区已累积的段落写入 **reports/security_diagnosis/**，便于工单与审计。"""
+四、授权目标（HTTPS / DNS）
+  • 填写 **HTTPS URL**、**对比 DNS**，勾选授权后可执行「检查 TLS 与安全响应头」「DNS 对比」。
+  • TLS 检查 **不是**漏洞扫描或渗透工具；DNS 对比用于查看系统解析与指定 DNS 的差异。
+
+五、TCP 端口扫描与 Nmap 路径
+  • **单主机**、**仅 IPv4**；「扫描目标」默认示例为 **127.0.0.1**。默认 **Python socket** 连接探测。
+    支持端口预设或自定义列表（含区间）、同一行内的 **并发**、**超时(s)**；可选 **抓取 Banner**；
+    可选 **使用 nmap（-sT）** 改为由 Nmap 做 TCP 连接扫描。
+  • **程序查找 `nmap.exe` 的顺序（Windows）**：① 系统 **PATH** 中的 `nmap` / `nmap.exe`；
+    ② **`%ProgramFiles%\\Nmap\\nmap.exe`**；③ **`%ProgramFiles(x86)%\\Nmap\\nmap.exe`**；
+    ④ 仓库根目录（与 `ThirdParty` 同级）下的 **`ThirdParty\\Nmap\\nmap.exe`**（便携放置）。
+    打包发行的程序以实际解压/附带目录为准，原则相同。
+  • **手动路径**：在「nmap 路径」中填写 `nmap.exe` 的完整路径（使用 Nmap 后端时优先采用您填写且存在的文件）。
+  • **安装 Nmap**：将官方 Windows **安装包 `.exe`** 保存到 **`ThirdParty\\Nmap\\`** 后，点「安装 Nmap」会启动该目录下
+    **最新** 的安装程序；也可自行安装到默认目录（通常会出现在上述 **Program Files\\Nmap** 并被自动探测）。
+    官方下载：https://nmap.org/download.html
+  • 「检测 Nmap」：按上述顺序查找并自动填入路径。
+  • 按钮顺序：**检测 Nmap** → **安装 Nmap** → **执行 TCP 端口扫描**（扫描须已勾选授权）。
+  • 扫描可能被对端记录；规格见设计文档 §3.4.1。
+
+六、导出
+  • 「导出当前结果为 Markdown…」将输出区已累积内容写入 **reports/security_diagnosis/**（开发模式在仓库下 `reports/`；
+    打包后在可执行文件旁的 `reports/`）。"""
 
         add_guide_tab("网络诊断", body_network)
         add_guide_tab("子网计算", body_subnet)
@@ -371,7 +417,7 @@ class StaticViewsMixin:
                 text=key,
                 bootstyle=SECONDARY,
                 font=("Microsoft YaHei UI", 11),
-            ).grid(row=r, column=0, sticky=tk.N + tk.E, padx=(0, 12), pady=(0, 8))
+            ).grid(row=r, column=0, sticky=W, padx=(0, 12), pady=(0, 8))
             ttk.Label(
                 parent,
                 text=value,
@@ -387,7 +433,7 @@ class StaticViewsMixin:
             text="官方网站",
             bootstyle=SECONDARY,
             font=("Microsoft YaHei UI", 11),
-        ).grid(row=2, column=0, sticky=tk.N + tk.E, padx=(0, 12), pady=(0, 8))
+        ).grid(row=2, column=0, sticky=W, padx=(0, 12), pady=(0, 8))
         site_lbl = tk.Label(
             lf_ver,
             text=WEBSITE_DISPLAY,
@@ -403,7 +449,7 @@ class StaticViewsMixin:
             text="官方社区",
             bootstyle=SECONDARY,
             font=("Microsoft YaHei UI", 11),
-        ).grid(row=3, column=0, sticky=tk.N + tk.E, padx=(0, 12), pady=(0, 8))
+        ).grid(row=3, column=0, sticky=W, padx=(0, 12), pady=(0, 8))
         community_lbl = tk.Label(
             lf_ver,
             text=COMMUNITY_DISPLAY,
@@ -428,29 +474,28 @@ class StaticViewsMixin:
 
         lf_contact = ttk.Labelframe(frm, text="作者与联系", padding=(14, 12, 14, 12))
         lf_contact.grid(row=5, column=0, sticky=EW, pady=(0, 10))
-        lf_contact.columnconfigure(0, weight=1)
+        lf_contact.columnconfigure(1, weight=1)
+
+        meta_pair(lf_contact, 0, "作者", AUTHOR_NAME)
+
         ttk.Label(
             lf_contact,
-            text=AUTHOR_SUMMARY,
-            font=("Microsoft YaHei UI", 11),
-            wraplength=0,
-            justify=tk.LEFT,
-        ).grid(row=0, column=0, sticky=W)
-
-        ttk.Separator(frm, orient=tk.HORIZONTAL).grid(row=6, column=0, sticky=EW, pady=(8, 14))
-
-        env = (
-            f"运行环境：当前解释器 Python {sys.version_info.major}.{sys.version_info.minor}."
-            f"{sys.version_info.micro}（建议 3.10+）；界面 ttkbootstrap / Tk。"
-        )
-        ttk.Label(
-            frm,
-            text=env,
+            text="电子邮箱",
             bootstyle=SECONDARY,
-            font=("Microsoft YaHei UI", 10),
-            wraplength=0,
-            justify=tk.LEFT,
-        ).grid(row=7, column=0, sticky=W)
+            font=("Microsoft YaHei UI", 11),
+        ).grid(row=1, column=0, sticky=W, padx=(0, 12), pady=(0, 8))
+        email_lbl = tk.Label(
+            lf_contact,
+            text=AUTHOR_EMAIL,
+            font=("Microsoft YaHei UI", 11, "underline"),
+            fg="#0b5ed7",
+            cursor="hand2",
+        )
+        email_lbl.grid(row=1, column=1, sticky=W, pady=(0, 8))
+        email_lbl.bind("<Button-1>", lambda _e: webbrowser.open(f"mailto:{AUTHOR_EMAIL}"))
+
+        meta_pair(lf_contact, 2, "QQ", AUTHOR_QQ_DISPLAY)
+        meta_pair(lf_contact, 3, "QQ群", AUTHOR_QQ_GROUP_DISPLAY)
 
     def _build_license_view(self) -> None:
         frm = ttk.Frame(self._content_host, padding=(20, 20, 20, 16))

@@ -79,7 +79,7 @@ class NetworkDiagnosisApp(NetworkViewsMixin, SubnetViewsMixin, StaticViewsMixin,
         # 最小窗口大小
         self.minsize(1260, 720)
         # 默认窗口大小：每次启动在主屏居中（大于屏幕时先缩放到可放入再居中）
-        self.geometry(self._centered_geometry(1920, 1200))
+        self.geometry(self._centered_geometry(1600, 1080))
 
         self._queue: queue.Queue[tuple[str, object]] = queue.Queue()
         self._worker: threading.Thread | None = None
@@ -138,7 +138,7 @@ class NetworkDiagnosisApp(NetworkViewsMixin, SubnetViewsMixin, StaticViewsMixin,
             ("switch", "交换机配置"),
             ("database", "数据库诊断"),
             ("security", "安全诊断"),
-            ("guide", "使用说明"),
+            ("guide", "使用帮助"),
             ("about", "关于"),
             ("license", "许可"),
         ]
@@ -177,9 +177,6 @@ class NetworkDiagnosisApp(NetworkViewsMixin, SubnetViewsMixin, StaticViewsMixin,
         self._view_frames["database"] = self._db_diagnosis
         self._security_diagnosis = SecurityDiagnosisFrame(self._content_host)
         self._view_frames["security"] = self._security_diagnosis
-        self._build_guide_view()
-        self._build_about_view()
-        self._build_license_view()
 
         self._active_module: str | None = None
         self._select_module("network")
@@ -205,15 +202,21 @@ class NetworkDiagnosisApp(NetworkViewsMixin, SubnetViewsMixin, StaticViewsMixin,
                 if callable(leave):
                     leave()
         self._active_module = module_key
-        for k, frame in self._view_frames.items():
-            if k == module_key:
-                frame.grid(row=0, column=0, sticky=NSEW)
-            else:
-                frame.grid_remove()
         for k, btn in self._sidebar_btn_by_module.items():
             btn.configure(
                 style="SidebarNavActive.TButton" if k == module_key else "SidebarNav.TButton"
             )
+        self._ensure_static_module_built(module_key)
+        if prev is not None:
+            fr_prev = self._view_frames.get(prev)
+            if fr_prev is not None:
+                try:
+                    fr_prev.grid_remove()
+                except tk.TclError:
+                    pass
+        fr_new = self._view_frames.get(module_key)
+        if fr_new is not None:
+            fr_new.grid(row=0, column=0, sticky=NSEW)
 
     def _configure_sidebar_nav_styles(self) -> None:
         c = self.style.colors
