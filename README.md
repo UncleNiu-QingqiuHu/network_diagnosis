@@ -1,6 +1,6 @@
 # 青丘狐网络工作台
 
-基于 Python 的 **Windows 桌面网络工作台**（tkinter + [ttkbootstrap](https://github.com/israelhudson/ttkbootstrap)），集成网络连通性诊断、**安全诊断（基线）**、子网计算、交换机 Console/SSH、数据库诊断等能力。官方网站：<https://www.qingqiuhu.net>。产品说明与能力范围以设计文档为准：
+基于 Python 的 **Windows 桌面网络工作台**（tkinter + [ttkbootstrap](https://github.com/israel-dryer/ttkbootstrap)），集成网络连通性诊断、**安全诊断（基线）**、子网计算、交换机 Console/SSH、数据库诊断等能力。官方网站：<https://www.qingqiuhu.net>。产品说明与能力范围以设计文档为准：
 
 - [`docs/network-diagnostic-tool-design_v1.5.md`](docs/network-diagnostic-tool-design_v1.5.md)（v1.4 见同目录归档）
 - 安全诊断方案：[`docs/network-security-diagnosis-design.md`](docs/network-security-diagnosis-design.md)
@@ -16,12 +16,12 @@
 | **交换机配置** | 串口 Console 或 **SSH（PTY）** 会话；SSH 未知主机密钥写入可写目录下的 `switch_console/`。 |
 | **数据库诊断** | 连接 **SQLite / MySQL / PostgreSQL / SQL Server / Oracle**，运行连通性与信息收集，输出 Markdown；支持周期性监控快照导出。 |
 | **安全诊断** | 本机 TCP 监听与 Windows 防火墙只读摘要；本机 CPU/GPU/内存/用户策略与临时清理（Windows）；授权前提下 HTTPS TLS/证书与安全响应头、DNS 对比、**单主机 IPv4 TCP 端口扫描**（Python 默认可选 nmap `-sT`）；详见 [`docs/network-security-diagnosis-design.md`](docs/network-security-diagnosis-design.md)。导出至 `reports/security_diagnosis/`。 |
-| **使用帮助 / 关于 / 许可** | 内置说明页与许可信息。 |
+| **使用说明 / 关于 / 许可** | 内置说明（标签页正文支持 Markdown 渲染）、关于与 MIT 许可原文；静态页在 **首次进入对应导航时** 再构建，以缩短冷启动。 |
 
 **网络诊断**探测能力简述：
 
 - 本机网络上下文（`ipconfig` 解析）、DNS、可选 ICMP `ping`、多端口 **tcping**、可选 **tshark** 抓包（需本机安装 Wireshark / Npcap）。
-- **依赖策略**：`tcping.exe` 随项目放在固定相对路径；`tshark` 从系统标准安装路径探测；可选同捆 Wireshark 安装包引导安装。
+- **依赖策略（与 `network_diagnosis/paths.py`、界面「检测」按钮一致）**：`tcping.exe` **仅**从 `ThirdParty/tcping/tcping.exe` 加载（不使用 PATH）；`tshark.exe` 探测 `%ProgramFiles%\Wireshark\` 与 `%ProgramFiles(x86)%\Wireshark\`；**iperf3** 优先 `ThirdParty/iperf3/iperf3.exe`，否则查找 PATH；可选将 Wireshark **官方安装包** 放入 `ThirdParty/Wireshark/` 由界面引导安装。
 
 **数据库诊断**补充：
 
@@ -57,7 +57,7 @@ network-diagnosis
 
 ## Windows 打包（PyInstaller）
 
-设计约定见 [`docs/network-diagnostic-tool-design_v1.5.md`](docs/network-diagnostic-tool-design_v1.5.md) 中「打包与分发」。 frozen 模式下 `network_diagnosis.paths.bundle_root()` 指向 **`sys._MEIPASS`**，因此 **`ThirdParty/tcping/tcping.exe`** 与包内资源需通过 **`--add-data`**（或 spec 里 `datas`）打进包内；**`reports/`、`switch_console/`** 仍写在 **exe 同目录**（无需打进包）。
+设计约定见 [`docs/network-diagnostic-tool-design_v1.5.md`](docs/network-diagnostic-tool-design_v1.5.md) 中「打包与分发」。 frozen 模式下 `network_diagnosis.paths.bundle_root()` 指向 **`sys._MEIPASS`**，因此 **`ThirdParty/tcping/tcping.exe`** 与包内资源需通过 **`--add-data`**（或 spec 里 `datas`）打进包内；**`reports/`、`logs/`、`switch_console/`** 仍写在 **exe 同目录**（无需打进包）。
 
 ### 1. 环境与依赖
 
@@ -158,11 +158,22 @@ python -m nuitka `
 ### 3. 与 PyInstaller 的差异提示
 
 - Nuitka **不提供** `sys._MEIPASS`；资源路径依赖发行目录布局与 `paths.py` 中的推算逻辑。
+- 与 PyInstaller 一致：**`reports/`、`logs/`、`switch_console/`** 应位于发行目录下可写路径（通常为 exe 旁）。
 - 单文件形态为 **`--onefile`**，启动需解压、排障成本更高；**目录分发建议不要加 `--onefile`**。
 
-## 报告与数据目录
+## 报告、运行日志与数据目录
 
-**网络诊断**每次任务会在**项目根目录**（或打包后 **exe 同目录**）下创建：
+约定均实现于 [`network_diagnosis/paths.py`](network_diagnosis/paths.py)：开发时为**仓库根目录**；**PyInstaller / 打包 exe** 时为 **exe 所在目录**（勿写入只读的 `_MEIPASS`）。
+
+### 运行日志
+
+- 目录：**`logs/`**（与 `reports/` 同级规则）。
+- 主文件：**`logs/app.log`**，按**自然日午夜**轮转，历史文件带日期后缀（由 `TimedRotatingFileHandler` 管理，默认保留约 90 份）。
+- 代码入口：**`network_diagnosis/runtime_log.py`**（`setup_runtime_logging()` 在 GUI `main_gui()` 启动早期调用）；其它模块可使用 `get_logger(__name__)` 写入同一日志树（`qingqiuhu.*`）。
+
+### 诊断报告与其它可写数据
+
+**网络诊断**每次任务会创建：
 
 ```text
 reports/<任务短ID>_<时间戳>/
@@ -182,9 +193,9 @@ reports/db_diagnosis/<任务ID>/
 reports/security_diagnosis/
 ```
 
-**交换机 Console**（如 SSH `known_hosts`）可写数据默认在仓库根下的 `switch_console/`；若使用 **PyInstaller** 或 **Nuitka standalone** 打包，则在 **exe 所在发行目录下的 `switch_console/`**（与 `paths.py` 约定一致）。
+**交换机 Console**（如 SSH `known_hosts`）默认可写目录：**`switch_console/`**。
 
-以上目录若不存在会在首次使用时创建；`reports/` 已加入 `.gitignore`。
+以上目录若不存在会在首次使用时创建；**`reports/`、`logs/`、`switch_console/`** 已加入 `.gitignore`。
 
 ## 第三方资源
 
@@ -192,7 +203,7 @@ reports/security_diagnosis/
 |------|------|------|
 | tcping | `ThirdParty/tcping/tcping.exe` | 必放；应用不依赖系统 PATH。 |
 | Wireshark 安装包 | `ThirdParty/Wireshark/*.exe` | 可选；未检测到 `tshark` 时可在界面中打开安装。 |
-| Nmap | `ThirdParty/Nmap/*.exe` 或 `ThirdParty/Nmap/nmap.exe` | 可选；安全诊断 TCP 扫描可选用 nmap。 |
+| Nmap | `ThirdParty/Nmap/*.exe`（安装包）或 `ThirdParty/Nmap/nmap.exe`（便携） | 可选；安全诊断勾选「使用 nmap」时使用；探测顺序为 PATH → 默认安装目录 → `ThirdParty/Nmap/nmap.exe`（见 `paths.resolve_nmap_exe_path`）。 |
 
 再分发第三方软件须遵守各自许可证（详见设计文档第 6 节）。
 
@@ -203,6 +214,7 @@ network_diagnosis/       # Python 包：模型、探针、编排、GUI、Markdow
 docs/                    # 设计文档
 ThirdParty/              # tcping、Wireshark/Nmap 安装包放置说明与目录
 reports/                 # 默认诊断输出（已加入 .gitignore）
+logs/                    # 运行日志 app.log（按日轮转；已加入 .gitignore）
 switch_console/          # SSH 等可写数据（已加入 .gitignore；首次运行创建）
 pyproject.toml
 CHANGELOG.md

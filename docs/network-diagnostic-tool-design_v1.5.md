@@ -2,7 +2,7 @@
 
 **文档版本**：v1.5  
 **状态**：方案讨论稿（持续迭代）  
-**相对 v1.4 的变更**：同一主程序内增加**子网计算**、**交换机 Console/SSH**、**数据库诊断**模块与侧栏导航（第 2.2、11 节）；扩展 **Python 运行时依赖** 与 **`reports/db_diagnosis/`、`switch_console/`** 等产物路径（第 9 节）；历史版本 **`network-diagnostic-tool-design_v1.4.md`** 保留，**以本文件为当前权威**。
+**相对 v1.4 的变更**：同一主程序内增加**子网计算**、**交换机 Console/SSH**、**数据库诊断**模块与侧栏导航（第 2.2、11 节）；扩展 **Python 运行时依赖** 与 **`reports/db_diagnosis/`、`switch_console/`、`logs/`** 等产物路径（第 9 节）；历史版本 **`network-diagnostic-tool-design_v1.4.md`** 保留，**以本文件为当前权威**。
 
 ---
 
@@ -31,7 +31,8 @@
 
 ### 2.2 主窗口与功能导航（v1.5）
 
-- **单一可执行入口**：同一桌面应用内，**左侧竖向导航**在多个功能视图间切换：**网络诊断**（核心 MVP）、**子网计算**、**交换机配置**、**数据库诊断**、**安全诊断**（本机暴露面与防火墙只读摘要、授权目标 TLS/HTTP 安全头、DNS 对比、**单主机 IPv4 TCP 端口扫描（Python / 可选 nmap）**；方案见 [`docs/network-security-diagnosis-design.md`](network-security-diagnosis-design.md)），以及 **使用帮助 / 关于 / 许可** 等页面。
+- **单一可执行入口**：同一桌面应用内，**左侧竖向导航**在多个功能视图间切换：**网络诊断**（核心 MVP）、**子网计算**、**交换机配置**、**数据库诊断**、**安全诊断**（本机暴露面与防火墙只读摘要、授权目标 TLS/HTTP 安全头、DNS 对比、**单主机 IPv4 TCP 端口扫描（Python / 可选 nmap）**；方案见 [`docs/network-security-diagnosis-design.md`](network-security-diagnosis-design.md)），以及 **使用说明 / 关于 / 许可** 等页面。
+- **静态说明页构建时机**：「使用说明」「关于」「许可」等可在 **首次切换到对应导航时** 再构建界面（减轻冷启动耗时）；不影响网络诊断等核心页的初始化顺序约定。
 - **资源与生命周期**：占用独占资源的模块（如交换机串口、SSH 会话）须在**用户切换到其它页面或关闭应用**时**释放连接**；实现上为对应视图提供 `on_leave`（或等价）钩子，避免长期占用 COM 口或遗留会话。
 - **说明性文案**：较长 `Label` 若不希望按固定像素在句中被「硬折行」，可采用 `wraplength=0`（Tk：不在宽度上自动断行），仅通过显式换行分段，以免提示语观感破碎。
 
@@ -186,7 +187,8 @@
 - **Wireshark 官方安装包**：**与主程序/公司安装器一并打包分发**；安装后由程序**自动探测** `tshark.exe`；许可与再分发 compliance 见第 6.3 节。
 - **企业环境**：禁止安装 Wireshark/Npcap 时，产品仍应在**无抓包**模式下完整提供第 7.1～7.5 节的核心价值，且针对网络诊断的**两种输出**均说明抓包不可用。
 - **Python 第三方库（与 `pyproject.toml` 同步）**：除 **ttkbootstrap** 外，扩展模块依赖 **paramiko**（SSH）、**pyserial**（串口）、**pymysql**、**psycopg**、**pyodbc**、**oracledb** 等；发布与审计时须将该清单与许可证一并梳理。用户环境侧另需：**SQL Server** 的 **ODBC 驱动**；**Oracle** 按 `oracledb` 文档可能需要 **Instant Client** 等（以官方说明为准）。
-- **产物目录（扩展模块）**：数据库诊断 Markdown 默认 **`reports/db_diagnosis/<任务ID>/`**；交换机 SSH 数据（如 **known_hosts**）默认 **`switch_console/`**（开发：仓库根且通常 `.gitignore`；打包：`exe` 同目录）。两者均须可写，**禁止**在 frozen 模式下写入 `sys._MEIPASS`。
+- **产物目录（扩展模块）**：数据库诊断 Markdown 默认 **`reports/db_diagnosis/<任务ID>/`**；交换机 SSH 数据（如 **known_hosts**）默认 **`switch_console/`**；**GUI 进程运行日志**默认 **`logs/app.log`**（按自然日午夜轮转，详见下款）。以上路径在开发环境位于**仓库根目录**下对应子目录（通常 `.gitignore`）；打包后位于 **`exe` 同目录**下。**禁止**在 frozen 模式下将可写产物写入 `sys._MEIPASS`。
+- **运行日志**：用于排障与审计轨迹（与诊断任务 Markdown **相互独立**）。约定 **`logs/`** 目录、`app.log` 主文件、`logging.handlers.TimedRotatingFileHandler` 按日切割并限制保留份数；具体实现以仓库 **`network_diagnosis/runtime_log.py`**、**`network_diagnosis/paths.py`**（`logs_root` / `ensure_logs_dir`）为准。
 
 ---
 
@@ -241,6 +243,7 @@
 
 | 版本 | 日期 | 摘要 |
 |------|------|------|
+| v1.5.2 | 2026-05-14 | **运行日志**：`logs/app.log`、按自然日轮转；`paths.logs_root()` 与 `reports/` 同级规则；README 与第 9 节同步；静态说明页可延迟构建 |
 | v1.5.1 | 2026-05-13 | 导航新增 **安全诊断** 模块（`docs/network-security-diagnosis-design.md` 对齐实现）；报告目录 `reports/security_diagnosis/` |
 | v1.5 | 2026-05-13 | 主窗口多模块（子网计算、交换机、数据库诊断）与导航；扩展依赖与产物路径；新增第 2.2、11 节，更新第 9、10 节；**产品展示名：青丘狐网络工作台** |
 | v1.4 | 2026-05-13 | 技术栈定为 Python 3 + tkinter + ttkbootstrap；补充打包、线程与编码注意点；待拍板聚焦安装器与 Markdown 落地 |

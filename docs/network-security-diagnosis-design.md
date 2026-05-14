@@ -148,7 +148,7 @@
 **高级选项：nmap（可选集成）**
 
 - **定位**：在同一授权闸门下，为已安装 nmap 的高级用户提供 **可选** 扫描后端；**默认关闭**，不因未安装 nmap 而阻断主流程。
-- **前置条件**：本机 `PATH` 可发现 `nmap.exe`，或用户在高级选项中填写 **nmap 可执行文件路径**（仅本地路径校验，不捆绑二进制）。
+- **前置条件（与实现 `paths.resolve_nmap_exe_path`、界面「检测 Nmap」一致）**：探测顺序为 ① 系统 **PATH** 中的 `nmap` / `nmap.exe`；② **`%ProgramFiles%\Nmap\nmap.exe`**；③ **`%ProgramFiles(x86)%\Nmap\nmap.exe`**；④ 仓库根目录（与 `ThirdParty` 同级）下的 **`ThirdParty\Nmap\nmap.exe`**（便携）。用户可在「nmap 路径」中手动填写 `nmap.exe` 完整路径。可将官方 Windows **安装包 `.exe`** 置于 **`ThirdParty\Nmap\`**，通过「安装 Nmap」启动该目录下最新的安装程序。
 - **参数边界（建议）**：首版仅支持 **`TCP connect`（`-sT`）**、单主机、端口列表或端口范围与 Python 路径 **语义对齐**；禁止在界面暴露任意 Shell；输出优先解析 **XML（`-oX -`）** 以保持结构化，失败时降级展示受限文本并提示人工核对。
 - **权限**：`-sT` 一般 **无需管理员**；若用户自行改用需提升权限的选项，应在 UI 层禁止或二次警示（实现阶段细化黑名单）。
 - **与 Python 路径关系**：同一任务 **二选一** 后端（Python **或** nmap），避免重复扫描与结果混淆。
@@ -243,6 +243,7 @@
 | 受众 | 企业网管 / IT 运维 / 安全运营（协作） |
 | 关联主方案 | [`network-diagnostic-tool-design_v1.5.md`](network-diagnostic-tool-design_v1.5.md) |
 | 落地实现 | 主程序 **「安全诊断」**：`network_diagnosis/gui/security_diagnosis_frame.py`；`network_diagnosis/security_diag/collect.py`、`port_scan.py`；报告目录 `reports/security_diagnosis/` |
+| 运行日志（全局） | GUI 进程：`logs/app.log`（按自然日轮转）；`network_diagnosis/runtime_log.py`，与诊断 Markdown **独立** |
 
 ---
 
