@@ -10,6 +10,7 @@ import threading
 import tkinter as tk
 import uuid
 from datetime import datetime
+from pathlib import Path
 from tkinter import messagebox
 from tkinter.scrolledtext import ScrolledText
 
@@ -20,6 +21,8 @@ from network_diagnosis.db_diagnosis.markdown_report import render_monitor_snapsh
 from network_diagnosis.db_diagnosis.model import DbDiagnosisReport
 from network_diagnosis.db_diagnosis.runner import DbConnectConfig, run_full_diagnosis
 from network_diagnosis.db_diagnosis.snapshot import collect_monitor_snapshot
+from network_diagnosis.gui.main_app_common import fix_primary_notebook_selected_tab_colors
+from network_diagnosis.gui.simple_markdown_text import append_simple_markdown, configure_simple_markdown_tags
 from network_diagnosis.paths import db_diagnosis_report_dir
 from network_diagnosis.runtime_log import get_logger
 
@@ -56,7 +59,7 @@ class DbDiagnosisFrame(ttk.Frame):
         ctl_w = 18
 
         ttk.Label(top, text="引擎", bootstyle=SECONDARY).grid(row=0, column=0, sticky=W, padx=(0, 8))
-        self.var_engine = tk.StringVar(value="sqlite")
+        self.var_engine = tk.StringVar(value="mysql")
         self.cmb_engine = ttk.Combobox(
             top,
             textvariable=self.var_engine,
@@ -68,7 +71,7 @@ class DbDiagnosisFrame(ttk.Frame):
         self.cmb_engine.bind("<<ComboboxSelected>>", lambda _e: self._sync_engine_hints())
 
         ttk.Label(top, text="主机 / 路径", bootstyle=SECONDARY).grid(row=0, column=2, sticky=W, padx=(16, 6))
-        self.var_host = tk.StringVar(value="")
+        self.var_host = tk.StringVar(value="127.0.0.1")
         ttk.Entry(top, textvariable=self.var_host).grid(row=0, column=3, sticky=EW, padx=(0, 10))
         ttk.Label(top, text="端口", bootstyle=SECONDARY).grid(row=0, column=4, sticky=W, padx=(0, 6))
         self.var_port = tk.IntVar(value=3306)
@@ -76,12 +79,12 @@ class DbDiagnosisFrame(ttk.Frame):
         self.sp_port.grid(row=0, column=5, sticky=W)
 
         ttk.Label(top, text="用户名", bootstyle=SECONDARY).grid(row=1, column=0, sticky=W, pady=(10, 0), padx=(0, 8))
-        self.var_user = tk.StringVar(value="")
+        self.var_user = tk.StringVar(value="root")
         ttk.Entry(top, textvariable=self.var_user, width=ctl_w).grid(
             row=1, column=1, sticky=W, pady=(10, 0), padx=(0, 10)
         )
         ttk.Label(top, text="密码", bootstyle=SECONDARY).grid(row=1, column=2, sticky=W, pady=(10, 0), padx=(16, 6))
-        self.var_pass = tk.StringVar(value="")
+        self.var_pass = tk.StringVar(value="asd123")
         ttk.Entry(top, textvariable=self.var_pass, show="*").grid(
             row=1, column=3, sticky=EW, pady=(10, 0), padx=(0, 10)
         )
@@ -105,24 +108,14 @@ class DbDiagnosisFrame(ttk.Frame):
         btnf.grid(row=1, column=0, sticky=EW)
         self.btn_diag = ttk.Button(btnf, text="运行诊断（生成 Markdown）", command=self._on_diagnose, bootstyle=SUCCESS)
         self.btn_diag.pack(side=tk.LEFT, padx=(0, 8))
-        self.btn_monitor = ttk.Button(btnf, text="开始监控", command=self._on_start_monitor, bootstyle=PRIMARY)
-        self.btn_monitor.pack(side=tk.LEFT, padx=(0, 8))
-        self.btn_stop_mon = ttk.Button(
-            btnf, text="停止监控", command=self._stop_monitor, bootstyle=WARNING, state=tk.DISABLED
+        self.btn_toggle_monitor = ttk.Button(
+            btnf, text="开始监控", command=self._on_toggle_monitor, bootstyle=PRIMARY
         )
-        self.btn_stop_mon.pack(side=tk.LEFT, padx=(0, 8))
+        self.btn_toggle_monitor.pack(side=tk.LEFT, padx=(0, 8))
         ttk.Label(btnf, text="间隔(秒)", bootstyle=SECONDARY).pack(side=tk.LEFT, padx=(8, 4))
         self.var_interval = tk.IntVar(value=5)
         ttk.Spinbox(btnf, from_=1, to=120, textvariable=self.var_interval, width=5).pack(side=tk.LEFT, padx=(0, 8))
-        self.btn_export_mon = ttk.Button(
-            btnf,
-            text="导出监控 Markdown",
-            command=self._export_monitor_md,
-            bootstyle=SECONDARY,
-            state=tk.DISABLED,
-        )
-        self.btn_export_mon.pack(side=tk.LEFT, padx=(0, 8))
-        self.btn_open_dir = ttk.Button(btnf, text="打开报告目录", command=self._open_report_dir, bootstyle=SECONDARY)
+        self.btn_open_dir = ttk.Button(btnf, text="打开报告目录", command=self._open_report_dir, bootstyle=INFO)
         self.btn_open_dir.pack(side=tk.LEFT, padx=(0, 8))
         self.btn_open_md = ttk.Button(
             btnf, text="打开上次报告", command=self._open_last_md, bootstyle=SECONDARY, state=tk.DISABLED
@@ -143,12 +136,49 @@ class DbDiagnosisFrame(ttk.Frame):
         tab_m.rowconfigure(0, weight=1)
         tab_m.columnconfigure(0, weight=1)
 
-        self.txt_diag = ScrolledText(tab_d, height=18, wrap=tk.WORD, font=("Consolas", 10))
+        self.txt_diag = ScrolledText(tab_d, height=18, wrap=tk.WORD, font=("Microsoft YaHei UI", 10))
         self.txt_diag.grid(row=0, column=0, sticky=NSEW)
+        configure_simple_markdown_tags(
+            self.txt_diag,
+            base_font=("Microsoft YaHei UI", 10),
+            theme_colors=ttk.Style().colors,
+        )
         self.txt_mon = ScrolledText(tab_m, height=18, wrap=tk.WORD, font=("Consolas", 10))
         self.txt_mon.grid(row=0, column=0, sticky=NSEW)
 
         self._sync_engine_hints()
+        fix_primary_notebook_selected_tab_colors(nb)
+
+    def _render_diag_md(self, md: str) -> None:
+        self.txt_diag.configure(state=tk.NORMAL)
+        self.txt_diag.delete("1.0", tk.END)
+        append_simple_markdown(self.txt_diag, md if md.endswith("\n") else md + "\n")
+        self.txt_diag.see(tk.END)
+
+    def _fallback_diag_preview_md(self, rep: DbDiagnosisReport) -> str:
+        lines_md: list[str] = [
+            f"- **任务 ID**：{rep.task_id}",
+            f"- **版本摘要**：{rep.version_line}",
+            f"- **Markdown**：{self._last_md_path or '—'}",
+            "",
+        ]
+        if rep.errors:
+            lines_md.append("## 告警 / 错误")
+            for err in rep.errors:
+                lines_md.append(f"- {err}")
+            lines_md.append("")
+        lines_md.append("## 章节预览")
+        lines_md.append("")
+        for t, body in rep.sections.items():
+            lines_md.append(f"### {t}")
+            lines_md.append("")
+            snippet = body[:800] + ("…" if len(body) > 800 else "")
+            lines_md.append(snippet)
+            lines_md.append("")
+        return "\n".join(lines_md).rstrip() + "\n"
+
+    def _sync_monitor_toggle_idle(self) -> None:
+        self.btn_toggle_monitor.configure(text="开始监控", bootstyle=PRIMARY, state=tk.NORMAL)
 
     def _sync_engine_hints(self) -> None:
         eng = self.var_engine.get().lower()
@@ -212,8 +242,7 @@ class DbDiagnosisFrame(ttk.Frame):
 
         self.btn_diag.configure(state=tk.DISABLED)
         self.lbl_status.configure(text="正在诊断…", bootstyle=WARNING)
-        self.txt_diag.delete("1.0", tk.END)
-        self.txt_diag.insert(tk.END, "正在连接并执行只读采集…\n")
+        self._render_diag_md("> 正在连接并执行只读采集…")
 
         cfg = self._cfg()
 
@@ -231,6 +260,12 @@ class DbDiagnosisFrame(ttk.Frame):
 
         self._diag_worker = threading.Thread(target=work, daemon=True)
         self._diag_worker.start()
+
+    def _on_toggle_monitor(self) -> None:
+        if self._mon_worker and self._mon_worker.is_alive():
+            self._stop_monitor()
+        else:
+            self._on_start_monitor()
 
     def _on_start_monitor(self) -> None:
         if self._mon_worker and self._mon_worker.is_alive():
@@ -252,9 +287,7 @@ class DbDiagnosisFrame(ttk.Frame):
         self._monitor_chunks.clear()
         self._mon_started = datetime.now()
         self.txt_mon.delete("1.0", tk.END)
-        self.btn_monitor.configure(state=tk.DISABLED)
-        self.btn_stop_mon.configure(state=tk.NORMAL)
-        self.btn_export_mon.configure(state=tk.NORMAL)
+        self.btn_toggle_monitor.configure(text="停止监控", bootstyle=WARNING, state=tk.NORMAL)
         self.lbl_status.configure(text="监控中…", bootstyle=INFO)
 
         interval = max(1, int(self.var_interval.get()))
@@ -303,14 +336,16 @@ class DbDiagnosisFrame(ttk.Frame):
 
     def _stop_monitor(self) -> None:
         self._mon_stop.set()
-        self.btn_monitor.configure(state=tk.NORMAL)
-        self.btn_stop_mon.configure(state=tk.DISABLED)
-        self.lbl_status.configure(text="就绪", bootstyle=SECONDARY)
+        self._sync_monitor_toggle_idle()
+        if self._mon_worker is not None and self._mon_worker.is_alive():
+            self.lbl_status.configure(text="正在停止监控…", bootstyle=WARNING)
+        else:
+            self.lbl_status.configure(text="就绪", bootstyle=SECONDARY)
 
-    def _export_monitor_md(self) -> None:
+    def _write_monitor_session_markdown(self) -> Path | None:
+        """将本轮 `_monitor_chunks` 写入 ``reports/db_diagnosis/<任务ID>/``；无成功采样则跳过。"""
         if not self._monitor_chunks:
-            messagebox.showinfo("导出", "暂无监控采样可导出。")
-            return
+            return None
         tid = datetime.now().strftime("%Y%m%d-%H%M%S") + "-mon-" + uuid.uuid4().hex[:6]
         d = db_diagnosis_report_dir(tid)
         path = d / f"db-monitor_{datetime.now().strftime('%Y%m%d-%H%M%S')}.md"
@@ -325,9 +360,14 @@ class DbDiagnosisFrame(ttk.Frame):
             ended=datetime.now(),
         )
         path.write_text(body, encoding="utf-8")
-        _log.info("数据库监控导出 markdown=%s report_dir=%s", path, d)
-        messagebox.showinfo("导出", f"已保存：\n{path}")
-        self._last_report_dir = str(d)
+        _log.info("数据库监控已自动生成 Markdown path=%s report_dir=%s", path, d)
+        self._last_report_dir = str(d.resolve())
+        self._last_md_path = str(path.resolve())
+        try:
+            self.btn_open_md.configure(state=tk.NORMAL)
+        except tk.TclError:
+            pass
+        return path
 
     def _poll_queue(self) -> None:
         try:
@@ -346,6 +386,16 @@ class DbDiagnosisFrame(ttk.Frame):
                 elif kind == "mon_end":
                     self.txt_mon.insert(tk.END, "\n--- 监控已结束 ---\n")
                     self.txt_mon.see(tk.END)
+                    saved = self._write_monitor_session_markdown()
+                    if saved is not None:
+                        self.txt_mon.insert(tk.END, f"\n（已自动生成 Markdown：`{saved}`）\n")
+                        self.txt_mon.see(tk.END)
+                        self.lbl_status.configure(text="监控已结束，Markdown 已保存", bootstyle=SUCCESS)
+                    else:
+                        self.txt_mon.insert(tk.END, "\n（本轮无成功采样，未生成 Markdown。）\n")
+                        self.txt_mon.see(tk.END)
+                        self.lbl_status.configure(text="监控已结束", bootstyle=SECONDARY)
+                    self._sync_monitor_toggle_idle()
         except queue.Empty:
             pass
         self.after(200, self._poll_queue)
@@ -364,25 +414,21 @@ class DbDiagnosisFrame(ttk.Frame):
         )
         if p:
             self.btn_open_md.configure(state=tk.NORMAL)
-        lines = [
-            f"任务 ID: {rep.task_id}\n",
-            f"版本摘要: {rep.version_line}\n",
-            f"Markdown: {self._last_md_path}\n",
-        ]
-        if rep.errors:
-            lines.append("\n告警/错误:\n" + "\n".join(rep.errors))
-        lines.append("\n--- 章节预览 ---\n")
-        for t, body in rep.sections.items():
-            snippet = body[:800] + ("…" if len(body) > 800 else "")
-            lines.append(f"\n## {t}\n{snippet}\n")
-        self.txt_diag.delete("1.0", tk.END)
-        self.txt_diag.insert(tk.END, "".join(lines))
+        if p and p.is_file():
+            try:
+                self._render_diag_md(p.read_text(encoding="utf-8"))
+            except OSError:
+                _log.warning("读取诊断 Markdown 失败 path=%s", p, exc_info=True)
+                self._render_diag_md(self._fallback_diag_preview_md(rep))
+        else:
+            self._render_diag_md(self._fallback_diag_preview_md(rep))
 
     def _apply_diag_err(self, msg: str) -> None:
         self.btn_diag.configure(state=tk.NORMAL)
         self.lbl_status.configure(text="诊断失败", bootstyle=DANGER)
         _log.error("数据库诊断界面提示失败: %s", msg)
-        self.txt_diag.insert(tk.END, f"\n失败: {msg}\n")
+        safe = msg.replace("```", "'''")
+        self._render_diag_md(f"## 诊断失败\n\n```\n{safe}\n```\n")
 
     def _apply_mon_snap(self, snap: str) -> None:
         self._monitor_chunks.append(snap)
@@ -392,7 +438,7 @@ class DbDiagnosisFrame(ttk.Frame):
     def _open_report_dir(self) -> None:
         d = self._last_report_dir
         if not d:
-            messagebox.showinfo("打开目录", "尚无报告目录，请先运行诊断或导出监控。")
+            messagebox.showinfo("打开目录", "尚无报告目录，请先运行诊断或完成一轮监控（结束后会自动生成报告）。")
             return
         self._startfile(d)
 

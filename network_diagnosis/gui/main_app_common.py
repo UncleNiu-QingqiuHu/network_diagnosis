@@ -69,6 +69,57 @@ def bind_label_wraplength(label: tk.Misc, *, inset: int = 4) -> None:
     label.after_idle(after_idle_sync)
 
 
+def fix_primary_notebook_selected_tab_colors(nb: tk.Misc) -> None:
+    """修正 ``bootstyle=PRIMARY`` 的 Notebook：仅「当前选中」Tab 使用主色底，未选中 Tab 使用输入区底色。
+
+    ttkbootstrap 默认实现与此相反（未选中为主色、选中为窗口底色），与本产品 Tab 交互预期不符。
+    """
+    try:
+        import ttkbootstrap as ttk
+
+        base = str(nb.cget("style"))
+    except (tk.TclError, AttributeError):
+        return
+    if base.lower() != "primary.tnotebook":
+        return
+    tab_style = f"{base}.Tab"
+    try:
+        root = nb.winfo_toplevel()
+        style = getattr(root, "style", None)
+        if style is None:
+            style = ttk.Style()
+        colors = style.colors
+        primary = colors.get("primary")
+        bordercolor = colors.border
+        fg_sel = colors.get_foreground("primary")
+        style.map(
+            tab_style,
+            background=[
+                ("selected", primary),
+                ("!selected", colors.inputbg),
+            ],
+            lightcolor=[
+                ("selected", primary),
+                ("!selected", colors.inputbg),
+            ],
+            darkcolor=[
+                ("selected", primary),
+                ("!selected", colors.inputbg),
+            ],
+            bordercolor=[
+                ("selected", bordercolor),
+                ("!selected", bordercolor),
+            ],
+            foreground=[
+                ("selected", fg_sel),
+                ("!selected", colors.inputfg),
+            ],
+            padding=[("selected", (6, 5)), ("!selected", (6, 5))],
+        )
+    except tk.TclError:
+        pass
+
+
 def parse_ports(text: str) -> list[int]:
     """
     解析端口列表，支持英文逗号分隔。

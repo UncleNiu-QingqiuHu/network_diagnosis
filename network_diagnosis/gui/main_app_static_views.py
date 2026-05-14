@@ -9,7 +9,7 @@ from tkinter.scrolledtext import ScrolledText
 import ttkbootstrap as ttk
 from ttkbootstrap.constants import EW, NSEW, PRIMARY, SECONDARY, W
 
-from network_diagnosis.gui.main_app_common import bind_label_wraplength
+from network_diagnosis.gui.main_app_common import bind_label_wraplength, fix_primary_notebook_selected_tab_colors
 from network_diagnosis.gui.simple_markdown_text import (
     append_simple_markdown,
     configure_simple_markdown_tags,
@@ -323,8 +323,10 @@ class StaticViewsMixin:
   • 报告内容侧重技术人员阅读：版本、会话、对象列表等以实际引擎与权限为准；无权限项会标注跳过。
 
 四、监控
-  • 「开始监控」按设定间隔周期性抓取快照；「停止监控」结束轮询。
-  • 「导出监控 Markdown」将当前监控采样整理为文档并保存到报告目录。
+  • 「开始监控 / 停止监控」按钮切换周期性快照轮询（间隔由「间隔(秒)」设定）。
+  • **停止监控后**会自动将本轮成功采样整理为 Markdown，写入 **reports/db_diagnosis/<任务ID>/**；
+    实时监控区末尾会提示文件路径，可用「打开上次报告」「打开报告目录」取回。
+  • 若本轮没有任何成功采样（例如连接始终失败），则不会生成 Markdown 文件。
   • 监控会持续占用连接，请在业务低峰或测试库上使用；长时间轮询注意对库侧负载的影响。
 
 五、安全与边界
@@ -383,6 +385,7 @@ class StaticViewsMixin:
         add_guide_tab("交换机配置", body_switch)
         add_guide_tab("数据库诊断", body_database)
         add_guide_tab("安全诊断", body_security)
+        fix_primary_notebook_selected_tab_colors(nb)
 
     def _build_about_view(self) -> None:
         frm = ttk.Frame(self._content_host, padding=(28, 28, 32, 28))
