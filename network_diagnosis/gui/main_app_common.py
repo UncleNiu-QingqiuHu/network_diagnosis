@@ -10,22 +10,22 @@ from network_diagnosis.paths import bundle_root
 
 
 def resolve_window_icon_path() -> Path | None:
-    """任务栏/标题栏图标：`network_diagnosis/images/qingqiu.ico`（与 `gui` 包同级目录 `images`）。"""
+    """任务栏/标题栏图标：`network_diagnosis/images/qqhu_black2.ico`（与 `gui` 包同级目录 `images`）。"""
     pkg_root = Path(__file__).resolve().parent.parent
     candidates: list[Path] = [
-        pkg_root / "images" / "qingqiu.ico",
+        pkg_root / "images" / "qqhu_black2.ico",
     ]
     root = bundle_root()
-    candidates.append(root / "network_diagnosis" / "images" / "qingqiu.ico")
+    candidates.append(root / "network_diagnosis" / "images" / "qqhu_black2.ico")
     if getattr(sys, "frozen", False):
         exe_dir = Path(sys.executable).resolve().parent
         candidates.extend(
             [
-                exe_dir / "network_diagnosis" / "images" / "qingqiu.ico",
-                exe_dir / "qingqiu.ico",
+                exe_dir / "network_diagnosis" / "images" / "qqhu_black2.ico",
+                exe_dir / "qqhu_black2.ico",
             ]
         )
-    candidates.append(root / "qingqiu.ico")
+    candidates.append(root / "qqhu_black2.ico")
     for p in candidates:
         if p.is_file():
             return p

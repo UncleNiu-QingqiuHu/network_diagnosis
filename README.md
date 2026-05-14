@@ -80,7 +80,7 @@ pyinstaller --noconfirm --windowed --onedir `
   --paths . `
   --collect-all ttkbootstrap `
   --add-data "ThirdParty/tcping/tcping.exe;ThirdParty/tcping" `
-  --add-data "network_diagnosis/images/qingqiu.ico;network_diagnosis/images" `
+  --add-data "network_diagnosis/images/qqhu_black2.ico;network_diagnosis/images" `
   network_diagnosis/__main__.py
 ```
 
@@ -136,7 +136,7 @@ python -m nuitka `
   --standalone `
   --assume-yes-for-downloads `
   --windows-console-mode=disable `
-  --windows-icon-from-ico=network_diagnosis/images/qqhu_blue2.ico `
+  --windows-icon-from-ico=network_diagnosis/images/qqhu_black2.ico `
   --enable-plugin=tk-inter `
   --include-package-data=ttkbootstrap `
   --include-data-dir=ThirdParty/tcping=ThirdParty/tcping `

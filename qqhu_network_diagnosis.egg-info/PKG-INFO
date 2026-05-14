@@ -96,7 +96,7 @@ pyinstaller --noconfirm --windowed --onedir `
   --paths . `
   --collect-all ttkbootstrap `
   --add-data "ThirdParty/tcping/tcping.exe;ThirdParty/tcping" `
-  --add-data "network_diagnosis/images/qingqiu.ico;network_diagnosis/images" `
+  --add-data "network_diagnosis/images/qqhu_black2.ico;network_diagnosis/images" `
   network_diagnosis/__main__.py
 ```
 
