@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import errno
 import ipaddress
 import os
 import re
+import select
 import socket
 import subprocess
 import sys
@@ -62,6 +64,39 @@ class PortProbeResult(NamedTuple):
     state: str  # open | closed | timeout | error
     latency_ms: int | None
     banner: str | None
+
+
+def _connect_in_progress_errno_codes() -> frozenset[int]:
+    """非阻塞 connect_ex 返回「正在进行」时的 errno（含 Windows WSA* 数值）。"""
+    codes: set[int] = set()
+    for name in ("EINPROGRESS", "EWOULDBLOCK", "WSAEINPROGRESS", "WSAEWOULDBLOCK"):
+        v = getattr(errno, name, None)
+        if isinstance(v, int):
+            codes.add(v)
+    if sys.platform == "win32":
+        codes.update({10035, 10036})
+    return frozenset(codes)
+
+
+_CONNECT_IN_PROGRESS = _connect_in_progress_errno_codes()
+
+
+def _wait_tcp_connect(sock: socket.socket, deadline: float) -> None:
+    """在 deadline 之前等待非阻塞 connect 完成；成功则返回，失败抛出 OSError 子类，逾时抛出 TimeoutError。"""
+    while True:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError
+        timeout_s = max(0.0, min(remaining, 10.0))
+        try:
+            _, w, x = select.select([], [sock], [sock], timeout_s)
+        except InterruptedError:
+            continue
+        if sock in w or sock in x:
+            code = int(sock.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR))
+            if code != 0:
+                raise OSError(code, os.strerror(code))
+            return
 
 
 def _sanitize_banner(raw: bytes, *, limit: int = 240) -> str:
@@ -147,21 +182,32 @@ def _probe_tcp_port(
     grab_banner: bool,
 ) -> PortProbeResult:
     t0 = time.perf_counter()
+    deadline = t0 + timeout
+    sock: socket.socket | None = None
     try:
-        with socket.create_connection((ip, port), timeout=timeout) as sock:
-            elapsed_ms = max(0, int((time.perf_counter() - t0) * 1000))
-            banner: str | None = None
-            if grab_banner:
-                bt = min(1.5, max(timeout, 0.5))
-                sock.settimeout(bt)
-                try:
-                    chunk = sock.recv(4096)
-                    if chunk:
-                        b = _sanitize_banner(chunk)
-                        banner = b if b else None
-                except OSError:
-                    banner = None
-            return PortProbeResult(port, "open", elapsed_ms, banner)
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.setblocking(False)
+        rc = sock.connect_ex((ip, port))
+        if rc == 0:
+            pass
+        elif rc in _CONNECT_IN_PROGRESS:
+            _wait_tcp_connect(sock, deadline)
+        else:
+            raise OSError(rc, os.strerror(rc))
+        elapsed_ms = max(0, int((time.perf_counter() - t0) * 1000))
+        sock.setblocking(True)
+        banner: str | None = None
+        if grab_banner:
+            bt = min(1.5, max(timeout, 0.5))
+            sock.settimeout(bt)
+            try:
+                chunk = sock.recv(4096)
+                if chunk:
+                    b = _sanitize_banner(chunk)
+                    banner = b if b else None
+            except OSError:
+                banner = None
+        return PortProbeResult(port, "open", elapsed_ms, banner)
     except TimeoutError:
         return PortProbeResult(port, "timeout", None, None)
     except ConnectionRefusedError:
@@ -171,6 +217,12 @@ def _probe_tcp_port(
         elapsed_ms = max(0, int((time.perf_counter() - t0) * 1000))
         err = str(e).replace("|", "｜")[:120]
         return PortProbeResult(port, "error", elapsed_ms, err or None)
+    finally:
+        if sock is not None:
+            try:
+                sock.close()
+            except OSError:
+                pass
 
 
 def _scan_tcp_python(
@@ -399,5 +451,5 @@ def authorized_tcp_port_scan_markdown(
         lines.append(
             f"| … | … | … | 端口数超过 {max_rows}，未展开非开放端口；请缩小列表或分批扫描 |"
         )
-        lines.append("")
-        return "\n".join(lines)
+    lines.append("")
+    return "\n".join(lines)
