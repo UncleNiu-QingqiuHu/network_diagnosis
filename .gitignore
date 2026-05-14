@@ -41,3 +41,4 @@ Wireshark*.exe
 nmap*.exe
 __main__.*/
 __main__.*
+*.egg-info/

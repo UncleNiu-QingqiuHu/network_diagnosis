@@ -59,6 +59,8 @@ network-diagnosis
 
 设计约定见 [`docs/network-diagnostic-tool-design_v1.5.md`](docs/network-diagnostic-tool-design_v1.5.md) 中「打包与分发」。 frozen 模式下 `network_diagnosis.paths.bundle_root()` 指向 **`sys._MEIPASS`**，因此 **`ThirdParty/tcping/tcping.exe`** 与包内资源需通过 **`--add-data`**（或 spec 里 `datas`）打进包内；**`reports/`、`logs/`、`switch_console/`** 仍写在 **exe 同目录**（无需打进包）。
 
+**完整功能分发（推荐）**：若希望在离线环境下直接使用 **带宽 iperf3**、**安全诊断 nmap 后端** 并在内置「许可」页展示 **MIT 正文**，打包时请把仓库根目录 **`LICENSE`**、以及已就绪的 **`ThirdParty/iperf3/`**（至少含 `iperf3.exe`）、**`ThirdParty/Nmap/`**（便携版须保留 **`nmap.exe` 与同目录依赖**，勿只拷单个 exe）一并打进包内（见下文示例）。第三方二进制再分发须遵守各自许可。
+
 ### 1. 环境与依赖
 
 在已 `pip install -e .` 的同一虚拟环境中安装打包工具：
@@ -86,10 +88,21 @@ pyinstaller --noconfirm --windowed --onedir `
 
 产物目录：`dist\qqhu-network-workbench\`，其中 `qqhu-network-workbench.exe` 为可执行文件。首次分发前请在本机实际运行一遍，确认杀毒/策略未拦截。
 
-**可选资源（按需加入 `--add-data`）**
+**建议与 tcping 一并打入（路径须已存在；缺一可先删掉对应 `--add-data` 行）**
 
-- **iperf3**：若仓库内已有 `ThirdParty/iperf3/iperf3.exe`，可增加  
-  `--add-data "ThirdParty/iperf3/iperf3.exe;ThirdParty/iperf3"`
+```powershell
+# 在上一段 pyinstaller 命令中追加（或单独再打一层 spec），Windows 下 `--add-data` 为「源;包内相对路径」：
+--add-data "LICENSE;." `
+--add-data "ThirdParty/iperf3;ThirdParty/iperf3" `
+--add-data "ThirdParty/Nmap;ThirdParty/Nmap"
+```
+
+- **`LICENSE`**：内置「许可」标签页从 `bundle_root()/LICENSE` 读取（PyInstaller 即 `_MEIPASS` 根目录）。
+- **iperf3**：目录内需含 **`iperf3.exe`**（与 [`network_diagnosis/paths.py`](network_diagnosis/paths.py) 约定一致）。
+- **Nmap**：便携分发时请打入 **整个 `ThirdParty/Nmap/`**（含 **`nmap.exe`** 及同目录 DLL 等），否则勾选「使用 nmap」时可能无法启动。
+
+**其它可选资源**
+
 - **Wireshark 安装包**：体积较大，也可改为**不**打入 `_MEIPASS`，而在发布 zip 中把 `ThirdParty\Wireshark\*.exe` 与 exe **并列**拷贝；程序通过 `bundle_root()` 在开发树或包内查找安装包（与 [`network_diagnosis/paths.py`](network_diagnosis/paths.py) 一致）。若选择打入包内，对目录使用例如：  
   `--add-data "ThirdParty/Wireshark;ThirdParty/Wireshark"`（仅当该目录存在且需随包分发时）
 
@@ -116,6 +129,8 @@ python -m build
 
 未走 PyInstaller 时，`network_diagnosis.paths.bundle_root()` 用 **`network_diagnosis/paths.py` 所在位置**推算发行根目录，因此 **`--include-data-dir`** 的**右侧路径**须与仓库内 **`ThirdParty/...`、`network_diagnosis/images/...`** 布局一致（与 [`network_diagnosis/paths.py`](network_diagnosis/paths.py) 一致）。
 
+**完整功能分发（推荐）**：与 PyInstaller 相同，建议将 **`LICENSE`**、**`ThirdParty/iperf3/`**、**`ThirdParty/Nmap/`**（便携 **整目录**）随 standalone 目录一并打入；许可页与第三方探测依赖上述布局。
+
 ### 1. 环境与编译器
 
 Windows 上需要 **C 编译器**（Visual Studio Build Tools 或 Nuitka 文档推荐的 MinGW）。配置说明见 [Nuitka User Manual](https://nuitka.net/user-documentation/user-manual.html)。
@@ -140,9 +155,14 @@ python -m nuitka `
   --enable-plugin=tk-inter `
   --include-package-data=ttkbootstrap `
   --include-data-dir=ThirdParty/tcping=ThirdParty/tcping `
+  --include-data-dir=ThirdParty/iperf3=ThirdParty/iperf3 `
+  --include-data-dir=ThirdParty/Nmap=ThirdParty/Nmap `
+  --include-data-files=LICENSE=LICENSE `
   --include-data-dir=network_diagnosis/images=network_diagnosis/images `
   network_diagnosis/__main__.py
 ```
+
+若本机尚未放置 **iperf3** 或 **Nmap** 目录，请先创建对应 `ThirdParty` 子目录并放入文件后再执行打包；否则请暂时删掉对应的 **`--include-data-dir=...`** 行（避免 Nuitka 因缺路径报错）。**`LICENSE`** 应始终存在于仓库根目录。
 
 **exe 图标**：使用 **`--windows-icon-from-ico=…`** 指定 **`.ico`** 文件，写入生成的 exe 的 **PE 图标资源**（资源管理器 / 任务栏展示）。与 **`--include-data-dir=network_diagnosis/images/...`** 无关：后者供运行时 `try_set_window_icon` 等读取 ICO。**`--onefile`** 打包时同样可带上该参数。路径相对于执行 `nuitka` 时的当前目录（上例为仓库根）。可用 `python -m nuitka --help | findstr /i icon` 核对本机 Nuitka 选项名称。
 
@@ -150,9 +170,14 @@ python -m nuitka `
 
 若希望 exe 名称更直观，可在仓库根新增 **`launcher.py`**，仅转调入口（例如 `from network_diagnosis.__main__ import main` 后调用 `main()`），再对 **`launcher.py`** 执行同一套参数，产物一般为 **`launcher.dist` / `launcher.exe`**（具体以本机 `python -m nuitka --help` 为准）。
 
-**可选 `--include-data-dir`**
+**已写入上方示例的 `--include-data-dir`**
 
-- **iperf3**：`--include-data-dir=ThirdParty/iperf3=ThirdParty/iperf3`（仅当该目录存在）
+- **iperf3**：`ThirdParty/iperf3/`（内含 `iperf3.exe`）
+- **Nmap**：`ThirdParty/Nmap/`（便携版 **整目录**，含 `nmap.exe` 与依赖）
+- **LICENSE**：`--include-data-files=LICENSE=LICENSE`（内置许可页）
+
+**其它可选 `--include-data-dir`**
+
 - **Wireshark 安装包**：体积较大时可不打进 standalone，在 zip 中与 **`.dist` 并列**放置 `ThirdParty\Wireshark\`；若打入：  
   `--include-data-dir=ThirdParty/Wireshark=ThirdParty/Wireshark`
 
@@ -205,8 +230,10 @@ reports/security_diagnosis/
 | 资源 | 路径 | 说明 |
 |------|------|------|
 | tcping | `ThirdParty/tcping/tcping.exe` | 必放；应用不依赖系统 PATH。 |
+| iperf3 | `ThirdParty/iperf3/iperf3.exe` | 可选；网络诊断选择「iperf3」带宽时使用；亦可依赖系统 PATH。打包完整分发时建议随包放置（见上文 PyInstaller / Nuitka）。 |
 | Wireshark 安装包 | `ThirdParty/Wireshark/*.exe` | 可选；未检测到 `tshark` 时可在界面中打开安装。 |
-| Nmap | `ThirdParty/Nmap/*.exe`（安装包）或 `ThirdParty/Nmap/nmap.exe`（便携） | 可选；安全诊断勾选「使用 nmap」时使用；探测顺序为 PATH → 默认安装目录 → `ThirdParty/Nmap/nmap.exe`（见 `paths.resolve_nmap_exe_path`）。 |
+| Nmap | `ThirdParty/Nmap/*.exe`（安装包）或便携 **`ThirdParty/Nmap/` 整目录**（含 `nmap.exe` 及 DLL） | 可选；安全诊断勾选「使用 nmap」时使用；探测顺序为 PATH → 默认安装目录 → `ThirdParty/Nmap/nmap.exe`（见 `paths.resolve_nmap_exe_path`）。打包时请带入完整便携目录。 |
+| LICENSE | 仓库根 `LICENSE` | 内置「许可」页读取；PyInstaller / Nuitka 打包时请按上文一并打入发行包。 |
 
 再分发第三方软件须遵守各自许可证（详见设计文档第 6 节）。
 
@@ -215,7 +242,7 @@ reports/security_diagnosis/
 ```text
 network_diagnosis/       # Python 包：模型、探针、编排、GUI、Markdown 序列化
 docs/                    # 设计文档
-ThirdParty/              # tcping、Wireshark/Nmap 安装包放置说明与目录
+ThirdParty/              # tcping、可选 iperf3 / Wireshark / Nmap；打包时建议连同根目录 LICENSE 一并分发
 reports/                 # 默认诊断输出（已加入 .gitignore）
 logs/                    # 运行日志 app.log（按日轮转；已加入 .gitignore）
 switch_console/          # SSH 等可写数据（已加入 .gitignore；首次运行创建）
