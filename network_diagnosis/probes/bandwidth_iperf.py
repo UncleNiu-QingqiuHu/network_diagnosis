@@ -33,10 +33,12 @@ def run_iperf_bandwidth(
     host: str,
     port: int,
     duration_sec: int,
+    parallel_streams: int,
     report_dir: Path,
 ) -> BandwidthProbeResult:
     duration_sec = max(2, min(600, duration_sec))
     port = max(1, min(65535, port))
+    parallel_streams = max(1, min(64, int(parallel_streams)))
     stem = "bandwidth_iperf3"
 
     cmd = [
@@ -47,6 +49,8 @@ def run_iperf_bandwidth(
         str(port),
         "-t",
         str(duration_sec),
+        "-P",
+        str(parallel_streams),
         "-R",
         "-J",
         "--connect-timeout",
@@ -59,7 +63,7 @@ def run_iperf_bandwidth(
         proc = subprocess.run(
             cmd,
             capture_output=True,
-            timeout=float(duration_sec) + 45.0,
+            timeout=float(duration_sec) + float(parallel_streams) * 3.0 + 45.0,
             text=True,
             encoding="utf-8",
             errors="replace",
@@ -74,7 +78,7 @@ def run_iperf_bandwidth(
             megabits_per_second=None,
             bytes_total=None,
             duration_sec=None,
-            parallel_streams=None,
+            parallel_streams=parallel_streams,
             target_label=f"{host}:{port}",
             error="timeout",
             log_stdout_path=out_path if out_path.is_file() else None,
@@ -90,7 +94,7 @@ def run_iperf_bandwidth(
             megabits_per_second=None,
             bytes_total=None,
             duration_sec=None,
-            parallel_streams=None,
+            parallel_streams=parallel_streams,
             target_label=f"{host}:{port}",
             error=str(e),
             log_stdout_path=None,
@@ -115,7 +119,7 @@ def run_iperf_bandwidth(
             megabits_per_second=None,
             bytes_total=None,
             duration_sec=None,
-            parallel_streams=None,
+            parallel_streams=parallel_streams,
             target_label=f"{host}:{port}",
             error=tail or f"exit {proc.returncode}",
             log_stdout_path=out_path,
@@ -144,7 +148,7 @@ def run_iperf_bandwidth(
             megabits_per_second=None,
             bytes_total=None,
             duration_sec=None,
-            parallel_streams=None,
+            parallel_streams=parallel_streams,
             target_label=f"{host}:{port}",
             error="json_parse",
             log_stdout_path=out_path,
@@ -160,7 +164,7 @@ def run_iperf_bandwidth(
             megabits_per_second=None,
             bytes_total=btes,
             duration_sec=seconds,
-            parallel_streams=None,
+            parallel_streams=parallel_streams,
             target_label=f"{host}:{port}",
             error="no_bps",
             log_stdout_path=out_path,
@@ -169,7 +173,7 @@ def run_iperf_bandwidth(
         )
 
     summary = (
-        f"iperf3 至 {host}:{port}，"
+        f"iperf3 至 {host}:{port}，并行 {parallel_streams} 路，"
         f"接收约 {mbps:.1f} Mbps"
         + (f"（时长约 {seconds:.1f} s）" if seconds else "")
         + "（仅反映到该服务器的路径与窗口条件）。"
@@ -182,7 +186,7 @@ def run_iperf_bandwidth(
         megabits_per_second=mbps,
         bytes_total=btes,
         duration_sec=seconds,
-        parallel_streams=None,
+        parallel_streams=parallel_streams,
         target_label=f"{host}:{port}",
         error="",
         log_stdout_path=out_path,

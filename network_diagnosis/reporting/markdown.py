@@ -115,7 +115,8 @@ def _bandwidth_section(report: DiagnosticReport) -> str:
         f"- 模式: {ui.bandwidth_mode}（off / http / iperf3）",
         f"- HTTP URL: `{ui.bandwidth_http_url or '—'}`",
         f"- HTTP 并发连接数: {ui.bandwidth_http_parallel}，持续时间 (s): {ui.bandwidth_http_seconds}",
-        f"- iperf3 服务器: `{ui.bandwidth_iperf_host or '—'}`，端口: {ui.bandwidth_iperf_port}，时长 (s): {ui.bandwidth_iperf_seconds}",
+        f"- iperf3 服务器: `{ui.bandwidth_iperf_host or '—'}`，端口: {ui.bandwidth_iperf_port}，"
+        f"并行流 (-P): {ui.bandwidth_iperf_parallel}，时长 (s): {ui.bandwidth_iperf_seconds}",
         "",
     ]
     if ui.bandwidth_mode == "off" or b is None:
@@ -129,6 +130,11 @@ def _bandwidth_section(report: DiagnosticReport) -> str:
         lines.append(f"- 字节量（如适用）: {b.bytes_total}")
     if b.duration_sec is not None:
         lines.append(f"- 时长（如适用）: {b.duration_sec:.3f} s")
+    if b.parallel_streams is not None:
+        if b.mode == "iperf3":
+            lines.append(f"- 并行流 (-P): {b.parallel_streams}")
+        else:
+            lines.append(f"- HTTP 并发连接数: {b.parallel_streams}")
     if b.command:
         lines.append(f"- 命令: `{' '.join(b.command)}`")
     if b.log_stdout_path:
@@ -340,7 +346,8 @@ def write_markdown_report(report: DiagnosticReport, path: Path) -> None:
         f"- 带宽/吞吐抽样模式: `{report.user_input.bandwidth_mode}`",
         f"- HTTP 抽样 URL: `{report.user_input.bandwidth_http_url or '—'}`",
         f"- HTTP 并发: {report.user_input.bandwidth_http_parallel}，时长 (s): {report.user_input.bandwidth_http_seconds}",
-        f"- iperf3 目标: `{report.user_input.bandwidth_iperf_host or '—'}:{report.user_input.bandwidth_iperf_port}`，时长 (s): {report.user_input.bandwidth_iperf_seconds}",
+        f"- iperf3 目标: `{report.user_input.bandwidth_iperf_host or '—'}:{report.user_input.bandwidth_iperf_port}`，"
+        f"并行流 (-P): {report.user_input.bandwidth_iperf_parallel}，时长 (s): {report.user_input.bandwidth_iperf_seconds}",
         f"- 指定 DNS（可选，与系统解析对比）: `{report.user_input.optional_dns_server or '—'}`",
         f"- PathPing / mtr: {report.user_input.enable_pathping}",
         f"- TCP 路径探测: {report.user_input.enable_tcp_traceroute}"

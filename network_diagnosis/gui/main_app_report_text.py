@@ -274,7 +274,10 @@ def _gui_lines_bandwidth(rep: DiagnosticReport) -> list[str]:
     if b.bytes_total is not None:
         lines.append(f"传输字节（如适用）：{b.bytes_total}")
     if b.parallel_streams is not None:
-        lines.append(f"HTTP 并发连接数：{b.parallel_streams}")
+        if b.mode == "iperf3":
+            lines.append(f"iperf3 并行流 (-P)：{b.parallel_streams}")
+        else:
+            lines.append(f"HTTP 并发连接数：{b.parallel_streams}")
     if b.log_stdout_path:
         lines.append(f"详细日志：{b.log_stdout_path}")
     if not b.ok and b.error:

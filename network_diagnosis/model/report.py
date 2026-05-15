@@ -70,7 +70,8 @@ class UserInputSnapshot:
     bandwidth_http_seconds: int = 15
     bandwidth_iperf_host: str = ""
     bandwidth_iperf_port: int = 5201
-    bandwidth_iperf_seconds: int = 10
+    bandwidth_iperf_seconds: int = 30
+    bandwidth_iperf_parallel: int = 4
     optional_dns_server: str = ""
     enable_pathping: bool = False
     enable_tcp_traceroute: bool = False

@@ -423,6 +423,14 @@ class NetworkDiagnosisApp(NetworkViewsMixin, SubnetViewsMixin, StaticViewsMixin,
             if not self.var_bw_iperf_host.get().strip():
                 messagebox.showwarning("校验", "已选择 iperf3，请填写服务器主机名或 IP。")
                 return
+            try:
+                bw_iperf_parallel = int(self.var_bw_iperf_parallel.get())
+            except tk.TclError:
+                messagebox.showwarning("校验", "iperf3 并发流数须为整数。")
+                return
+            if not (1 <= bw_iperf_parallel <= 64):
+                messagebox.showwarning("校验", "iperf3 并发流数须在 1–64 之间。")
+                return
 
         opts = RunOptions(
             target_host=host,
@@ -446,6 +454,7 @@ class NetworkDiagnosisApp(NetworkViewsMixin, SubnetViewsMixin, StaticViewsMixin,
             bandwidth_iperf_host=self.var_bw_iperf_host.get().strip(),
             bandwidth_iperf_port=int(self.var_bw_iperf_port.get()),
             bandwidth_iperf_seconds=int(self.var_bw_iperf_seconds.get()),
+            bandwidth_iperf_parallel=int(self.var_bw_iperf_parallel.get()),
             optional_dns_server=self.var_optional_dns.get().strip(),
             enable_pathping=bool(self.var_adv_pathping.get()),
             enable_tcp_traceroute=bool(self.var_adv_tcp_trace.get()),

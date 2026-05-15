@@ -223,7 +223,8 @@ class NetworkViewsMixin:
 
         self.var_bw_iperf_host = tk.StringVar(value="")
         self.var_bw_iperf_port = tk.IntVar(value=5201)
-        self.var_bw_iperf_seconds = tk.IntVar(value=10)
+        self.var_bw_iperf_seconds = tk.IntVar(value=30)
+        self.var_bw_iperf_parallel = tk.IntVar(value=4)
 
         self._frm_bw_iperf = ttk.Frame(lf_bw)
         ip_row = ttk.Frame(self._frm_bw_iperf)
@@ -244,6 +245,13 @@ class NetworkViewsMixin:
             ip_row, from_=2, to=600, textvariable=self.var_bw_iperf_seconds, width=6
         )
         self.sb_bw_iperf_seconds.grid(row=1, column=1, sticky=W, pady=(6, 0))
+        ttk.Label(ip_row, text="\u5e76\u53d1\u6d41 (-P)", bootstyle=SECONDARY).grid(
+            row=1, column=2, sticky=W, padx=(12, 6), pady=(6, 0)
+        )
+        self.sb_bw_iperf_parallel = ttk.Spinbox(
+            ip_row, from_=1, to=64, textvariable=self.var_bw_iperf_parallel, width=6
+        )
+        self.sb_bw_iperf_parallel.grid(row=1, column=3, sticky=W, pady=(6, 0))
 
         self.var_bw_mode.trace_add("write", lambda *_: self._sync_bw_panels())
         self._sync_bw_panels()

@@ -82,7 +82,8 @@ class RunOptions:
     bandwidth_http_seconds: int = 15
     bandwidth_iperf_host: str = ""
     bandwidth_iperf_port: int = 5201
-    bandwidth_iperf_seconds: int = 10
+    bandwidth_iperf_seconds: int = 30
+    bandwidth_iperf_parallel: int = 4
     optional_dns_server: str = ""
     enable_pathping: bool = False
     enable_tcp_traceroute: bool = False
@@ -182,12 +183,13 @@ def _run_bandwidth(
             target_label=f"{host}:{options.bandwidth_iperf_port}",
             error="iperf3_missing",
         )
-    progress(f"正在运行 iperf3（{host}:{options.bandwidth_iperf_port}）…")
+    progress(f"正在运行 iperf3（{host}:{options.bandwidth_iperf_port}，并发 {options.bandwidth_iperf_parallel}）…")
     return run_iperf_bandwidth(
         exe,
         host,
         options.bandwidth_iperf_port,
         options.bandwidth_iperf_seconds,
+        options.bandwidth_iperf_parallel,
         report_dir,
     )
 
@@ -580,6 +582,7 @@ def run_diagnostic(options: RunOptions, progress: Callable[[str], None]) -> Diag
         bandwidth_iperf_host=options.bandwidth_iperf_host,
         bandwidth_iperf_port=options.bandwidth_iperf_port,
         bandwidth_iperf_seconds=options.bandwidth_iperf_seconds,
+        bandwidth_iperf_parallel=options.bandwidth_iperf_parallel,
         optional_dns_server=(options.optional_dns_server or "").strip(),
         enable_pathping=options.enable_pathping,
         enable_tcp_traceroute=options.enable_tcp_traceroute,
