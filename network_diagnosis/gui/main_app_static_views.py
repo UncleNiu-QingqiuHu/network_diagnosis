@@ -73,7 +73,7 @@ class StaticViewsMixin:
 
         intro = (
             "左侧「功能导航」可在各模块间切换。下方按标签页分模块说明："
-            "「网络诊断」「子网计算」「交换机配置」「数据库诊断」「ARP安全」「安全诊断」「数字签名」。"
+            "「网络诊断」「子网计算」「交换机配置」「数据库诊断」「ARP安全」「安全诊断」「数字签名」「SSL证书」。"
         )
         ttk.Label(
             frm,
@@ -561,6 +561,39 @@ class StaticViewsMixin:
   • 仅为 **有权处理的二进制** 签名；勿替第三方或未授权软件代签。"""
 
         add_guide_tab("数字签名", body_code_sign)
+
+        body_ssl_cert = """【本模块用途】
+  • **Let's Encrypt**：通过 **DNS-01** 向 Let's Encrypt 申请/续期浏览器信任的 DV 证书；由 **阿里云 DNS** 或 **腾讯云 DNSPod** API 自动写入/清理 `_acme-challenge` TXT。
+  • **私有证书**：使用 **cryptography** 在本机生成 **根 CA + 站点证书**，支持 **域名与 IP** 的 SAN，用于内网或开发 HTTPS；可导出 **PFX** 便于 IIS 导入。
+
+══════════════════════════════════════
+一、公有证书（Let's Encrypt）
+══════════════════════════════════════
+
+  • **前置**：域名 DNS **托管**在对应云平台；API 密钥仅为 **解析管理** 所需最小权限的子账号密钥。
+  • **单域名 / 多域名 / 泛域名**：可同时填写多个主机名。**泛域名**（如 ``*.example.com``）Let's Encrypt **可以签发**，但必须走 **DNS-01**（本模块即采用 DNS-01）；历史上 **HTTP-01** 无法用于泛域名，容易误以为 LE「不支持泛域名」。
+  • **输出**：默认在用户目录下 `qqhu-letsencrypt`，写入 **privkey.pem**、**fullchain.pem**、**cert.pem**，以及 **letsencrypt-account.pem**（账户密钥，续期务必沿用）。
+  • **Staging**：勾选后为 Let's Encrypt **测试目录**，浏览器不信任；排障后可关闭改用 **正式目录**。
+  • **部署**：工具 **不负责** Web 服务器绑定与 reload；请将 PEM 配置到 IIS/Nginx 等后自行加载。
+  • **续期**：保留同一「账户密钥」与域名列表，再次点击「申请 / 续期」即可覆盖写入证书文件。
+
+══════════════════════════════════════
+二、私有证书
+══════════════════════════════════════
+
+  • **有效期**：根 CA 与站点证书均为 **10 年（3650 天）**，界面不提供修改。
+  • **信任**：客户端需导入生成的 **private-ca.crt.pem** 至「受信任的根证书颁发机构」。
+  • **SAN**：务必包含浏览器访问时使用的主机名或 IP。
+  • **PFX**：可选密码导出 **private-site.pfx**。
+  • **各文件怎么用**：服务端一般为 ``private-site.fullchain.pem``（证书链）+ ``private-site.key.pem``（私钥），例如 Nginx 的 ``ssl_certificate`` / ``ssl_certificate_key``；IIS 导入 ``private-site.pfx``。客户端只需信任 **private-ca.crt.pem**（导入「受信任的根证书颁发机构」）。**private-ca.key.pem** 勿拷贝到对外 Web 服务器。
+
+══════════════════════════════════════
+三、合规与安全
+══════════════════════════════════════
+
+  • **密钥泄露**：阿里云/腾讯云密钥与 ACME 账户私钥视同高敏，勿提交仓库或截图外发。"""
+
+        add_guide_tab("SSL证书", body_ssl_cert)
         fix_primary_notebook_selected_tab_colors(nb)
 
     def _build_about_view(self) -> None:

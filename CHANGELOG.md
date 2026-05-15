@@ -1,5 +1,16 @@
 # 变更日志
 
+## [2.1.6] — 2026-05-15
+
+### 新增
+- **SSL 证书**模块（导航「SSL证书」）：**Let's Encrypt**（ACME DNS-01，阿里云 DNS / 腾讯云 DNSPod API）；**私有证书**（`cryptography` 根 CA + 站点证书，固定 10 年有效期，可选 PFX）；内置帮助与方案文档 [`docs/ssl_certificate_scheme.md`](docs/ssl_certificate_scheme.md)。
+- 依赖：`acme`、`requests`（Let's Encrypt）；延续 `cryptography`（私有证书）。
+
+### 文档
+- **打包**：README 中 PyInstaller / Nuitka 长篇说明迁至 [`docs/packaging.md`](docs/packaging.md)，英文 [`docs/packaging.en.md`](docs/packaging.en.md)；README 仅保留摘要与链接。
+
+---
+
 ## [2026-05-13] [文档] 设计方案 v1.5
 
 - 新增 `docs/network-diagnostic-tool-design_v1.5.md`：主窗口多模块（子网计算、交换机、数据库诊断）、扩展依赖与 `reports/db_diagnosis/`、`switch_console/` 路径约定；`v1.4` 文档保留并标注归档。

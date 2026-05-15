@@ -28,6 +28,7 @@ from ttkbootstrap.constants import (
 )
 
 from network_diagnosis.gui.code_signing_frame import CodeSigningFrame
+from network_diagnosis.gui.ssl_certificate_frame import SslCertificateFrame
 from network_diagnosis.gui.db_diagnosis_frame import DbDiagnosisFrame
 from network_diagnosis.gui.intranet_arp_frame import IntranetArpMonitorFrame
 from network_diagnosis.gui.main_app_common import parse_ports, scaled_photo_from_png, try_set_window_icon
@@ -154,6 +155,7 @@ class NetworkDiagnosisApp(NetworkViewsMixin, SubnetViewsMixin, StaticViewsMixin,
             ("arp_intranet", "ARP安全"),
             ("security", "安全诊断"),
             ("code_sign", "数字签名"),
+            ("ssl_cert", "SSL证书"),
             ("guide", "使用帮助"),
             ("about", "关于"),
             ("license", "许可"),
@@ -214,6 +216,8 @@ class NetworkDiagnosisApp(NetworkViewsMixin, SubnetViewsMixin, StaticViewsMixin,
         self._view_frames["security"] = self._security_diagnosis
         self._code_signing = CodeSigningFrame(self._content_host)
         self._view_frames["code_sign"] = self._code_signing
+        self._ssl_certificate = SslCertificateFrame(self._content_host)
+        self._view_frames["ssl_cert"] = self._ssl_certificate
 
         self._active_module: str | None = None
         self._select_module("network")
