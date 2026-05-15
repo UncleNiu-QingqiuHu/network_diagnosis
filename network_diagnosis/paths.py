@@ -66,6 +66,37 @@ def refresh_catalog_icon_png() -> Path:
     return Path(__file__).resolve().parent / "images" / "fa--refresh.png"
 
 
+def resolve_sidebar_nav_icon_png(module_key: str) -> Path | None:
+    """左侧导航图标（透明底 PNG），位于 ``network_diagnosis/images/``。
+
+    键与 ``main_app`` 中 ``nav_items`` 的 ``module_key`` 一致；若文件不存在则返回 ``None``（仅显示文字）。
+    「许可」优先 ``material-symbols--license.png``，其次 ``license.png``。
+    """
+    img_root = Path(__file__).resolve().parent / "images"
+    if module_key == "license":
+        for name in ("material-symbols--license.png", "license.png"):
+            p = img_root / name
+            if p.is_file():
+                return p
+        return None
+
+    _names: dict[str, str] = {
+        "network": "material-symbols--network-wifi.png",
+        "subnet": "fluent--globe-12-filled.png",
+        "switch": "streamline-ultimate--ethernet-port-bold.png",
+        "database": "teenyicons--database-solid.png",
+        "arp_intranet": "ion--shield-checkmark.png",
+        "security": "simple-icons--scan.png",
+        "guide": "fa6-solid--book-open.png",
+        "about": "ooui--info-filled.png",
+    }
+    fn = _names.get(module_key)
+    if not fn:
+        return None
+    p = img_root / fn
+    return p if p.is_file() else None
+
+
 def third_party_tcping() -> Path:
     return bundle_root() / "ThirdParty" / "tcping" / "tcping.exe"
 

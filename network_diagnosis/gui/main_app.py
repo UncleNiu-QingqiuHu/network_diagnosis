@@ -28,7 +28,7 @@ from ttkbootstrap.constants import (
 
 from network_diagnosis.gui.db_diagnosis_frame import DbDiagnosisFrame
 from network_diagnosis.gui.intranet_arp_frame import IntranetArpMonitorFrame
-from network_diagnosis.gui.main_app_common import parse_ports, try_set_window_icon
+from network_diagnosis.gui.main_app_common import parse_ports, scaled_photo_from_png, try_set_window_icon
 from network_diagnosis.gui.main_app_network_views import NetworkViewsMixin
 from network_diagnosis.gui.main_app_report_text import (
     _any_advanced,
@@ -58,6 +58,7 @@ from network_diagnosis.paths import (
     find_tshark,
     iter_wireshark_installers,
     resolve_iperf3_exe,
+    resolve_sidebar_nav_icon_png,
     resolve_tcping_exe,
 )
 from network_diagnosis.runner import RunOptions, run_diagnostic
@@ -136,6 +137,7 @@ class NetworkDiagnosisApp(NetworkViewsMixin, SubnetViewsMixin, StaticViewsMixin,
         self._configure_sidebar_nav_styles()
 
         self._sidebar_btn_by_module: dict[str, ttk.Button] = {}
+        self._sidebar_nav_photos: list[tk.PhotoImage] = []
         nav_items: list[tuple[str, str]] = [
             ("network", "网络诊断"),
             ("subnet", "子网计算"),
@@ -147,15 +149,23 @@ class NetworkDiagnosisApp(NetworkViewsMixin, SubnetViewsMixin, StaticViewsMixin,
             ("about", "关于"),
             ("license", "许可"),
         ]
+        _nav_icon_px = 20
         for mod_key, nav_label in nav_items:
-            btn = ttk.Button(
-                action_frame,
-                text=nav_label,
+            icon_path = resolve_sidebar_nav_icon_png(mod_key)
+            photo = scaled_photo_from_png(self, icon_path, size_px=_nav_icon_px) if icon_path else None
+            if photo is not None:
+                self._sidebar_nav_photos.append(photo)
+            btn_kw: dict = dict(
                 command=lambda k=mod_key: self._select_module(k),
                 style="SidebarNav.TButton",
                 takefocus=False,
                 cursor="hand2",
+                text=nav_label,
             )
+            if photo is not None:
+                btn_kw["image"] = photo
+                btn_kw["compound"] = tk.LEFT
+            btn = ttk.Button(action_frame, **btn_kw)
             btn.pack(side=tk.TOP, fill=tk.X, pady=(0, 4))
             self._sidebar_btn_by_module[mod_key] = btn
 
