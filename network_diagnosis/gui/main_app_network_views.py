@@ -456,35 +456,99 @@ class NetworkViewsMixin:
 
     def _setup_summary_text_tags(self) -> None:
         st = self.txt_summary
-        st.tag_configure("sec_title", font=("Microsoft YaHei UI", 12, "bold"))
-        st.tag_configure("headline", font=("Microsoft YaHei UI", 13, "bold"))
-        st.tag_configure("body", font=("Microsoft YaHei UI", 12))
+        tc = self.style.colors
+        ff = "Microsoft YaHei UI"
+
+        def pick(attr: str, fb: str) -> str:
+            v = getattr(tc, attr, fb)
+            return v if isinstance(v, str) and v else fb
+
+        bg = getattr(tc, "inputbg", None) or "#ffffff"
+        fg = getattr(tc, "inputfg", None) or "#2b2b2b"
+        sel_bg = getattr(tc, "selectbg", None) or "#347083"
+        sel_fg = getattr(tc, "selectfg", None) or "#ffffff"
+        st.configure(
+            background=bg,
+            foreground=fg,
+            insertbackground=fg,
+            selectbackground=sel_bg,
+            selectforeground=sel_fg,
+        )
+
+        lum = 1.0
+        gl = getattr(tc, "get_luminance", None)
+        if callable(gl):
+            try:
+                lum = float(gl(bg))
+            except (TypeError, ValueError):
+                lum = 1.0
+        dark_ui = lum < 0.45
+
+        def contrast_fg(hex_bg: str, fb: str) -> str:
+            gf = getattr(tc, "get_foreground", None)
+            if callable(gf):
+                try:
+                    out = gf(hex_bg)
+                    if isinstance(out, str) and out:
+                        return out
+                except (TypeError, ValueError):
+                    pass
+            return fb
+
+        if dark_ui:
+            hi = pick("light", "#fdf6e3")
+            accent = pick("primary", pick("info", "#268bd2"))
+            st.tag_configure("sec_title", font=(ff, 12, "bold"), foreground=pick("success", "#44aca4"))
+            st.tag_configure("headline", font=(ff, 13, "bold"), foreground=hi)
+            st.tag_configure("body", font=(ff, 12), foreground=fg)
+            st.tag_configure("overall_label", font=(ff, 12, "bold"), foreground=accent)
+
+            pairs = [
+                ("quality_grade_exc", "success", "#28a745", "#fdf6e3"),
+                ("quality_grade_ok", "info", "#17a2b8", "#fdf6e3"),
+                ("quality_grade_poor", "warning", "#ffc107", "#1a1a1a"),
+                ("quality_grade_bad", "danger", "#dc3545", "#fdf6e3"),
+            ]
+            for tag_name, col_attr, fb_bg, fb_fg in pairs:
+                bgb = pick(col_attr, fb_bg)
+                st.tag_configure(
+                    tag_name,
+                    font=(ff, 13, "bold"),
+                    background=bgb,
+                    foreground=contrast_fg(bgb, fb_fg),
+                )
+            return
+
+        # 浅色主题：保留原有柔和底色，略加深标题与档位字色
+        st.tag_configure("sec_title", font=(ff, 12, "bold"), foreground=pick("success", "#146c43"))
+        st.tag_configure("headline", font=(ff, 13, "bold"), foreground=pick("dark", "#1a252f"))
+        st.tag_configure("body", font=(ff, 12))
         st.tag_configure(
             "quality_grade_exc",
-            font=("Microsoft YaHei UI", 13, "bold"),
-            background="#d4edda",
-            foreground="#155724",
+            font=(ff, 13, "bold"),
+            background="#c3e6cb",
+            foreground="#0d462c",
         )
         st.tag_configure(
             "quality_grade_ok",
-            font=("Microsoft YaHei UI", 13, "bold"),
-            background="#d1ecf1",
-            foreground="#0c5460",
+            font=(ff, 13, "bold"),
+            background="#bee5eb",
+            foreground="#055160",
         )
         st.tag_configure(
             "quality_grade_poor",
-            font=("Microsoft YaHei UI", 13, "bold"),
-            background="#fff3cd",
-            foreground="#856404",
+            font=(ff, 13, "bold"),
+            background="#ffe69c",
+            foreground="#664d03",
         )
         st.tag_configure(
             "quality_grade_bad",
-            font=("Microsoft YaHei UI", 13, "bold"),
-            background="#f8d7da",
-            foreground="#721c24",
+            font=(ff, 13, "bold"),
+            background="#f5c2c7",
+            foreground="#58151c",
         )
         st.tag_configure(
             "overall_label",
-            font=("Microsoft YaHei UI", 12, "bold"),
-            foreground="#2c3e50",
+            font=(ff, 12, "bold"),
+            foreground=pick("info", "#087990"),
         )

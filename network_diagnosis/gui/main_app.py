@@ -311,7 +311,7 @@ class NetworkDiagnosisApp(NetworkViewsMixin, SubnetViewsMixin, StaticViewsMixin,
             pass
         self._run_progress.pack_forget()
         self._status_shell.configure(bootstyle=SECONDARY)
-        self.lbl_status.configure(font=self._status_font_normal)
+        self.lbl_status.configure(font=self._status_font_normal, bootstyle=SECONDARY)
 
     def _append_log(self, text: str) -> None:
         self.txt_log.insert(END, text + "\n")
@@ -511,7 +511,7 @@ class NetworkDiagnosisApp(NetworkViewsMixin, SubnetViewsMixin, StaticViewsMixin,
                     messagebox.showerror("诊断失败", str(payload))
                     self._stop_running_ui()
                     self.btn_run.configure(state=tk.NORMAL)
-                    self.lbl_status.configure(text="失败", bootstyle=DANGER)
+                    self.lbl_status.configure(text="失败", bootstyle=(INVERSE, DANGER))
                     self._status_shell.configure(text="任务状态")
                 elif kind == "done":
                     rep: DiagnosticReport = payload  # type: ignore[assignment]
@@ -614,17 +614,17 @@ class NetworkDiagnosisApp(NetworkViewsMixin, SubnetViewsMixin, StaticViewsMixin,
         if g.overall.value == "ok":
             self.lbl_status.configure(
                 text=f"完成（网络质量：{q}）",
-                bootstyle=SUCCESS,
+                bootstyle=(INVERSE, SUCCESS),
             )
         elif g.overall.value == "degraded":
             self.lbl_status.configure(
                 text=f"完成（部分异常或已降级）（网络质量：{q}）",
-                bootstyle=WARNING,
+                bootstyle=(INVERSE, WARNING),
             )
         else:
             self.lbl_status.configure(
                 text=f"完成（存在明显问题）（网络质量：{q}）",
-                bootstyle=DANGER,
+                bootstyle=(INVERSE, DANGER),
             )
 
         self._append_log(f"报告: {md}")
