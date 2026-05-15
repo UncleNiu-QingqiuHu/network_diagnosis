@@ -167,7 +167,7 @@ pip install nuitka ordered-set zstandard
 
 ### 2. standalone 目录（推荐）
 
-在**仓库根目录**执行（路径请按本机修改）；**推荐直接使用**[`scripts/build-nuitka-standalone.ps1`](scripts/build-nuitka-standalone.ps1)，可从 [`network_diagnosis/version.py`](network_diagnosis/version.py) 读出版本与产品名并传入 Nuitka 的 `--file-version`、`--copyright` 等（与「详细信息」对齐）。
+在**仓库根目录**执行（路径请按本机修改）。**`--file-version` / `--product-version` / `--copyright` 等**建议与 [`network_diagnosis/version.py`](network_diagnosis/version.py) 中的 `APP_VERSION`、`APP_DISPLAY_NAME` 等保持一致，以便 exe「详细信息」与发行版一致；可在本机用 PowerShell 等自行封装一条命令（**仓库不收录**此类脚本，见根目录 `.gitignore`）。
 
 ```powershell
 cd E:\Workspace\qqhu_network_diagnosis
@@ -193,7 +193,7 @@ python -m nuitka `
   network_diagnosis
 ```
 
-其中 **`--file-version` / `--product-version`** 须为四段数字（示例与当前 `APP_VERSION` 对齐）；若以 [`network_diagnosis/version.py`](network_diagnosis/version.py) 中的 `APP_VERSION` 为准更改发布号，请同步修改上述两行或改用仓库脚本自动生成。
+其中 **`--file-version` / `--product-version`** 须为四段数字（示例与当前 `APP_VERSION` 对齐）；若以 [`network_diagnosis/version.py`](network_diagnosis/version.py) 中的 `APP_VERSION` 为准更改发布号，请同步修改上述两行，或在本机构建脚本中据其自动生成参数。
 
 若本机尚未放置 **iperf3** 或 **Nmap** 目录，请先创建对应 `ThirdParty` 子目录并放入文件后再执行打包；否则请暂时删掉对应的 **`--include-data-dir=...`** 行（避免 Nuitka 因缺路径报错）。**`LICENSE`** 应始终存在于仓库根目录。
 

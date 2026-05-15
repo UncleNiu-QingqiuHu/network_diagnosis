@@ -44,5 +44,7 @@ __main__.*
 # Nuitka standalone（自定义 --output-folder-name 时也不再是 __main__.dist）
 *.dist/
 *.build/
-qqhu_network_diagnosis.egg-info/
-*.ps1
+# setuptools / pip 可编辑安装（`pip install -e .`）生成的元数据目录
+*.egg-info/
+# 本地 Nuitka 封装脚本（不入库；自行在 `scripts/` 下维护）
+scripts/build-nuitka-standalone.ps1

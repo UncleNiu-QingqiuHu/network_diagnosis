@@ -167,7 +167,7 @@ pip install nuitka ordered-set zstandard
 
 ### 2. Standalone directory (recommended)
 
-From the **repository root** (adjust paths):
+From the **repository root** (adjust paths). Keep **`--file-version` / `--product-version` / `--company-name` / `--copyright`** aligned with [`network_diagnosis/version.py`](network_diagnosis/version.py) so Explorer “Details” matches your release; a local PowerShell wrapper is fine—the repo **does not ship** helper scripts under `scripts/` (see root `.gitignore`).
 
 ```powershell
 cd E:\Workspace\qqhu_network_diagnosis
