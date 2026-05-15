@@ -1,4 +1,0 @@
-ThirdParty
-docs
-network_diagnosis
-reports

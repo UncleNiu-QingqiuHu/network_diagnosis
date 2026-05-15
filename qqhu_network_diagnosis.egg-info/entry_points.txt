@@ -1,2 +1,0 @@
-[gui_scripts]
-network-diagnosis = network_diagnosis.__main__:main
