@@ -41,4 +41,8 @@ Wireshark*.exe
 nmap*.exe
 __main__.*/
 __main__.*
-*.egg-info/
+# Nuitka standalone（自定义 --output-folder-name 时也不再是 __main__.dist）
+*.dist/
+*.build/
+qqhu_network_diagnosis.egg-info/
+*.ps1

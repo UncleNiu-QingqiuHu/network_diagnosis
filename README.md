@@ -1,6 +1,12 @@
 # 青丘狐网络工作台
 
-基于 Python 的 **Windows 桌面网络工作台**（tkinter + [ttkbootstrap](https://github.com/israel-dryer/ttkbootstrap)），集成网络连通性诊断、**安全诊断（基线）**、子网计算、交换机 Console/SSH、数据库诊断等能力。官方网站：<https://www.qingqiuhu.net>。产品说明与能力范围以设计文档为准：
+[English README](README.en.md)
+
+> 本仓库同时提供了发行版[Github发行版地址](https://github.com/UncleNiu-QingqiuHu/network_diagnosis/releases)以供下载
+
+基于 Python 的 **Windows 桌面网络工作台**（tkinter + [ttkbootstrap](https://github.com/israel-dryer/ttkbootstrap)），集成网络连通性诊断、**安全诊断（基线）**、子网计算、交换机 Console/SSH、数据库诊断、**ARP 安全监视**、**Windows 数字签名**等能力。官方网站：<https://www.qingqiuhu.net>。发布版本号以 [`network_diagnosis/version.py`](network_diagnosis/version.py) 中的 `APP_VERSION` 为准。
+
+产品说明与能力范围以设计文档为准（若克隆目录中暂无 `docs/`，请从发布包或团队渠道获取同名文档）：
 
 - [`docs/network-diagnostic-tool-design_v1.5.md`](docs/network-diagnostic-tool-design_v1.5.md)（v1.4 见同目录归档）
 - 安全诊断方案：[`docs/network-security-diagnosis-design.md`](docs/network-security-diagnosis-design.md)
@@ -15,12 +21,16 @@
 | **子网计算** | IPv4 CIDR / 点分掩码计算；可刷新本机 IPv4、网关、DNS 与公网地址参考信息。 |
 | **交换机配置** | 串口 Console 或 **SSH（PTY）** 会话；SSH 未知主机密钥写入可写目录下的 `switch_console/`。 |
 | **数据库诊断** | 连接 **SQLite / MySQL / PostgreSQL / SQL Server / Oracle**，运行连通性与信息收集，输出 Markdown；支持周期性监控快照导出。 |
+| **ARP 安全** | 以 `arp -a` 轮询本机 ARP 表，对**默认网关 MAC** 做基线对比；异常变化时提示疑似 ARP 欺骗（内网侧轻量监视）。 |
 | **安全诊断** | 本机 TCP 监听与 Windows 防火墙只读摘要；本机 CPU/GPU/内存/用户策略与临时清理（Windows）；授权前提下 HTTPS TLS/证书与安全响应头、DNS 对比、**单主机 IPv4 TCP 端口扫描**（Python 默认可选 nmap `-sT`）；详见 [`docs/network-security-diagnosis-design.md`](docs/network-security-diagnosis-design.md)。导出至 `reports/security_diagnosis/`。 |
-| **使用说明 / 关于 / 许可** | 内置说明（标签页正文支持 Markdown 渲染）、关于与 MIT 许可原文；静态页在 **首次进入对应导航时** 再构建，以缩短冷启动。 |
+| **数字签名** | Windows **Authenticode**：`signtool` + PFX 对 exe/dll **仅签名与校验**；exe「详细信息」请在 **Nuitka/PyInstaller 构建时**写入。自签名 PFX 由 **PowerShell / .NET** 一键生成；`signtool` 来自 Windows SDK 或 PATH。 |
+| **使用帮助 / 关于 / 许可** | 内置帮助（正文支持 Markdown 渲染）、关于与 MIT 许可原文；静态页在 **首次进入对应导航时** 再构建，以缩短冷启动。 |
 
 **网络诊断**探测能力简述：
 
 - 本机网络上下文（`ipconfig` 解析）、DNS、可选 ICMP `ping`、多端口 **tcping**、可选 **tshark** 抓包（需本机安装 Wireshark / Npcap）。
+- 可选 **Traceroute**、**PathPing**、**TCP Traceroute**；可选 **出口探测**、**IPv4 MTU** 探测；可选对目标的 **HTTP(S)/TLS** 探针。
+- 带宽：**HTTP 下载测速** 或 **iperf3**（TCP/UDP，可与网络质量综合判定联动）；历史任务索引默认写入 `reports/_diagnosis_history.json`，支持同目标多次报告对比（可在界面关闭）。
 - **依赖策略（与 `network_diagnosis/paths.py`、界面「检测」按钮一致）**：`tcping.exe` **仅**从 `ThirdParty/tcping/tcping.exe` 加载（不使用 PATH）；`tshark.exe` 探测 `%ProgramFiles%\Wireshark\` 与 `%ProgramFiles(x86)%\Wireshark\`；**iperf3** 优先 `ThirdParty/iperf3/iperf3.exe`，否则查找 PATH；可选将 Wireshark **官方安装包** 放入 `ThirdParty/Wireshark/` 由界面引导安装。
 
 **数据库诊断**补充：
@@ -33,13 +43,17 @@
 - Windows 10/11（当前脚本与子进程参数按 Windows 优化）。
 - **Python 3.10+**（与 `pyproject.toml` 中 `requires-python` 一致）。
 - 将 **`tcping.exe`** 放到 `ThirdParty/tcping/tcping.exe`（否则端口探测会降级并在报告中说明）。
+- 将 **`tshark.exe`** 放到 `ThirdParty/Wireshark/`（否则抓包功能不可用）。
+- 将 **`iperf3.exe`** 放到 `ThirdParty/iperf3/`（否则带宽测速功能不可用）。
+- 将 **`nmap.exe`** 放到 `ThirdParty/Nmap/`（否则端口扫描功能不可用）。
 
-##
+## 界面截图
 
 ![](./readmeimgs/PixPin_2026-05-15_15-59-59.png)
 ![](./readmeimgs/PixPin_2026-05-15_16-01-08.png)
 ![](./readmeimgs/PixPin_2026-05-15_16-01-27.png)
 ![](./readmeimgs/PixPin_2026-05-15_16-01-38.png)
+![](./readmeimgs/PixPin_2026-05-15_19-11-05.png)
 
 ## 安装与运行
 
@@ -153,7 +167,7 @@ pip install nuitka ordered-set zstandard
 
 ### 2. standalone 目录（推荐）
 
-在**仓库根目录**执行（路径请按本机修改）：
+在**仓库根目录**执行（路径请按本机修改）；**推荐直接使用**[`scripts/build-nuitka-standalone.ps1`](scripts/build-nuitka-standalone.ps1)，可从 [`network_diagnosis/version.py`](network_diagnosis/version.py) 读出版本与产品名并传入 Nuitka 的 `--file-version`、`--copyright` 等（与「详细信息」对齐）。
 
 ```powershell
 cd E:\Workspace\qqhu_network_diagnosis
@@ -165,13 +179,21 @@ python -m nuitka `
   --windows-icon-from-ico=network_diagnosis/images/qqhu_black2.ico `
   --enable-plugin=tk-inter `
   --include-package-data=ttkbootstrap `
+  --company-name=Qingqiuhu `
+  --product-name=青丘狐网络工作台 `
+  --file-description=青丘狐网络工作台 `
+  --file-version=2.0.2.0 `
+  --product-version=2.0.2.0 `
+  "--copyright=© Qingqiuhu / 青丘狐。contact@qingqiuhu.net" `
   --include-data-dir=ThirdParty/tcping=ThirdParty/tcping `
   --include-data-dir=ThirdParty/iperf3=ThirdParty/iperf3 `
   --include-data-dir=ThirdParty/Nmap=ThirdParty/Nmap `
   --include-data-files=LICENSE=LICENSE `
   --include-data-dir=network_diagnosis/images=network_diagnosis/images `
-  network_diagnosis/__main__.py
+  network_diagnosis
 ```
+
+其中 **`--file-version` / `--product-version`** 须为四段数字（示例与当前 `APP_VERSION` 对齐）；若以 [`network_diagnosis/version.py`](network_diagnosis/version.py) 中的 `APP_VERSION` 为准更改发布号，请同步修改上述两行或改用仓库脚本自动生成。
 
 若本机尚未放置 **iperf3** 或 **Nmap** 目录，请先创建对应 `ThirdParty` 子目录并放入文件后再执行打包；否则请暂时删掉对应的 **`--include-data-dir=...`** 行（避免 Nuitka 因缺路径报错）。**`LICENSE`** 应始终存在于仓库根目录。
 
@@ -218,7 +240,7 @@ python -m nuitka `
 reports/<任务短ID>_<时间戳>/
 ```
 
-其中包含 Markdown 报告、各子进程 stdout/stderr 日志，以及（若启用抓包）pcap 等文件。
+其中包含 Markdown 报告、各子进程 stdout/stderr 日志，以及（若启用抓包）pcap 等文件。同目标历史索引（若未关闭）位于 **`reports/_diagnosis_history.json`**。
 
 **数据库诊断**与监控导出的 Markdown 位于：
 
@@ -252,7 +274,8 @@ reports/security_diagnosis/
 
 ```text
 network_diagnosis/       # Python 包：模型、探针、编排、GUI、Markdown 序列化
-docs/                    # 设计文档
+docs/                    # 设计文档（部分克隆可能未含该目录）
+readmeimgs/              # README 用界面截图
 ThirdParty/              # tcping、可选 iperf3 / Wireshark / Nmap；打包时建议连同根目录 LICENSE 一并分发
 reports/                 # 默认诊断输出（已加入 .gitignore）
 logs/                    # 运行日志 app.log（按日轮转；已加入 .gitignore）
@@ -270,5 +293,7 @@ python -m ruff check network_diagnosis
 ```
 
 ## 许可证
+
+MIT
 
 见仓库根目录 [`LICENSE`](LICENSE)。

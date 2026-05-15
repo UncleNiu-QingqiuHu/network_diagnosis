@@ -23,14 +23,11 @@ from ttkbootstrap.constants import (
 )
 
 from network_diagnosis.code_sign_windows import (
-    CODE_SIGN_CONTACT_EMAIL,
     find_signtool_exe,
     generate_self_signed_code_signing_pfx,
     sign_pe,
     verify_pe,
 )
-from network_diagnosis.pe_win_props_stamp import format_version_display, stamp_pe_details_properties
-from network_diagnosis.version import APP_DISPLAY_NAME, APP_VERSION
 
 
 class CodeSigningFrame(ttk.Frame):
@@ -59,7 +56,6 @@ class CodeSigningFrame(ttk.Frame):
         self._var_exe = tk.StringVar(value="")
         self._var_timestamp = tk.BooleanVar(value=True)
         self._var_ts_url = tk.StringVar(value="http://timestamp.digicert.com")
-        self._var_stamp_pe_details = tk.BooleanVar(value=True)
         self._lf_tgt: tk.Misc | None = None
         self._tgt_compact: bool | None = None
 
@@ -138,7 +134,7 @@ class CodeSigningFrame(ttk.Frame):
             text=(
                 "• CA / 商业证书：使用厂商下发的「PFX」及密码签名（可被公开信任链验证）。\n"
                 "• 自签名：点击下方「一键生成自签名证书」导出「PFX」与「CER」；\n"
-                "• 以下所有路径建议不要使用中文或空格，以免 signtool 兼容性问题（尤其是时间戳 URL）。"
+                "• 以下所有路径建议不要使用中文或空格，以免 signtool 兼容性问题（尤其是时间戳 URL）。\n"
             ),
             bootstyle=SECONDARY,
             wraplength=920,
@@ -180,12 +176,6 @@ class CodeSigningFrame(ttk.Frame):
         ).grid(row=0, column=0, columnspan=2, sticky=W)
         ttk.Label(lf_opt, text="时间戳 URL").grid(row=1, column=0, sticky=W, padx=(0, 8), pady=(8, 0))
         ttk.Entry(lf_opt, textvariable=self._var_ts_url).grid(row=1, column=1, sticky=EW, pady=(8, 0))
-        ttk.Checkbutton(
-            lf_opt,
-            text="签名前写入「详细信息」版本资源（文件/产品版本、产品名称、版权、语言）",
-            variable=self._var_stamp_pe_details,
-            bootstyle="round-toggle",
-        ).grid(row=2, column=0, columnspan=2, sticky=W, pady=(10, 0))
 
         lf_tgt = ttk.Labelframe(grid, text="待签名文件", bootstyle=SECONDARY, padding=(12, 10, 12, 10))
         lf_tgt.grid(row=2, column=0, sticky=EW, pady=(0, 8))
@@ -333,26 +323,6 @@ class CodeSigningFrame(ttk.Frame):
             return
 
         exe_resolved = exe.resolve()
-        if self._var_stamp_pe_details.get():
-            ver_disp = format_version_display(APP_VERSION)
-            cop = f"© Qingqiuhu / 青丘狐。{CODE_SIGN_CONTACT_EMAIL}"
-            ok_st, err_st = stamp_pe_details_properties(
-                exe_resolved,
-                file_version=ver_disp,
-                product_version=ver_disp,
-                product_name=APP_DISPLAY_NAME,
-                file_description=APP_DISPLAY_NAME,
-                copyright_line=cop,
-            )
-            if not ok_st:
-                if not messagebox.askyesno(
-                    "数字签名",
-                    f"写入 exe「详细信息」版本资源失败：\n{err_st}\n\n是否仍继续执行 Authenticode 签名？",
-                    parent=self.winfo_toplevel(),
-                ):
-                    return
-            else:
-                self._append_log(f"[详细信息] 已写入 VERSIONINFO（先于签名）。文件/产品版本：{ver_disp}")
 
         ts = self._var_ts_url.get().strip() if self._var_timestamp.get() else None
 
