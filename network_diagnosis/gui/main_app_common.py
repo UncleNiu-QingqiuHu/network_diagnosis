@@ -69,8 +69,17 @@ def bind_label_wraplength(label: tk.Misc, *, inset: int = 4) -> None:
     label.after_idle(after_idle_sync)
 
 
-def scaled_photo_from_png(master: tk.Misc, path: Path, *, size_px: int) -> tk.PhotoImage | None:
+def scaled_photo_from_png(
+    master: tk.Misc,
+    path: Path,
+    *,
+    size_px: int,
+    trim_alpha_bbox: bool = False,
+) -> tk.PhotoImage | None:
     """将 PNG 统一缩放为 ``size_px × size_px`` 像素后再装入 Tk（便于与高 DPI / 任意素材尺寸解耦）。
+
+    ``trim_alpha_bbox=True`` 时先按不透明区域裁剪再缩放，用于画布留白较多的图标（如侧边栏「数字签名」），
+    避免与其它满幅图标相比显得过小。
 
     依赖 Pillow（``ttkbootstrap`` 已间接引入）。若缩放失败则退回原始 ``PhotoImage`` 加载。
     """
@@ -80,6 +89,10 @@ def scaled_photo_from_png(master: tk.Misc, path: Path, *, size_px: int) -> tk.Ph
         from PIL import Image, ImageTk
 
         img = Image.open(path).convert("RGBA")
+        if trim_alpha_bbox:
+            bbox = img.split()[3].getbbox()
+            if bbox:
+                img = img.crop(bbox)
         try:
             resample = Image.Resampling.LANCZOS
         except AttributeError:

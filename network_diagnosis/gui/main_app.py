@@ -154,7 +154,16 @@ class NetworkDiagnosisApp(NetworkViewsMixin, SubnetViewsMixin, StaticViewsMixin,
         _nav_icon_px = 20
         for mod_key, nav_label in nav_items:
             icon_path = resolve_sidebar_nav_icon_png(mod_key)
-            photo = scaled_photo_from_png(self, icon_path, size_px=_nav_icon_px) if icon_path else None
+            photo = (
+                scaled_photo_from_png(
+                    self,
+                    icon_path,
+                    size_px=_nav_icon_px,
+                    trim_alpha_bbox=(mod_key == "code_sign"),
+                )
+                if icon_path
+                else None
+            )
             if photo is not None:
                 self._sidebar_nav_photos.append(photo)
             btn_kw: dict = dict(

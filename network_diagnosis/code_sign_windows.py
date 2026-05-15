@@ -5,11 +5,28 @@ from __future__ import annotations
 import base64
 import locale
 import os
+import re
 import shutil
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
+
+CODE_SIGN_CONTACT_EMAIL = "contact@qingqiuhu.net"
+
+
+def normalize_code_sign_subject(subject: str) -> str:
+    """若主题 DN 中尚无邮箱类组件，则追加 ``E=contact@qingqiuhu.net``。"""
+    s = subject.strip()
+    if not s:
+        s = "CN=Qingqiuhu Self-Signed Code Signing"
+    low = s.casefold()
+    em = CODE_SIGN_CONTACT_EMAIL.casefold()
+    if em in low:
+        return s
+    if re.search(r"(^|,)\s*(e|emailaddress)=", low):
+        return s
+    return f"{s}, E={CODE_SIGN_CONTACT_EMAIL}"
 
 
 def _decode_windows_console_output(raw: bytes | None) -> str:
@@ -120,7 +137,7 @@ def generate_self_signed_code_signing_pfx(
 
     不依赖 ``Cert:`` 证书驱动器，亦不在本地证书存储中保留证书（部分环境无法加载
     ``Microsoft.PowerShell.Security`` / PKI 模块时仍可用）。
-    ``subject`` 建议形如 ``CN=组织或工具名称``。
+    ``subject`` 建议形如 ``CN=组织或工具名称``；生成前会规范化并附带联系邮箱（DN ``E=`` 及 SAN，若运行库支持）。
     返回 ``(成功, 日志文本, pfx路径, cer路径)``。
     """
     output_dir = output_dir.resolve()
@@ -129,7 +146,8 @@ def generate_self_signed_code_signing_pfx(
     cer_path = output_dir / "codesign-selfsigned-public.cer"
 
     pwd_b64 = base64.b64encode(password.encode("utf-8")).decode("ascii")
-    sub_b64 = base64.b64encode(subject.encode("utf-8")).decode("ascii")
+    subject_dn = normalize_code_sign_subject(subject)
+    sub_b64 = base64.b64encode(subject_dn.encode("utf-8")).decode("ascii")
     pfx_lit = str(pfx_path.resolve()).replace("'", "''")
     cer_lit = str(cer_path.resolve()).replace("'", "''")
 
@@ -164,10 +182,15 @@ try {{
         $true
     )
     [void]$req.CertificateExtensions.Add($keyUsage)
+    try {{
+        $san = New-Object System.Security.Cryptography.X509Certificates.SubjectAlternativeNameBuilder
+        [void]$san.AddEmailAddress('{contact_email}')
+        [void]$req.CertificateExtensions.Add($san.Build())
+    }} catch {{ }}
     $bc = New-Object System.Security.Cryptography.X509Certificates.X509BasicConstraintsExtension($false, $false, 0, $false)
     [void]$req.CertificateExtensions.Add($bc)
     $notBefore = [DateTimeOffset]::UtcNow.AddMinutes(-1)
-    $notAfter = $notBefore.AddYears(5)
+    $notAfter = $notBefore.AddYears(10)
     $cert = $req.CreateSelfSigned($notBefore, $notAfter)
     $pfxBytes = $cert.Export([System.Security.Cryptography.X509Certificates.X509ContentType]::Pfx, $pwdPlain)
     [System.IO.File]::WriteAllBytes($pfxPath, $pfxBytes)
@@ -178,7 +201,13 @@ try {{
     if ($null -ne $rsa) {{ $rsa.Dispose() }}
 }}
 """
-    ps = ps_template.format(pwd_b64=pwd_b64, sub_b64=sub_b64, pfx=pfx_lit, cer=cer_lit)
+    ps = ps_template.format(
+        pwd_b64=pwd_b64,
+        sub_b64=sub_b64,
+        pfx=pfx_lit,
+        cer=cer_lit,
+        contact_email=CODE_SIGN_CONTACT_EMAIL.replace("'", "''"),
+    )
     fd, tmp_ps1 = tempfile.mkstemp(suffix=".ps1", prefix="qqhu-codesign-")
     os.close(fd)
     tmp_path = Path(tmp_ps1)
