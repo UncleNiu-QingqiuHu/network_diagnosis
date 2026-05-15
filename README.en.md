@@ -6,11 +6,6 @@
 
 A **Windows desktop network workbench** built with Python (tkinter + [ttkbootstrap](https://github.com/israel-dryer/ttkbootstrap)): connectivity diagnostics, **security diagnostics (baseline)**, IPv4 subnet utilities, switch **Console/SSH**, database diagnostics, **ARP security monitoring**, and **Windows Authenticode signing**. Official site: <https://www.qingqiuhu.net>. Release version is defined by `APP_VERSION` in [`network_diagnosis/version.py`](network_diagnosis/version.py).
 
-Product scope and behavior are defined by the design documents below (if your clone has no `docs/` folder, obtain the same filenames from a release bundle or your team):
-
-- [`docs/network-diagnostic-tool-design_v1.5.md`](docs/network-diagnostic-tool-design_v1.5.md) (v1.4 archived alongside)
-- Security diagnostics: [`docs/network-security-diagnosis-design.md`](docs/network-security-diagnosis-design.md)
-
 ## Feature overview
 
 The main window uses a left-hand navigation rail with the following modules:

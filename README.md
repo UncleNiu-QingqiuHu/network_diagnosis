@@ -6,11 +6,6 @@
 
 基于 Python 的 **Windows 桌面网络工作台**（tkinter + [ttkbootstrap](https://github.com/israel-dryer/ttkbootstrap)），集成网络连通性诊断、**安全诊断（基线）**、子网计算、交换机 Console/SSH、数据库诊断、**ARP 安全监视**、**Windows 数字签名**等能力。官方网站：<https://www.qingqiuhu.net>。发布版本号以 [`network_diagnosis/version.py`](network_diagnosis/version.py) 中的 `APP_VERSION` 为准。
 
-产品说明与能力范围以设计文档为准（若克隆目录中暂无 `docs/`，请从发布包或团队渠道获取同名文档）：
-
-- [`docs/network-diagnostic-tool-design_v1.5.md`](docs/network-diagnostic-tool-design_v1.5.md)（v1.4 见同目录归档）
-- 安全诊断方案：[`docs/network-security-diagnosis-design.md`](docs/network-security-diagnosis-design.md)
-
 ## 功能概览
 
 主窗口左侧为功能导航，当前包含：
