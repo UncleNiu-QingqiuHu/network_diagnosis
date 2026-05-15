@@ -27,6 +27,7 @@ from ttkbootstrap.constants import (
 )
 
 from network_diagnosis.gui.db_diagnosis_frame import DbDiagnosisFrame
+from network_diagnosis.gui.intranet_arp_frame import IntranetArpMonitorFrame
 from network_diagnosis.gui.main_app_common import parse_ports, try_set_window_icon
 from network_diagnosis.gui.main_app_network_views import NetworkViewsMixin
 from network_diagnosis.gui.main_app_report_text import (
@@ -140,6 +141,7 @@ class NetworkDiagnosisApp(NetworkViewsMixin, SubnetViewsMixin, StaticViewsMixin,
             ("subnet", "子网计算"),
             ("switch", "交换机配置"),
             ("database", "数据库诊断"),
+            ("arp_intranet", "ARP安全"),
             ("security", "安全诊断"),
             ("guide", "使用帮助"),
             ("about", "关于"),
@@ -178,6 +180,8 @@ class NetworkDiagnosisApp(NetworkViewsMixin, SubnetViewsMixin, StaticViewsMixin,
         self._view_frames["switch"] = self._switch_console
         self._db_diagnosis = DbDiagnosisFrame(self._content_host)
         self._view_frames["database"] = self._db_diagnosis
+        self._intranet_arp = IntranetArpMonitorFrame(self._content_host)
+        self._view_frames["arp_intranet"] = self._intranet_arp
         self._security_diagnosis = SecurityDiagnosisFrame(self._content_host)
         self._view_frames["security"] = self._security_diagnosis
 
