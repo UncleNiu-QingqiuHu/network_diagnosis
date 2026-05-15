@@ -7,7 +7,7 @@ import webbrowser
 from tkinter.scrolledtext import ScrolledText
 
 import ttkbootstrap as ttk
-from ttkbootstrap.constants import EW, NSEW, PRIMARY, SECONDARY, W
+from ttkbootstrap.constants import E, EW, NSEW, PRIMARY, SECONDARY, W
 
 from network_diagnosis.gui.main_app_common import (
     bind_label_wraplength,
@@ -574,11 +574,22 @@ class StaticViewsMixin:
             bootstyle=SECONDARY,
             font=("Microsoft YaHei UI", 11),
         ).grid(row=0, column=0, sticky=W)
+        title_row = ttk.Frame(frm)
+        title_row.grid(row=1, column=0, sticky=EW, pady=(6, 2))
+        title_row.columnconfigure(1, weight=1)
         ttk.Label(
-            frm,
+            title_row,
             text=APP_DISPLAY_NAME,
             font=("Microsoft YaHei UI", 22, "bold"),
-        ).grid(row=1, column=0, sticky=W, pady=(6, 2))
+        ).grid(row=0, column=0, sticky=W)
+        self._about_update_btn = ttk.Button(
+            title_row,
+            text="检查更新",
+            bootstyle=SECONDARY,
+            command=self._on_manual_update_check,
+            width=12,
+        )
+        self._about_update_btn.grid(row=0, column=2, sticky=E)
         ttk.Label(
             frm,
             text=APP_DISPLAY_NAME_EN,

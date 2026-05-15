@@ -9,6 +9,7 @@ import sys
 import threading
 import tkinter as tk
 import tkinter.font as tkfont
+import webbrowser
 from tkinter import messagebox
 from urllib.parse import urlparse
 
@@ -64,6 +65,12 @@ from network_diagnosis.paths import (
 )
 from network_diagnosis.runner import RunOptions, run_diagnostic
 from network_diagnosis.runtime_log import get_logger, setup_runtime_logging
+from network_diagnosis.update_check import (
+    GITHUB_RELEASES_WEB,
+    GithubLatestReleaseInfo,
+    NETWORK_FAILURE_HINT,
+    fetch_latest_release_info,
+)
 from network_diagnosis.version import APP_DISPLAY_NAME, APP_VERSION, AUTHOR_SUMMARY
 
 _log = get_logger(__name__)
@@ -220,6 +227,131 @@ class NetworkDiagnosisApp(NetworkViewsMixin, SubnetViewsMixin, StaticViewsMixin,
         except tk.TclError:
             pass
         self.after_idle(self._init_main_sash)
+        self.after(1200, self._schedule_startup_update_check)
+
+    def _schedule_startup_update_check(self) -> None:
+        """后台请求 GitHub latest release；经队列在主线程弹窗（勿在工作线程调用 ``after``）。"""
+
+        def worker() -> None:
+            try:
+                info = fetch_latest_release_info()
+            except Exception as e:
+                _log.exception("启动时更新检查异常")
+                info = GithubLatestReleaseInfo(
+                    fetched_ok=False,
+                    error_detail=str(e),
+                    user_hint=NETWORK_FAILURE_HINT,
+                )
+            try:
+                self._queue.put(("update_check_startup", info))
+            except Exception:
+                _log.exception("启动时更新检查结果入队失败")
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _apply_startup_update_check(self, info: GithubLatestReleaseInfo) -> None:
+        if not info.fetched_ok:
+            _log.debug(
+                "启动时更新检查失败：%s | %s",
+                info.user_hint or "",
+                info.error_detail or "",
+            )
+            return
+        if info.is_newer_than_running is not True:
+            return
+        latest_label = info.release_title or info.tag_name or "新版本"
+        zip_hint = ""
+        if info.download_zip_url:
+            zip_hint = f"\n\nWin64 发行包（zip）：\n{info.download_zip_url}"
+        msg = (
+            f"发现新版本：{latest_label}\n"
+            f"当前版本：{APP_VERSION}"
+            f"{zip_hint}\n\n"
+            "是否使用浏览器打开下载？（首选 zip 直链；若 404 请到 Release 页面核对附件名）"
+        )
+        try:
+            if messagebox.askyesno("软件更新", msg, parent=self):
+                webbrowser.open(info.download_zip_url or info.html_url or GITHUB_RELEASES_WEB)
+        except tk.TclError:
+            pass
+
+    def _set_about_update_busy(self, busy: bool) -> None:
+        btn = getattr(self, "_about_update_btn", None)
+        if btn is None:
+            return
+        try:
+            if busy:
+                btn.configure(state=tk.DISABLED, text="检查中…")
+            else:
+                btn.configure(state=tk.NORMAL, text="检查更新")
+        except tk.TclError:
+            pass
+
+    def _on_manual_update_check(self) -> None:
+        """关于页「检查更新」按钮。"""
+        self._set_about_update_busy(True)
+        _log.info("手动检查更新：已开始请求 GitHub")
+
+        def worker() -> None:
+            try:
+                info = fetch_latest_release_info()
+            except Exception as e:
+                _log.exception("手动更新检查异常")
+                info = GithubLatestReleaseInfo(
+                    fetched_ok=False,
+                    error_detail=str(e),
+                    user_hint=NETWORK_FAILURE_HINT,
+                )
+            try:
+                self._queue.put(("update_check_manual", info))
+            except Exception:
+                _log.exception("手动更新检查结果入队失败")
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _present_manual_update_check(self, info: GithubLatestReleaseInfo) -> None:
+        self._set_about_update_busy(False)
+        if not info.fetched_ok:
+            head = info.user_hint or "无法获取 GitHub Release 信息。"
+            tail = info.error_detail or ""
+            msg = head if not tail.strip() else f"{head}\n\n技术详情：\n{tail}"
+            messagebox.showwarning("检查更新", msg, parent=self)
+            return
+        if info.is_newer_than_running is True:
+            latest_label = info.release_title or info.tag_name or "新版本"
+            zip_hint = ""
+            if info.download_zip_url:
+                zip_hint = f"\n\nWin64 发行包（zip）：\n{info.download_zip_url}"
+            msg = (
+                f"发现新版本：{latest_label}\n"
+                f"当前版本：{APP_VERSION}"
+                f"{zip_hint}\n\n"
+                "是否使用浏览器打开下载？（首选 zip 直链）"
+            )
+            try:
+                if messagebox.askyesno("检查更新", msg, parent=self):
+                    webbrowser.open(info.download_zip_url or info.html_url or GITHUB_RELEASES_WEB)
+            except tk.TclError:
+                pass
+            return
+        if info.is_newer_than_running is False:
+            messagebox.showinfo(
+                "检查更新",
+                f"当前已是最新版本。\n\n本地版本：{APP_VERSION}"
+                + (f"\n远程标签：{info.tag_name}" if info.tag_name else ""),
+                parent=self,
+            )
+            return
+        zip_hint = ""
+        if info.download_zip_url:
+            zip_hint = f"\n\n可尝试 Win64 zip：\n{info.download_zip_url}"
+        messagebox.showwarning(
+            "检查更新",
+            f"已连接 GitHub，但无法可靠比较版本号。\n本地：{APP_VERSION}\n远程标签：{info.tag_name}"
+            f"{zip_hint}\n\n"
+            f"Release 总览：{GITHUB_RELEASES_WEB}",
+            parent=self,
+        )
 
     def _select_module(self, module_key: str) -> None:
         if self._active_module == module_key:
@@ -564,6 +696,10 @@ class NetworkDiagnosisApp(NetworkViewsMixin, SubnetViewsMixin, StaticViewsMixin,
                     rep: DiagnosticReport = payload  # type: ignore[assignment]
                     self._render_report(rep)
                     self.btn_run.configure(state=tk.NORMAL)
+                elif kind == "update_check_startup":
+                    self._apply_startup_update_check(payload)  # type: ignore[arg-type]
+                elif kind == "update_check_manual":
+                    self._present_manual_update_check(payload)  # type: ignore[arg-type]
         except queue.Empty:
             pass
         self.after(200, self._poll_queue)
