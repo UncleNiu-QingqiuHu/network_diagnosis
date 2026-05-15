@@ -22,6 +22,7 @@ from network_diagnosis.model.report import (
     GuiSummary,
     HistoryCompareResult,
     HttpTlsProbeResult,
+    IperfUdpQualityResult,
     MtuProbeResult,
     OverallStatus,
     PortFailureClass,
@@ -33,7 +34,7 @@ from network_diagnosis.model.report import (
 )
 from network_diagnosis.paths import find_tshark, report_root, resolve_iperf3_exe, resolve_tcping_exe
 from network_diagnosis.probes.bandwidth_http import run_http_bandwidth
-from network_diagnosis.probes.bandwidth_iperf import run_iperf_bandwidth
+from network_diagnosis.probes.bandwidth_iperf import run_iperf_bandwidth, run_iperf_udp_quality
 from network_diagnosis.probes.dns_probe import pick_tcp_target, resolve_dns, resolve_dns_via_server
 from network_diagnosis.probes.egress_probe import run_egress
 from network_diagnosis.probes.http_tls_probe import probe_https
@@ -84,6 +85,8 @@ class RunOptions:
     bandwidth_iperf_port: int = 5201
     bandwidth_iperf_seconds: int = 30
     bandwidth_iperf_parallel: int = 4
+    bandwidth_iperf_for_quality: bool = True
+    bandwidth_iperf_udp_bitrate: str = "1000M"
     optional_dns_server: str = ""
     enable_pathping: bool = False
     enable_tcp_traceroute: bool = False
@@ -238,6 +241,8 @@ def _build_gui_summary(
     user_configured_ports: bool,
     bandwidth: BandwidthProbeResult | None,
     bandwidth_mode: str,
+    iperf_udp_quality: IperfUdpQualityResult | None = None,
+    use_iperf_udp_for_quality: bool = False,
 ) -> GuiSummary:
     bullets: list[str] = []
     status = OverallStatus.OK
@@ -291,6 +296,16 @@ def _build_gui_summary(
             bullets.append(f"带宽抽样（{bandwidth.mode}）：{bandwidth.summary}")
         else:
             bullets.append(f"带宽抽样（{bandwidth.mode}）未成功：{bandwidth.summary}")
+
+    if (
+        bw_mode == "iperf3"
+        and use_iperf_udp_for_quality
+        and iperf_udp_quality is not None
+    ):
+        if iperf_udp_quality.ok:
+            bullets.append(f"iperf3 UDP 质量抽样：{iperf_udp_quality.summary}")
+        else:
+            bullets.append(f"iperf3 UDP 质量抽样未成功：{iperf_udp_quality.summary}")
 
     if any(d.code == "tcping_missing" for d in degradations) and user_configured_ports:
         status = OverallStatus.FAILED
@@ -508,6 +523,25 @@ def run_diagnostic(options: RunOptions, progress: Callable[[str], None]) -> Diag
 
     bw: BandwidthProbeResult | None = _run_bandwidth(options, report_dir, progress, degradations)
 
+    iperf_udp_q: IperfUdpQualityResult | None = None
+    bw_norm = _normalize_bw_mode(options.bandwidth_mode)
+    if (
+        bw_norm == "iperf3"
+        and options.bandwidth_iperf_for_quality
+        and (options.bandwidth_iperf_host or "").strip()
+    ):
+        iperf_exe = resolve_iperf3_exe()
+        if iperf_exe is not None:
+            progress("正在运行 iperf3 UDP 抽样（丢包/抖动，用于网络质量综合判定）…")
+            iperf_udp_q = run_iperf_udp_quality(
+                iperf_exe,
+                (options.bandwidth_iperf_host or "").strip(),
+                options.bandwidth_iperf_port,
+                options.bandwidth_iperf_seconds,
+                options.bandwidth_iperf_udp_bitrate,
+                report_dir,
+            )
+
     path_quality: ShellProbeResult | None = None
     if options.enable_pathping:
         progress("正在执行 PathPing / mtr（可能较慢）…")
@@ -583,6 +617,8 @@ def run_diagnostic(options: RunOptions, progress: Callable[[str], None]) -> Diag
         bandwidth_iperf_port=options.bandwidth_iperf_port,
         bandwidth_iperf_seconds=options.bandwidth_iperf_seconds,
         bandwidth_iperf_parallel=options.bandwidth_iperf_parallel,
+        bandwidth_iperf_for_quality=options.bandwidth_iperf_for_quality,
+        bandwidth_iperf_udp_bitrate=options.bandwidth_iperf_udp_bitrate,
         optional_dns_server=(options.optional_dns_server or "").strip(),
         enable_pathping=options.enable_pathping,
         enable_tcp_traceroute=options.enable_tcp_traceroute,
@@ -601,6 +637,8 @@ def run_diagnostic(options: RunOptions, progress: Callable[[str], None]) -> Diag
         user_configured_ports=bool(options.ports),
         bandwidth=bw,
         bandwidth_mode=options.bandwidth_mode,
+        iperf_udp_quality=iperf_udp_q,
+        use_iperf_udp_for_quality=options.bandwidth_iperf_for_quality,
     )
     nq = compute_network_quality(
         dns,
@@ -609,6 +647,11 @@ def run_diagnostic(options: RunOptions, progress: Callable[[str], None]) -> Diag
         user_configured_ports=bool(options.ports),
         enable_ping=options.enable_ping,
         bandwidth=bw,
+        iperf_udp_quality=iperf_udp_q,
+        use_iperf_udp_for_quality=(
+            _normalize_bw_mode(options.bandwidth_mode) == "iperf3"
+            and options.bandwidth_iperf_for_quality
+        ),
     )
     hist: HistoryCompareResult | None = None
     if options.enable_history_compare:
@@ -631,6 +674,7 @@ def run_diagnostic(options: RunOptions, progress: Callable[[str], None]) -> Diag
         gui=gui,
         network_quality=nq,
         bandwidth=bw,
+        iperf_udp_quality=iperf_udp_q,
         dns_specified=dns_specified,
         path_quality=path_quality,
         tcp_path=tcp_path,

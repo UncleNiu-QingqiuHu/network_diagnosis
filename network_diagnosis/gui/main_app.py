@@ -410,6 +410,15 @@ class NetworkDiagnosisApp(NetworkViewsMixin, SubnetViewsMixin, StaticViewsMixin,
             return
 
         bw_mode = self.var_bw_mode.get()
+        try:
+            udp_mbps_for_snap = int(self.var_bw_iperf_udp_mbps.get())
+        except tk.TclError:
+            messagebox.showwarning("校验", "UDP 目标码率（Mbps）须为整数。")
+            return
+        if not (1 <= udp_mbps_for_snap <= 1_000_000):
+            messagebox.showwarning("校验", "UDP 目标码率须在 1–1000000 Mbps 之间。")
+            return
+
         if bw_mode == "http":
             u = self.var_bw_http_url.get().strip()
             if not u:
@@ -455,6 +464,8 @@ class NetworkDiagnosisApp(NetworkViewsMixin, SubnetViewsMixin, StaticViewsMixin,
             bandwidth_iperf_port=int(self.var_bw_iperf_port.get()),
             bandwidth_iperf_seconds=int(self.var_bw_iperf_seconds.get()),
             bandwidth_iperf_parallel=int(self.var_bw_iperf_parallel.get()),
+            bandwidth_iperf_for_quality=bool(self.var_bw_iperf_for_quality.get()),
+            bandwidth_iperf_udp_bitrate=f"{udp_mbps_for_snap}M",
             optional_dns_server=self.var_optional_dns.get().strip(),
             enable_pathping=bool(self.var_adv_pathping.get()),
             enable_tcp_traceroute=bool(self.var_adv_tcp_trace.get()),
@@ -622,17 +633,17 @@ class NetworkDiagnosisApp(NetworkViewsMixin, SubnetViewsMixin, StaticViewsMixin,
 
         if g.overall.value == "ok":
             self.lbl_status.configure(
-                text=f"完成（网络质量：{q}）",
+                text=f"诊断完成（网络质量：{q}）",
                 bootstyle=(INVERSE, SUCCESS),
             )
         elif g.overall.value == "degraded":
             self.lbl_status.configure(
-                text=f"完成（部分异常或已降级）（网络质量：{q}）",
+                text=f"诊断完成（部分异常或已降级）（网络质量：{q}）",
                 bootstyle=(INVERSE, WARNING),
             )
         else:
             self.lbl_status.configure(
-                text=f"完成（存在明显问题）（网络质量：{q}）",
+                text=f"诊断完成（存在明显问题）（网络质量：{q}）",
                 bootstyle=(INVERSE, DANGER),
             )
 

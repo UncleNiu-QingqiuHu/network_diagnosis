@@ -72,6 +72,8 @@ class UserInputSnapshot:
     bandwidth_iperf_port: int = 5201
     bandwidth_iperf_seconds: int = 30
     bandwidth_iperf_parallel: int = 4
+    bandwidth_iperf_for_quality: bool = True
+    bandwidth_iperf_udp_bitrate: str = "1000M"
     optional_dns_server: str = ""
     enable_pathping: bool = False
     enable_tcp_traceroute: bool = False
@@ -179,6 +181,22 @@ class NetworkQualityAssessment:
 
 
 @dataclass
+class IperfUdpQualityResult:
+    """iperf3 UDP 抽样（丢包/抖动），用于网络质量综合判定（可选）。"""
+
+    ok: bool
+    summary: str
+    packet_loss_pct: float | None
+    jitter_ms: float | None
+    megabits_per_second: float | None
+    target_label: str
+    error: str
+    command: list[str] | None = None
+    log_stdout_path: Path | None = None
+    log_stderr_path: Path | None = None
+
+
+@dataclass
 class BandwidthProbeResult:
     """可选带宽/吞吐抽样结果（HTTP 多连接或 iperf3）。"""
 
@@ -273,6 +291,7 @@ class DiagnosticReport:
     network_quality: NetworkQualityAssessment
     dns_specified: DnsAnswer | None = None
     bandwidth: BandwidthProbeResult | None = None
+    iperf_udp_quality: IperfUdpQualityResult | None = None
     path_quality: ShellProbeResult | None = None
     tcp_path: ShellProbeResult | None = None
     http_tls: HttpTlsProbeResult | None = None

@@ -8,6 +8,7 @@ from collections.abc import Iterable
 from network_diagnosis.model.report import (
     BandwidthProbeResult,
     DnsAnswer,
+    IperfUdpQualityResult,
     NetworkQualityAssessment,
     PingStats,
     PortFailureClass,
@@ -84,6 +85,8 @@ def compute_network_quality(
     user_configured_ports: bool,
     enable_ping: bool,
     bandwidth: BandwidthProbeResult | None = None,
+    iperf_udp_quality: IperfUdpQualityResult | None = None,
+    use_iperf_udp_for_quality: bool = False,
 ) -> NetworkQualityAssessment:
     metric_lines: list[str] = []
 
@@ -125,13 +128,38 @@ def compute_network_quality(
             lat_source = "TCP 握手 RTT（tcping）"
 
     jitter_ms: float | None = None
+    jitter_src = ""
     if enable_ping and ping is not None and len(ping.rtts_ms) >= 1:
         jitter_ms = _mean_jitter_ipdv(ping.rtts_ms)
+        jitter_src = "ICMP" if len(ping.rtts_ms) >= 2 else "ICMP（单样本，抖动近似）"
     elif port_results:
         tcp_rtts = _collect_tcp_rtts(port_results)
         jitter_ms = _stdev_or_none(tcp_rtts)
         if jitter_ms is not None:
+            jitter_src = "TCP RTT 波动（tcping）"
             lat_source = lat_source or "TCP 握手 RTT（tcping）"
+
+    if (
+        use_iperf_udp_for_quality
+        and iperf_udp_quality is not None
+        and iperf_udp_quality.ok
+    ):
+        ul = iperf_udp_quality.packet_loss_pct
+        uj = iperf_udp_quality.jitter_ms
+        if ul is not None:
+            if loss_pct is not None:
+                loss_pct = max(loss_pct, ul)
+                loss_source = f"{loss_source}；已与 iperf3 UDP 合并（取较差）"
+            else:
+                loss_pct = ul
+                loss_source = "iperf3 UDP"
+        if uj is not None:
+            if jitter_ms is not None:
+                jitter_ms = max(jitter_ms, uj)
+                jitter_src = f"{jitter_src}；已与 iperf3 UDP 合并（取较差）"
+            else:
+                jitter_ms = uj
+                jitter_src = "iperf3 UDP"
 
     # 指标展示
     if loss_pct is not None and loss_source:
@@ -145,13 +173,21 @@ def compute_network_quality(
         metric_lines.append("时延/延迟：—（无可用 RTT 样本）")
 
     if jitter_ms is not None:
-        src = "ICMP" if enable_ping and ping and len(ping.rtts_ms or []) >= 2 else "TCP RTT 波动"
-        metric_lines.append(f"抖动：约 {jitter_ms:.1f} ms（{src}）")
+        metric_lines.append(f"抖动：约 {jitter_ms:.1f} ms（{jitter_src or '—'}）")
     else:
         metric_lines.append("抖动：—（样本过少）")
 
     tb, tn = _throughput_bandwidth_body(bandwidth)
     metric_lines.append(f"带宽/吞吐量：{tb}")
+
+    if use_iperf_udp_for_quality and iperf_udp_quality is not None:
+        if iperf_udp_quality.ok:
+            metric_lines.append(f"iperf3 UDP（质量辅助）：{iperf_udp_quality.summary}")
+        else:
+            metric_lines.append(
+                "iperf3 UDP（质量辅助）：抽样失败，未并入丢包/抖动档位。"
+                + (f" {iperf_udp_quality.summary}".rstrip() if iperf_udp_quality.summary else "")
+            )
 
     all_ports_bad = bool(
         user_configured_ports and port_results and all(p.failure_class != PortFailureClass.OK for p in port_results)

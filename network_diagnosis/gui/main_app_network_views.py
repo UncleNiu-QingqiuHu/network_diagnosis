@@ -225,6 +225,8 @@ class NetworkViewsMixin:
         self.var_bw_iperf_port = tk.IntVar(value=5201)
         self.var_bw_iperf_seconds = tk.IntVar(value=30)
         self.var_bw_iperf_parallel = tk.IntVar(value=4)
+        self.var_bw_iperf_for_quality = tk.BooleanVar(value=True)
+        self.var_bw_iperf_udp_mbps = tk.IntVar(value=1000)
 
         self._frm_bw_iperf = ttk.Frame(lf_bw)
         ip_row = ttk.Frame(self._frm_bw_iperf)
@@ -252,6 +254,29 @@ class NetworkViewsMixin:
             ip_row, from_=1, to=64, textvariable=self.var_bw_iperf_parallel, width=6
         )
         self.sb_bw_iperf_parallel.grid(row=1, column=3, sticky=W, pady=(6, 0))
+
+        iperf_qual_row = ttk.Frame(self._frm_bw_iperf)
+        iperf_qual_row.pack(fill=tk.X, pady=(8, 0))
+        ttk.Checkbutton(
+            iperf_qual_row,
+            text="\u5c06 iperf3 UDP \u7eb3\u5165\u7f51\u7edc\u8d28\u91cf\u7efc\u5408\u5224\u5b9a\uff08\u989d\u5916\u8dd1\u4e00\u6b21 UDP\uff09",
+            variable=self.var_bw_iperf_for_quality,
+            bootstyle="round-toggle",
+        ).pack(side=tk.LEFT)
+        ttk.Label(iperf_qual_row, text="UDP -b", bootstyle=SECONDARY).pack(side=tk.LEFT, padx=(12, 4))
+        self.sb_bw_iperf_udp_mbps = ttk.Spinbox(
+            iperf_qual_row,
+            from_=1,
+            to=1_000_000,
+            textvariable=self.var_bw_iperf_udp_mbps,
+            width=8,
+        )
+        self.sb_bw_iperf_udp_mbps.pack(side=tk.LEFT)
+        ttk.Label(
+            iperf_qual_row,
+            text=" M\uff08Mbps\uff0ciperf3 \u5355\u4f4d\uff09",
+            bootstyle=SECONDARY,
+        ).pack(side=tk.LEFT, padx=(2, 0))
 
         self.var_bw_mode.trace_add("write", lambda *_: self._sync_bw_panels())
         self._sync_bw_panels()

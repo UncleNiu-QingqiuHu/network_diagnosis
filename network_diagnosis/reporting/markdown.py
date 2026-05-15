@@ -117,8 +117,13 @@ def _bandwidth_section(report: DiagnosticReport) -> str:
         f"- HTTP 并发连接数: {ui.bandwidth_http_parallel}，持续时间 (s): {ui.bandwidth_http_seconds}",
         f"- iperf3 服务器: `{ui.bandwidth_iperf_host or '—'}`，端口: {ui.bandwidth_iperf_port}，"
         f"并行流 (-P): {ui.bandwidth_iperf_parallel}，时长 (s): {ui.bandwidth_iperf_seconds}",
-        "",
     ]
+    if ui.bandwidth_mode == "iperf3":
+        lines.append(
+            f"- iperf3 UDP 纳入质量判定: {ui.bandwidth_iperf_for_quality}；"
+            f"UDP `-b`: `{ui.bandwidth_iperf_udp_bitrate or '—'}`"
+        )
+    lines.append("")
     if ui.bandwidth_mode == "off" or b is None:
         lines.append("（本轮未启用或未产生带宽抽样结果。）")
         return "\n".join(lines)
@@ -143,6 +148,26 @@ def _bandwidth_section(report: DiagnosticReport) -> str:
         lines.append(f"- stderr: `{b.log_stderr_path.resolve()}`")
     if b.error:
         lines.append(f"- 错误信息: {b.error}")
+    q = report.iperf_udp_quality
+    if q is not None:
+        lines.append("")
+        lines.append("##### iperf3 UDP（网络质量辅助）")
+        lines.append(f"- 成功: {q.ok}")
+        lines.append(f"- 摘要: {q.summary}")
+        if q.packet_loss_pct is not None:
+            lines.append(f"- UDP 丢包率（约）: {q.packet_loss_pct:.2f}%")
+        if q.jitter_ms is not None:
+            lines.append(f"- UDP 抖动（约）: {q.jitter_ms:.3f} ms")
+        if q.megabits_per_second is not None:
+            lines.append(f"- UDP 接收速率（约）: {q.megabits_per_second:.2f} Mbps")
+        if q.command:
+            lines.append(f"- 命令: `{' '.join(q.command)}`")
+        if q.log_stdout_path:
+            lines.append(f"- 日志/输出: `{q.log_stdout_path.resolve()}`")
+        if q.log_stderr_path:
+            lines.append(f"- stderr: `{q.log_stderr_path.resolve()}`")
+        if q.error:
+            lines.append(f"- 错误信息: {q.error}")
     return "\n".join(lines)
 
 
@@ -348,6 +373,8 @@ def write_markdown_report(report: DiagnosticReport, path: Path) -> None:
         f"- HTTP 并发: {report.user_input.bandwidth_http_parallel}，时长 (s): {report.user_input.bandwidth_http_seconds}",
         f"- iperf3 目标: `{report.user_input.bandwidth_iperf_host or '—'}:{report.user_input.bandwidth_iperf_port}`，"
         f"并行流 (-P): {report.user_input.bandwidth_iperf_parallel}，时长 (s): {report.user_input.bandwidth_iperf_seconds}",
+        f"- iperf3 UDP 纳入质量判定: {report.user_input.bandwidth_iperf_for_quality}；"
+        f"UDP `-b`: `{report.user_input.bandwidth_iperf_udp_bitrate or '—'}`（仅模式为 iperf3 且勾选时执行）",
         f"- 指定 DNS（可选，与系统解析对比）: `{report.user_input.optional_dns_server or '—'}`",
         f"- PathPing / mtr: {report.user_input.enable_pathping}",
         f"- TCP 路径探测: {report.user_input.enable_tcp_traceroute}"
