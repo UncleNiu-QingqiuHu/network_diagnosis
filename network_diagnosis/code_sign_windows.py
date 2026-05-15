@@ -15,6 +15,13 @@ from pathlib import Path
 CODE_SIGN_CONTACT_EMAIL = "contact@qingqiuhu.net"
 
 
+def _win_subprocess_no_window_kw() -> dict:
+    """GUI 或无控制台宿主下避免 ``signtool`` / ``powershell`` 拉起黑色 CMD 窗口。"""
+    if sys.platform == "win32" and hasattr(subprocess, "CREATE_NO_WINDOW"):
+        return {"creationflags": subprocess.CREATE_NO_WINDOW}  # type: ignore[dict-item]
+    return {}
+
+
 def normalize_code_sign_subject(subject: str) -> str:
     """若主题 DN 中尚无邮箱类组件，则追加 ``E=contact@qingqiuhu.net``。"""
     s = subject.strip()
@@ -58,7 +65,7 @@ def _decode_windows_console_output(raw: bytes | None) -> str:
 
 
 def _run_capture_decoded(cmd: list[str]) -> subprocess.CompletedProcess[str]:
-    proc = subprocess.run(cmd, capture_output=True)
+    proc = subprocess.run(cmd, capture_output=True, **_win_subprocess_no_window_kw())
     out = _decode_windows_console_output(proc.stdout)
     err = _decode_windows_console_output(proc.stderr)
     return subprocess.CompletedProcess(cmd, proc.returncode, stdout=out, stderr=err)
@@ -223,6 +230,7 @@ try {{
                 str(tmp_path),
             ],
             capture_output=True,
+            **_win_subprocess_no_window_kw(),
         )
         stdout_txt = _decode_windows_console_output(proc.stdout)
         stderr_txt = _decode_windows_console_output(proc.stderr)
