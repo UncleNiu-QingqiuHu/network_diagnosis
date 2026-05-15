@@ -34,6 +34,13 @@
 - **Python 3.10+**（与 `pyproject.toml` 中 `requires-python` 一致）。
 - 将 **`tcping.exe`** 放到 `ThirdParty/tcping/tcping.exe`（否则端口探测会降级并在报告中说明）。
 
+##
+
+![](./readmeimgs/PixPin_2026-05-15_15-59-59.png)
+![](./readmeimgs/PixPin_2026-05-15_16-01-08.png)
+![](./readmeimgs/PixPin_2026-05-15_16-01-27.png)
+![](./readmeimgs/PixPin_2026-05-15_16-01-38.png)
+
 ## 安装与运行
 
 ```powershell

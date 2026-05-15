@@ -87,6 +87,7 @@ def resolve_sidebar_nav_icon_png(module_key: str) -> Path | None:
         "database": "teenyicons--database-solid.png",
         "arp_intranet": "ion--shield-checkmark.png",
         "security": "simple-icons--scan.png",
+        "code_sign": "bitcoin-icons--sign-filled.png",
         "guide": "fa6-solid--book-open.png",
         "about": "ooui--info-filled.png",
     }
