@@ -2,7 +2,7 @@
 
 [Chinese (Simplified)](README.md)
 
-> Prebuilt releases are available for download on GitHub: [Releases](https://github.com/UncleNiu-QingqiuHu/network_diagnosis/releases). The executable programs (exe) provided by this warehouse have been digitally signed.
+> Prebuilt releases are available for download on GitHub: [GitHub Releases](https://github.com/UncleNiu-QingqiuHu/network_diagnosis/releases) or GitCode：[GitCode Releases](https://gitcode.com/ibobcheung/qqhu_network_diagnosis/releases). The executable programs (exe) provided by this warehouse have been digitally signed.
 
 A **Windows desktop network workbench** built with Python (tkinter + [ttkbootstrap](https://github.com/israel-dryer/ttkbootstrap)): connectivity diagnostics, **security diagnostics (baseline)**, IPv4 subnet utilities, switch **Console/SSH**, database diagnostics, **ARP security monitoring**, **Windows Authenticode signing**, and **SSL certificates (Let's Encrypt / private CA)**. Official site: <https://www.qingqiuhu.net>. Release version is defined by `APP_VERSION` in [`network_diagnosis/version.py`](network_diagnosis/version.py).
 
