@@ -4,7 +4,7 @@
 `runner` / Markdown 报告 / GUI 标题等均应引用此变量，勿在其它文件手写版本字符串。
 """
 
-APP_VERSION = "2.1.8"
+APP_VERSION = "2.1.7"
 DESIGN_DOC_REF = "network-diagnostic-tool-design_v1.5"
 
 APP_DISPLAY_NAME = "青丘狐网络工作台"

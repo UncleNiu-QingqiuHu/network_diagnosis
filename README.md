@@ -2,7 +2,7 @@
 
 [English README](README.en.md)
 
-> 本仓库同时提供了发行版[Github发行版地址](https://github.com/UncleNiu-QingqiuHu/network_diagnosis/releases)以供下载。本仓库提供的发行版可执行程序（exe）已进行数字签名。
+> 本仓库同时提供了发行版[Github发行版地址](https://github.com/UncleNiu-QingqiuHu/network_diagnosis/releases)/[GitCode发行版地址](https://gitcode.com/ibobcheung/qqhu_network_diagnosis/releases)以供下载。本仓库提供的发行版可执行程序（exe）已进行数字签名。
 
 **Windows 桌面网络工作台**（tkinter + [ttkbootstrap](https://github.com/israel-dryer/ttkbootstrap)），集成网络连通性诊断、**安全诊断（基线）**、子网计算、交换机 Console/SSH、数据库诊断、**ARP 安全监视**、**Windows 数字签名**、**SSL 证书（Let's Encrypt / 私有 CA）**等能力。官方网站：<https://www.qingqiuhu.net>。发布版本号以 [`network_diagnosis/version.py`](network_diagnosis/version.py) 中的 `APP_VERSION` 为准。
 
