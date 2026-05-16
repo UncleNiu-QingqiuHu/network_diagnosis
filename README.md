@@ -4,6 +4,8 @@
 
 > 本仓库同时提供了发行版[Github发行版地址](https://github.com/UncleNiu-QingqiuHu/network_diagnosis/releases)/[GitCode发行版地址](https://gitcode.com/ibobcheung/qqhu_network_diagnosis/releases)以供下载。本仓库提供的发行版可执行程序（exe）通过 Nuitka 编译优化，已进行数字签名。
 
+> 3.0.0 版本开始增加AI大模型调用，对AI大模型进行了优化，支持调用本工具的能力。当前仅测试了 DeepSeek 模型，仅适配了网络诊断、子网计算、数据库诊断功能。
+
 **Windows 桌面网络工作台**（tkinter + [ttkbootstrap](https://github.com/israel-dryer/ttkbootstrap)），集成网络连通性诊断、**安全诊断（基线）**、子网计算、交换机 Console/SSH、数据库诊断、**ARP 安全监视**、**Windows 数字签名**、**SSL 证书（Let's Encrypt / 私有 CA）**等能力。官方网站：<https://www.qingqiuhu.net>。发布版本号以 [`network_diagnosis/version.py`](network_diagnosis/version.py) 中的 `APP_VERSION` 为准。
 
 ## 功能概览
@@ -12,6 +14,7 @@
 
 | 模块 | 说明 |
 |------|------|
+| **AI助手** | 自然语言对话驱动本机能力：大模型配置、流式回复、Markdown 渲染、**Skills** 扩展；可自动执行网络诊断、子网计算、数据库诊断等（详见 [`docs/ai-assistant.md`](docs/ai-assistant.md)）。 |
 | **网络诊断** | 双输出：面向非技术用户的 GUI 摘要 + 每次任务一份完整 **Markdown** 技术报告（同源数据模型）。 |
 | **子网计算** | IPv4 CIDR / 点分掩码计算；可刷新本机 IPv4、网关、DNS 与公网地址参考信息。 |
 | **交换机配置** | 串口 Console 或 **SSH（PTY）** 会话；SSH 未知主机密钥写入可写目录下的 `switch_console/`。 |
