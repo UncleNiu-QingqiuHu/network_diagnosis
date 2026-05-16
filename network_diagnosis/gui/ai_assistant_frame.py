@@ -5,6 +5,7 @@ from __future__ import annotations
 import queue
 import threading
 import tkinter as tk
+import tkinter.font as tkfont
 from tkinter import messagebox
 from tkinter.scrolledtext import ScrolledText
 from typing import TYPE_CHECKING, Any
@@ -16,6 +17,7 @@ from network_diagnosis.ai.agent import run_agent_chat
 from network_diagnosis.ai.app_actions import AppActions
 from network_diagnosis.ai.client import LlmClientError, test_connection
 from network_diagnosis.ai.config import LlmConfig, load_llm_config, save_llm_config
+from network_diagnosis.gui.simple_markdown_text import append_simple_markdown, configure_simple_markdown_tags
 from network_diagnosis.paths import skills_root
 from network_diagnosis.runtime_log import get_logger
 
@@ -34,6 +36,7 @@ class AiAssistantFrame(ttk.Frame):
         self._chat_worker: threading.Thread | None = None
         self._messages: list[dict[str, Any]] = []
         self._stream_body_start: str | None = None
+        self._stream_buffer: list[str] = []
         self._build_ui()
         self._load_config_into_form()
         self.after(200, self._poll_queue)
@@ -45,7 +48,7 @@ class AiAssistantFrame(ttk.Frame):
         self.rowconfigure(1, weight=1)
         self.columnconfigure(0, weight=1)
 
-        lf_cfg = ttk.Labelframe(self, text="大模型配置", padding=(12, 10, 12, 10))
+        lf_cfg = ttk.Labelframe(self, text="大模型配置(仅测试了DeepSeek模型，其他模型请自行配置)", padding=(12, 10, 12, 10))
         lf_cfg.grid(row=0, column=0, sticky=EW, padx=12, pady=(12, 8))
         lf_cfg.columnconfigure(1, weight=1)
         lf_cfg.columnconfigure(3, weight=1)
@@ -76,7 +79,7 @@ class AiAssistantFrame(ttk.Frame):
         skills_hint = str(skills_root())
         self.lbl_cfg_hint = ttk.Label(
             btn_row,
-            text=f"OpenAI 兼容接口 · Skills 目录：{skills_hint}",
+            text=f"OpenAI 兼容接口(DeepSeek/Qwen/Gemini/Kimi...) · Skills 目录：{skills_hint}",
             bootstyle=SECONDARY,
             font=("Microsoft YaHei UI", 9),
         )
@@ -101,32 +104,45 @@ class AiAssistantFrame(ttk.Frame):
         )
         self.txt_chat.grid(row=0, column=0, sticky=NSEW)
         self.txt_chat.tag_configure("user", foreground="#268bd2")
-        self.txt_chat.tag_configure("assistant", foreground="#2aa198")
+        self.txt_chat.tag_configure("assistant_label", foreground="#2aa198", font=("Microsoft YaHei UI", 11, "bold"))
         self.txt_chat.tag_configure("system", foreground="#93a1a1", font=("Microsoft YaHei UI", 10, "italic"))
         self.txt_chat.tag_configure("error", foreground="#dc322f")
         self.txt_chat.tag_configure("status", foreground="#657b83", font=("Microsoft YaHei UI", 10))
+        configure_simple_markdown_tags(
+            self.txt_chat,
+            base_font=("Microsoft YaHei UI", 11),
+            theme_colors=ttk.Style().colors,
+        )
 
         input_row = ttk.Frame(lf_chat)
         input_row.grid(row=1, column=0, sticky=EW, pady=(10, 0))
         input_row.columnconfigure(0, weight=1)
 
-        self.txt_input = ScrolledText(input_row, wrap=tk.WORD, height=4, font=("Microsoft YaHei UI", 11))
-        self.txt_input.grid(row=0, column=0, sticky=EW, padx=(0, 8))
+        input_wrap = ttk.Frame(input_row)
+        input_wrap.grid(row=0, column=0, sticky=tk.N + tk.E + tk.W, padx=(0, 8))
+        input_wrap.columnconfigure(0, weight=1)
+
+        self.txt_input = ScrolledText(input_wrap, wrap=tk.WORD, height=2, font=("Microsoft YaHei UI", 11))
+        self.txt_input.pack(fill=tk.BOTH, expand=False)
         self.txt_input.bind("<Return>", self._on_input_return)
         self.txt_input.bind("<Control-Return>", self._on_input_ctrl_return)
 
-        btn_col = ttk.Frame(input_row)
-        btn_col.grid(row=0, column=1, sticky=tk.N)
-        self.btn_send = ttk.Button(btn_col, text="发送", command=self._on_send, bootstyle=SUCCESS, width=10)
+        self._btn_col = ttk.Frame(input_row)
+        self._btn_col.grid(row=0, column=1, sticky=tk.N)
+        self.btn_send = ttk.Button(
+            self._btn_col, text="发送", command=self._on_send, bootstyle=SUCCESS, width=10
+        )
         self.btn_send.pack(pady=(0, 6))
-        ttk.Button(btn_col, text="清空对话", command=self._on_clear_chat, bootstyle=SECONDARY, width=10).pack()
+        ttk.Button(self._btn_col, text="清空对话", command=self._on_clear_chat, bootstyle=SECONDARY, width=10).pack()
+
         ttk.Label(
-            btn_col,
-            text="Enter 发送\nCtrl+Enter 换行",
+            input_row,
+            text="Ctrl+Enter 换行",
             bootstyle=SECONDARY,
-            font=("Microsoft YaHei UI", 8),
-            justify=tk.CENTER,
-        ).pack(pady=(6, 0))
+            font=("Microsoft YaHei UI", 9),
+        ).grid(row=1, column=0, columnspan=2, sticky=W, pady=(4, 0))
+
+        self.after_idle(self._sync_input_height_to_buttons)
 
         self.lbl_status = ttk.Label(lf_chat, text="请配置 API Key 后开始对话", bootstyle=SECONDARY)
         self.lbl_status.grid(row=2, column=0, sticky=W, pady=(8, 0))
@@ -139,6 +155,25 @@ class AiAssistantFrame(ttk.Frame):
             "• 切换到网络诊断页面\n"
             "回复将实时流式显示。可在项目 skills/ 目录添加 SKILL.md，下一条消息起自动生效。",
         )
+
+    def _sync_input_height_to_buttons(self, attempt: int = 0) -> None:
+        """使消息输入框像素高度与右侧「发送 + 清空」按钮列一致。"""
+        if attempt > 12:
+            return
+        try:
+            self.update_idletasks()
+            btn_h = int(self._btn_col.winfo_reqheight())
+            if btn_h <= 4:
+                self.after(40, lambda: self._sync_input_height_to_buttons(attempt + 1))
+                return
+            f = tkfont.Font(font=self.txt_input.cget("font"))
+            line_h = max(f.metrics("linespace"), 1)
+            border = 2 * int(float(self.txt_input.cget("borderwidth") or 0))
+            # 纵向滚动条占用少量高度，略减一行避免输入框偏高
+            lines = max(2, round((btn_h - border - 4) / line_h))
+            self.txt_input.configure(height=lines)
+        except tk.TclError:
+            pass
 
     def _on_input_return(self, event: tk.Event) -> str:
         self._on_send()
@@ -192,36 +227,58 @@ class AiAssistantFrame(ttk.Frame):
 
     def _append_chat_line(self, role: str, text: str) -> None:
         self.txt_chat.configure(state=tk.NORMAL)
-        prefix = {"user": "你：", "assistant": "助手：", "system": "", "error": "错误：", "status": ""}.get(role, "")
-        tag = role if role in ("user", "assistant", "system", "error", "status") else "assistant"
-        if prefix:
-            self.txt_chat.insert(END, prefix + "\n", (tag,))
-        self.txt_chat.insert(END, text.rstrip() + "\n\n", (tag,))
+        body = text.rstrip()
+        if role == "assistant":
+            self.txt_chat.insert(END, "助手：\n", ("assistant_label",))
+            if body:
+                append_simple_markdown(self.txt_chat, body + "\n")
+            self.txt_chat.insert(END, "\n")
+        else:
+            prefix = {"user": "你：", "system": "", "error": "错误：", "status": ""}.get(role, "")
+            tag = role if role in ("user", "system", "error", "status") else "user"
+            if prefix:
+                self.txt_chat.insert(END, prefix + "\n", (tag,))
+            if body:
+                self.txt_chat.insert(END, body + "\n\n", (tag,))
+            elif prefix:
+                self.txt_chat.insert(END, "\n")
         self.txt_chat.see(END)
         self.txt_chat.configure(state=tk.DISABLED)
 
     def _begin_assistant_stream(self) -> None:
         self._stream_body_start = None
+        self._stream_buffer = []
         self.txt_chat.configure(state=tk.NORMAL)
-        self.txt_chat.insert(END, "助手：\n", ("assistant",))
-        self._stream_body_start = self.txt_chat.index("end-1c")
+        self.txt_chat.insert(END, "助手：\n", ("assistant_label",))
+        self._stream_body_start = self.txt_chat.index(END)
         self.txt_chat.see(END)
         self.txt_chat.configure(state=tk.DISABLED)
 
     def _append_assistant_stream_delta(self, piece: str) -> None:
         if not piece:
             return
+        self._stream_buffer.append(piece)
+        # 流式阶段先显示纯文本，结束后统一 Markdown 渲染
         self.txt_chat.configure(state=tk.NORMAL)
-        self.txt_chat.insert(END, piece, ("assistant",))
+        self.txt_chat.insert(END, piece)
         self.txt_chat.see(END)
         self.txt_chat.configure(state=tk.DISABLED)
 
     def _end_assistant_stream(self) -> None:
         self.txt_chat.configure(state=tk.NORMAL)
-        self.txt_chat.insert(END, "\n\n", ("assistant",))
+        raw = "".join(self._stream_buffer)
+        if self._stream_body_start:
+            try:
+                self.txt_chat.delete(self._stream_body_start, END)
+            except tk.TclError:
+                pass
+            if raw.strip():
+                append_simple_markdown(self.txt_chat, raw.rstrip() + "\n")
+        self.txt_chat.insert(END, "\n")
         self.txt_chat.see(END)
         self.txt_chat.configure(state=tk.DISABLED)
         self._stream_body_start = None
+        self._stream_buffer = []
 
     def _on_clear_chat(self) -> None:
         if self._chat_worker and self._chat_worker.is_alive():
@@ -311,10 +368,7 @@ class AiAssistantFrame(ttk.Frame):
                     self.btn_send.configure(state=tk.NORMAL)
                 elif kind == "chat_fail":
                     if self._stream_body_start is not None:
-                        self.txt_chat.configure(state=tk.NORMAL)
-                        self.txt_chat.insert(END, "\n", ("assistant",))
-                        self.txt_chat.configure(state=tk.DISABLED)
-                        self._stream_body_start = None
+                        self._end_assistant_stream()
                     self._append_chat_line("error", str(payload))
                     self.lbl_status.configure(text="请求失败", bootstyle=DANGER)
                     self.btn_send.configure(state=tk.NORMAL)

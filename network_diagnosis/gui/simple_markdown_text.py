@@ -351,6 +351,10 @@ def append_simple_markdown(widget: tk.Text, md: str) -> None:
                 i = j
                 continue
 
+        if line.startswith("# "):
+            widget.insert(END, line[2:] + "\n", "md_h2")
+            i += 1
+            continue
         if line.startswith("## "):
             widget.insert(END, line[3:] + "\n", "md_h2")
             i += 1
