@@ -4,7 +4,7 @@
 `runner` / Markdown 报告 / GUI 标题等均应引用此变量，勿在其它文件手写版本字符串。
 """
 
-APP_VERSION = "2.1.6"
+APP_VERSION = "2.1.8"
 DESIGN_DOC_REF = "network-diagnostic-tool-design_v1.5"
 
 APP_DISPLAY_NAME = "青丘狐网络工作台"
@@ -13,6 +13,12 @@ WEBSITE_URL = "https://www.qingqiuhu.net"
 WEBSITE_DISPLAY = "www.qingqiuhu.net"
 COMMUNITY_URL = "https://www.pheks.com/community/"
 COMMUNITY_DISPLAY = "www.pheks.com/community/"
+GITCODE_REPO_URL = "https://gitcode.com/ibobcheung/qqhu_network_diagnosis.git"
+GITCODE_REPO_DISPLAY = "gitcode.com/ibobcheung/qqhu_network_diagnosis"
+GITEE_REPO_URL = "https://gitee.com/mrzed/qqhu_network_diagnosis.git"
+GITEE_REPO_DISPLAY = "gitee.com/mrzed/qqhu_network_diagnosis"
+GITHUB_REPO_URL = "https://github.com/UncleNiu-QingqiuHu/network_diagnosis.git"
+GITHUB_REPO_DISPLAY = "github.com/UncleNiu-QingqiuHu/network_diagnosis"
 AUTHOR_NAME = "Mr. Z"
 AUTHOR_EMAIL = "mr.zed@qq.com"
 AUTHOR_QQ_DISPLAY = "40061980"

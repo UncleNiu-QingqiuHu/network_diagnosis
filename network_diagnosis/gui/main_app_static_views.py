@@ -30,6 +30,12 @@ from network_diagnosis.version import (
     COMMUNITY_DISPLAY,
     COMMUNITY_URL,
     DESIGN_DOC_REF,
+    GITHUB_REPO_DISPLAY,
+    GITHUB_REPO_URL,
+    GITCODE_REPO_DISPLAY,
+    GITCODE_REPO_URL,
+    GITEE_REPO_DISPLAY,
+    GITEE_REPO_URL,
     WEBSITE_DISPLAY,
     WEBSITE_URL,
 )
@@ -682,6 +688,27 @@ class StaticViewsMixin:
         )
         community_lbl.grid(row=3, column=1, sticky=W, pady=(0, 8))
         community_lbl.bind("<Button-1>", lambda _e: webbrowser.open(COMMUNITY_URL))
+
+        def repo_link_row(r: int, key: str, display: str, url: str) -> None:
+            ttk.Label(
+                lf_ver,
+                text=key,
+                bootstyle=SECONDARY,
+                font=("Microsoft YaHei UI", 11),
+            ).grid(row=r, column=0, sticky=W, padx=(0, 12), pady=(0, 8))
+            lbl = tk.Label(
+                lf_ver,
+                text=display,
+                font=("Microsoft YaHei UI", 11, "underline"),
+                fg="#0b5ed7",
+                cursor="hand2",
+            )
+            lbl.grid(row=r, column=1, sticky=W, pady=(0, 8))
+            lbl.bind("<Button-1>", lambda _e, u=url: webbrowser.open(u))
+
+        repo_link_row(4, "GitCode", GITCODE_REPO_DISPLAY, GITCODE_REPO_URL)
+        repo_link_row(5, "Gitee", GITEE_REPO_DISPLAY, GITEE_REPO_URL)
+        repo_link_row(6, "GitHub", GITHUB_REPO_DISPLAY, GITHUB_REPO_URL)
 
         lf_intro = ttk.Labelframe(frm, text="简介", padding=(14, 12, 14, 12))
         lf_intro.grid(row=4, column=0, sticky=EW, pady=(0, 10))
