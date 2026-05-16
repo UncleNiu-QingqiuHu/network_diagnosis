@@ -48,6 +48,7 @@
 
 ## 界面截图
 
+![](./readmeimgs/PixPin_2026-05-16_23-10-17.png)
 ![](./readmeimgs/PixPin_2026-05-15_15-59-59.png)
 ![](./readmeimgs/PixPin_2026-05-15_16-01-08.png)
 ![](./readmeimgs/PixPin_2026-05-15_16-01-27.png)
