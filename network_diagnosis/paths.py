@@ -61,6 +61,33 @@ def ensure_logs_dir() -> Path:
     return d
 
 
+def user_config_dir() -> Path:
+    """用户可写配置目录（与 reports/logs 同级策略）。"""
+    if getattr(sys, "frozen", False):
+        base = Path(sys.executable).resolve().parent
+    else:
+        base = bundle_root()
+    d = base / "config"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def ai_assistant_config_path() -> Path:
+    """AI 助手大模型连接配置 JSON。"""
+    return user_config_dir() / "ai_assistant.json"
+
+
+def skills_root() -> Path:
+    """用户可编辑的 Agent Skills 目录（与 config/ 同级，可入库共享）。"""
+    if getattr(sys, "frozen", False):
+        base = Path(sys.executable).resolve().parent
+    else:
+        base = bundle_root()
+    d = base / "skills"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
 def refresh_catalog_icon_png() -> Path:
     """数据库诊断「刷新库列表」图标（PNG，矢量稿为 ``images/fa--refresh.svg``，Tk 无法直接加载 SVG）。"""
     return Path(__file__).resolve().parent / "images" / "fa--refresh.png"
@@ -81,6 +108,7 @@ def resolve_sidebar_nav_icon_png(module_key: str) -> Path | None:
         return None
 
     _names: dict[str, str] = {
+        "ai_assistant": "fluent--bot-28-filled.png",
         "network": "material-symbols--network-wifi.png",
         "subnet": "fluent--globe-12-filled.png",
         "switch": "streamline-ultimate--ethernet-port-bold.png",

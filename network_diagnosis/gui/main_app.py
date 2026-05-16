@@ -27,6 +27,7 @@ from ttkbootstrap.constants import (
     W,
 )
 
+from network_diagnosis.gui.ai_assistant_frame import AiAssistantFrame
 from network_diagnosis.gui.code_signing_frame import CodeSigningFrame
 from network_diagnosis.gui.ssl_certificate_frame import SslCertificateFrame
 from network_diagnosis.gui.db_diagnosis_frame import DbDiagnosisFrame
@@ -148,6 +149,7 @@ class NetworkDiagnosisApp(NetworkViewsMixin, SubnetViewsMixin, StaticViewsMixin,
         self._sidebar_btn_by_module: dict[str, ttk.Button] = {}
         self._sidebar_nav_photos: list[tk.PhotoImage] = []
         nav_items: list[tuple[str, str]] = [
+            ("ai_assistant", "AI助手"),
             ("network", "网络诊断"),
             ("subnet", "子网计算"),
             ("switch", "交换机配置"),
@@ -201,6 +203,9 @@ class NetworkDiagnosisApp(NetworkViewsMixin, SubnetViewsMixin, StaticViewsMixin,
 
         self._view_frames: dict[str, ttk.Frame] = {}
 
+        self._ai_assistant = AiAssistantFrame(self._content_host, app=self)
+        self._view_frames["ai_assistant"] = self._ai_assistant
+
         self._build_network_diagnosis_view()
 
         self.after(200, self._poll_queue)
@@ -220,7 +225,7 @@ class NetworkDiagnosisApp(NetworkViewsMixin, SubnetViewsMixin, StaticViewsMixin,
         self._view_frames["ssl_cert"] = self._ssl_certificate
 
         self._active_module: str | None = None
-        self._select_module("network")
+        self._select_module("ai_assistant")
         self.after_idle(self._finish_startup_display)
 
     def _finish_startup_display(self) -> None:

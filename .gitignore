@@ -48,3 +48,4 @@ __main__.*
 *.egg-info/
 # 本地 Nuitka 封装脚本（不入库；自行在 `scripts/` 下维护）
 scripts/build-nuitka-standalone.ps1
+config/
