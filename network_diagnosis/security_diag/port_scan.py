@@ -51,7 +51,7 @@ _TCP_SCAN_PRESETS: dict[str, list[int]] = {
     "database": [1433, 1521, 3306, 5432, 6379, 27017, 9200],
 }
 
-_MAX_PORTS = 2048
+_MAX_PORTS = 65535
 _MIN_WORKERS = 1
 _MAX_WORKERS = 200
 _DEFAULT_WORKERS = 50
@@ -113,6 +113,26 @@ def _sanitize_banner(raw: bytes, *, limit: int = 240) -> str:
     s = s.replace("|", "｜")
     s = re.sub(r"\s+", " ", s).strip()
     return s[:limit] if s else ""
+
+
+def _nmap_port_list_arg(ports: list[int]) -> str:
+    """将已排序端口列表转为 ``nmap -p`` 参数，用区间压缩以控制命令行长度。"""
+    if not ports:
+        return ""
+    if len(ports) == 1:
+        return str(ports[0])
+    if ports[-1] - ports[0] + 1 == len(ports):
+        return f"{ports[0]}-{ports[-1]}"
+    parts: list[str] = []
+    lo = hi = ports[0]
+    for p in ports[1:]:
+        if p == hi + 1:
+            hi = p
+        else:
+            parts.append(f"{lo}-{hi}" if lo != hi else str(lo))
+            lo = hi = p
+    parts.append(f"{lo}-{hi}" if lo != hi else str(lo))
+    return ",".join(parts)
 
 
 def parse_tcp_ports_spec(spec: str) -> list[int]:
@@ -280,8 +300,8 @@ def _scan_tcp_nmap(
     nmap_exe: str,
 ) -> tuple[list[tuple[int, str, str]], str]:
     """返回 ([(port, state, fingerprint)], raw_xml_or_empty)。"""
-    port_arg = ",".join(str(p) for p in ports)
-    host_timeout = min(180, max(45, 30 + len(ports) // 5))
+    port_arg = _nmap_port_list_arg(ports)
+    host_timeout = min(3600, max(45, 30 + len(ports) // 5))
     cmd = [
         nmap_exe,
         "-sT",
@@ -294,7 +314,8 @@ def _scan_tcp_nmap(
         f"{host_timeout}s",
         ip,
     ]
-    kwargs: dict[str, object] = dict(capture_output=True, timeout=min(300, 90 + len(ports) // 3))
+    proc_timeout = min(7200, max(300, 90 + len(ports) // 4))
+    kwargs: dict[str, object] = dict(capture_output=True, timeout=proc_timeout)
     if sys.platform == "win32":
         kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW  # type: ignore[attr-defined]
     try:
