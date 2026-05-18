@@ -29,9 +29,9 @@ from ttkbootstrap.constants import (
 
 from network_diagnosis.gui.ai_assistant_frame import AiAssistantFrame
 from network_diagnosis.gui.code_signing_frame import CodeSigningFrame
-from network_diagnosis.gui.ssl_certificate_frame import SslCertificateFrame
 from network_diagnosis.gui.db_diagnosis_frame import DbDiagnosisFrame
 from network_diagnosis.gui.intranet_arp_frame import IntranetArpMonitorFrame
+from network_diagnosis.gui.ip_scan_frame import IpScanFrame
 from network_diagnosis.gui.main_app_common import parse_ports, scaled_photo_from_png, try_set_window_icon
 from network_diagnosis.gui.main_app_network_views import NetworkViewsMixin
 from network_diagnosis.gui.main_app_report_text import (
@@ -56,6 +56,7 @@ from network_diagnosis.gui.main_app_report_text import (
 from network_diagnosis.gui.main_app_static_views import StaticViewsMixin
 from network_diagnosis.gui.main_app_subnet_views import SubnetViewsMixin
 from network_diagnosis.gui.security_diagnosis_frame import SecurityDiagnosisFrame
+from network_diagnosis.gui.ssl_certificate_frame import SslCertificateFrame
 from network_diagnosis.gui.switch_console_frame import SwitchConsoleFrame
 from network_diagnosis.model.report import DiagnosticReport
 from network_diagnosis.paths import (
@@ -69,8 +70,8 @@ from network_diagnosis.runner import RunOptions, run_diagnostic
 from network_diagnosis.runtime_log import get_logger, setup_runtime_logging
 from network_diagnosis.update_check import (
     GITHUB_RELEASES_WEB,
-    GithubLatestReleaseInfo,
     NETWORK_FAILURE_HINT,
+    GithubLatestReleaseInfo,
     fetch_latest_release_info,
 )
 from network_diagnosis.version import APP_DISPLAY_NAME, APP_VERSION, AUTHOR_SUMMARY
@@ -152,6 +153,7 @@ class NetworkDiagnosisApp(NetworkViewsMixin, SubnetViewsMixin, StaticViewsMixin,
             ("ai_assistant", "AI助手"),
             ("network", "网络诊断"),
             ("subnet", "子网计算"),
+            ("ip_scan", "IP扫描"),
             ("switch", "交换机配置"),
             ("database", "数据库诊断"),
             ("arp_intranet", "ARP安全"),
@@ -211,6 +213,8 @@ class NetworkDiagnosisApp(NetworkViewsMixin, SubnetViewsMixin, StaticViewsMixin,
         self.after(200, self._poll_queue)
 
         self._build_subnet_view()
+        self._ip_scan = IpScanFrame(self._content_host)
+        self._view_frames["ip_scan"] = self._ip_scan
         self._switch_console = SwitchConsoleFrame(self._content_host)
         self._view_frames["switch"] = self._switch_console
         self._db_diagnosis = DbDiagnosisFrame(self._content_host)

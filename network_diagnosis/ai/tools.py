@@ -97,7 +97,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "name": "navigate_module",
             "description": (
                 "切换到工作台左侧某一功能页，便于用户查看图形界面或手动操作。"
-                "module_key: ai_assistant, network, subnet, switch, database, arp_intranet, "
+                "module_key: ai_assistant, network, subnet, ip_scan, switch, database, arp_intranet, "
                 "security, code_sign, ssl_cert, guide, about, license"
             ),
             "parameters": {
@@ -116,6 +116,7 @@ _MODULE_LABELS: dict[str, str] = {
     "ai_assistant": "AI助手",
     "network": "网络诊断",
     "subnet": "子网计算",
+    "ip_scan": "IP扫描",
     "switch": "交换机配置",
     "database": "数据库诊断",
     "arp_intranet": "ARP安全",
