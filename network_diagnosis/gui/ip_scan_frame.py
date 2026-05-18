@@ -17,6 +17,14 @@ from network_diagnosis.runtime_log import get_logger
 
 _log = get_logger(__name__)
 
+# 状态列：实心圆 ● / 空心圆 ○（字形易区分）；行前景色再用主题绿/红强化在线/离线
+_STATUS_ONLINE_DISP = "\u25cf 在线"
+_STATUS_OFFLINE_DISP = "\u25cb 离线"
+
+# 扫描表格固定列宽（像素）；IPv4 列随容器宽度在 _sync_scan_tree_columns 中计算
+_TREE_COL_ALIVE_W = 132
+_TREE_COL_RTT_W = 120
+
 
 class IpScanFrame(ttk.Frame):
     def __init__(self, master: tk.Misc, **kwargs) -> None:
@@ -32,22 +40,40 @@ class IpScanFrame(ttk.Frame):
         if self._worker is not None and self._worker.is_alive():
             self._cancel_event.set()
 
+    def on_show(self) -> None:
+        """首次显示前 Panedwindow 宽度常为 0，延迟执行的 sash 易失效；切换回本页时再居中一次。"""
+        self.update_idletasks()
+        self.after_idle(lambda: self._init_ip_scan_sash(0))
+        self.after(120, lambda: self._init_ip_scan_sash(0))
+
     def _build_ui(self) -> None:
         self.rowconfigure(0, weight=1)
-        self.columnconfigure(0, weight=0, minsize=340)
-        self.columnconfigure(1, weight=1)
+        self.columnconfigure(0, weight=1)
 
-        frm_ops = ttk.Frame(self, padding=(14, 12, 8, 12))
-        frm_ops.grid(row=0, column=0, sticky=NSEW)
+        pw = ttk.Panedwindow(self, orient=tk.HORIZONTAL)
+        pw.grid(row=0, column=0, sticky=NSEW)
+        self._pw_ip_scan = pw
+
+        frm_ops = ttk.Frame(pw, padding=(14, 14, 8, 14))
+        frm_out = ttk.Frame(pw, padding=(8, 14, 14, 14))
+        self._frm_ops_pane = frm_ops
+        self._frm_out_pane = frm_out
+        pw.add(frm_ops, weight=1)
+        pw.add(frm_out, weight=1)
+        try:
+            pw.pane(frm_ops, weight=1)
+            pw.pane(frm_out, weight=1)
+        except tk.TclError:
+            pass
+
         frm_ops.columnconfigure(0, weight=1)
 
-        frm_out = ttk.Frame(self, padding=(8, 12, 14, 12))
-        frm_out.grid(row=0, column=1, sticky=NSEW)
         frm_out.rowconfigure(1, weight=1)
         frm_out.columnconfigure(0, weight=1)
 
         hint = ttk.Labelframe(frm_ops, text="合规提示", bootstyle=WARNING, padding=(10, 10, 10, 8))
         hint.grid(row=0, column=0, sticky=EW)
+        hint.columnconfigure(0, weight=1)
         hint_msg = (
             "向一段 IPv4 地址发送 ICMP 可能被安全设备记录；请在 **已获得授权** 的内网或测试环境中使用。\n"
             "本页默认排除典型以太网前缀下的网络地址与广播地址（与子网计算的可用主机语义一致）；"
@@ -56,7 +82,8 @@ class IpScanFrame(ttk.Frame):
         txt_hint = tk.Text(
             hint,
             wrap=tk.WORD,
-            height=5,
+            width=36,
+            height=6,
             relief=tk.FLAT,
             padx=4,
             pady=4,
@@ -138,14 +165,13 @@ class IpScanFrame(ttk.Frame):
         ttk.Button(btn_row2, text="清空表格", command=self._clear_grid, bootstyle=SECONDARY).pack(
             side=LEFT, padx=(0, 8)
         )
-        ttk.Button(btn_row2, text="导出 CSV…", command=self._export_csv, bootstyle=SECONDARY).pack(side=LEFT)
-
-        btn_row3 = ttk.Frame(frm_ops)
-        btn_row3.grid(row=4, column=0, sticky=EW, pady=(8, 0))
-        ttk.Button(btn_row3, text="复制在线列表", command=self._copy_alive, bootstyle=SECONDARY).pack(side=LEFT)
+        ttk.Button(btn_row2, text="导出 CSV…", command=self._export_csv, bootstyle=SECONDARY).pack(
+            side=LEFT, padx=(0, 8)
+        )
+        ttk.Button(btn_row2, text="复制在线列表", command=self._copy_alive, bootstyle=SECONDARY).pack(side=LEFT)
 
         self.lbl_status = ttk.Label(frm_ops, text="就绪。", bootstyle=INFO)
-        self.lbl_status.grid(row=5, column=0, sticky=EW, pady=(14, 0))
+        self.lbl_status.grid(row=4, column=0, sticky=EW, pady=(14, 0))
 
         hdr = ttk.Label(frm_out, text="扫描结果", font=("Microsoft YaHei UI", 12, "bold"))
         hdr.grid(row=0, column=0, sticky=W, pady=(0, 8))
@@ -154,35 +180,85 @@ class IpScanFrame(ttk.Frame):
         wrap.grid(row=1, column=0, sticky=NSEW)
         wrap.rowconfigure(0, weight=1)
         wrap.columnconfigure(0, weight=1)
+        self._scan_wrap = wrap
 
         cols = ("ip", "alive", "rtt")
         self.tree = ttk.Treeview(wrap, columns=cols, show="headings", height=22, selectmode=tk.BROWSE)
         self.tree.heading("ip", text="IPv4 地址")
         self.tree.heading("alive", text="状态")
         self.tree.heading("rtt", text="RTT (ms)")
-        self.tree.column("ip", width=160, anchor=tk.W)
-        self.tree.column("alive", width=80, anchor=tk.CENTER)
-        self.tree.column("rtt", width=100, anchor=tk.CENTER)
+        # 初始宽度占位；真实宽度在 _sync_scan_tree_columns 中按容器裁定（避免列宽总和超出可视区域）
+        self.tree.column("ip", width=260, anchor=tk.W, stretch=False)
+        self.tree.column("alive", width=_TREE_COL_ALIVE_W, anchor=tk.CENTER, stretch=False)
+        self.tree.column("rtt", width=_TREE_COL_RTT_W, anchor=tk.CENTER, stretch=False)
 
         scroll_y = ttk.Scrollbar(wrap, orient=VERTICAL, command=self.tree.yview)
+        self._scan_scroll_y = scroll_y
         self.tree.configure(yscrollcommand=scroll_y.set)
         self.tree.grid(row=0, column=0, sticky=NSEW)
         scroll_y.grid(row=0, column=1, sticky="ns")
 
+        wrap.bind("<Configure>", self._sync_scan_tree_columns)
+
         try:
             style = ttk.Style()
-            ok_col = getattr(style.colors, "success", "#2aa198")
-            bad_col = getattr(style.colors, "secondary", "#586e75")
+            tc = style.colors
+            ok_col = getattr(tc, "success", "#2aa198")
+            bad_col = getattr(tc, "danger", "#cb4b16")
             self.tree.tag_configure("alive", foreground=ok_col)
             self.tree.tag_configure("dead", foreground=bad_col)
         except tk.TclError:
             self.tree.tag_configure("alive", foreground="#2aa198")
-            self.tree.tag_configure("dead", foreground="#586e75")
+            self.tree.tag_configure("dead", foreground="#dc322f")
 
         self.lbl_summary = ttk.Label(frm_out, text="", bootstyle=SECONDARY)
         self.lbl_summary.grid(row=2, column=0, sticky=W, pady=(10, 0))
 
+        self.after_idle(self._sync_scan_tree_columns)
+        self.after(180, self._init_ip_scan_sash)
+
         self._apply_busy(False)
+
+    def _init_ip_scan_sash(self, attempt: int = 0) -> None:
+        """左右约 1:1；与子网计算页 Panedwindow 行为一致。"""
+        if attempt > 40:
+            return
+        try:
+            self.update_idletasks()
+            pw = self._pw_ip_scan
+            w = pw.winfo_width()
+            if w <= 80:
+                self.after(80, lambda a=attempt + 1: self._init_ip_scan_sash(a))
+                return
+            half = max(w // 2, 120)
+            pw.sashpos(0, half)
+        except tk.TclError:
+            pass
+        self.after_idle(self._sync_scan_tree_columns)
+
+    def _sync_scan_tree_columns(self, event: tk.Event | None = None) -> None:
+        """按右侧容器宽度裁定 IPv4 列宽，避免 Treeview 列总宽超出可视区域导致显示错乱。"""
+        if event is not None and event.widget is not self._scan_wrap:
+            return
+        try:
+            ww = self._scan_wrap.winfo_width()
+        except tk.TclError:
+            return
+        if ww <= 48:
+            return
+        try:
+            sb_w = max(int(self._scan_scroll_y.winfo_width()), 16)
+        except tk.TclError:
+            sb_w = 18
+        inner = max(ww - sb_w - 12, 160)
+        sep_gutter = 28
+        ip_w = max(140, inner - _TREE_COL_ALIVE_W - _TREE_COL_RTT_W - sep_gutter)
+        try:
+            self.tree.column("alive", width=_TREE_COL_ALIVE_W)
+            self.tree.column("rtt", width=_TREE_COL_RTT_W)
+            self.tree.column("ip", width=int(ip_w))
+        except tk.TclError:
+            pass
 
     def _apply_busy(self, busy: bool) -> None:
         self._busy = busy
@@ -205,7 +281,7 @@ class IpScanFrame(ttk.Frame):
         lines: list[str] = []
         for iid in self.tree.get_children():
             ip, alive, _rtt = self.tree.item(iid, "values")
-            if alive == "在线":
+            if str(alive).endswith("在线"):
                 lines.append(str(ip))
         if not lines:
             messagebox.showinfo("IP 扫描", "当前没有「在线」地址可复制。", parent=self)
@@ -237,7 +313,8 @@ class IpScanFrame(ttk.Frame):
                 w = csv.writer(f)
                 w.writerow(["IPv4", "状态", "RTT_ms"])
                 for ip, alive, rtt in rows:
-                    w.writerow([ip, alive, rtt])
+                    plain = "离线" if str(alive).endswith("离线") else "在线"
+                    w.writerow([ip, plain, rtt])
         except OSError as e:
             messagebox.showerror("IP 扫描", f"写入失败：{e}", parent=self)
             return
@@ -325,7 +402,7 @@ class IpScanFrame(ttk.Frame):
                 if kind == "row":
                     ip, alive, rtt = rest[0], rest[1], rest[2]
                     tag = "alive" if alive else "dead"
-                    st = "在线" if alive else "离线"
+                    st = _STATUS_ONLINE_DISP if alive else _STATUS_OFFLINE_DISP
                     rtt_s = "" if rtt is None else f"{rtt:.0f}"
                     self.tree.insert("", END, values=(ip, st, rtt_s), tags=(tag,))
                 elif kind == "prog":

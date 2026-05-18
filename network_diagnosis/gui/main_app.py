@@ -392,6 +392,9 @@ class NetworkDiagnosisApp(NetworkViewsMixin, SubnetViewsMixin, StaticViewsMixin,
         fr_new = self._view_frames.get(module_key)
         if fr_new is not None:
             fr_new.grid(row=0, column=0, sticky=NSEW)
+            shown = getattr(fr_new, "on_show", None)
+            if callable(shown):
+                shown()
         _log.info("切换导航模块 %s -> %s", prev, module_key)
 
     def _configure_sidebar_nav_styles(self) -> None:
