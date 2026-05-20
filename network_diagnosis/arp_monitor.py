@@ -65,10 +65,15 @@ def run_arp_a_text() -> tuple[str, str | None]:
 
 def parse_arp_entries(arp_text: str) -> dict[str, str]:
     """IP → 规范化 MAC。"""
-    out: dict[str, str] = {}
+    return {ip: mac for ip, (mac, _typ) in parse_arp_entries_full(arp_text).items()}
+
+
+def parse_arp_entries_full(arp_text: str) -> dict[str, tuple[str, str]]:
+    """IP → (规范化 MAC, ARP 类型列如 dynamic/static)。"""
+    out: dict[str, tuple[str, str]] = {}
     for m in _MAC_RE.finditer(arp_text):
-        ip_s, mac_s, _typ = m.group(1), m.group(2), m.group(3)
-        out[ip_s.strip()] = normalize_mac(mac_s)
+        ip_s, mac_s, typ = m.group(1), m.group(2), m.group(3)
+        out[ip_s.strip()] = (normalize_mac(mac_s), typ.strip().lower())
     return out
 
 

@@ -112,6 +112,7 @@ def resolve_sidebar_nav_icon_png(module_key: str) -> Path | None:
         "network": "material-symbols--network-wifi.png",
         "subnet": "fluent--globe-12-filled.png",
         "ip_scan": "streamline-flex--iris-scan-solid.png",
+        "mac_scan": "icon-park-solid--i-mac.png",
         "switch": "streamline-ultimate--ethernet-port-bold.png",
         "database": "teenyicons--database-solid.png",
         "arp_intranet": "ion--shield-checkmark.png",

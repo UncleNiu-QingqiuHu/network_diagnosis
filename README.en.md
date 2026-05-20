@@ -16,6 +16,8 @@ The main window uses a left-hand navigation rail with the following modules:
 |--------|-------------|
 | **Network diagnostics** | Dual output: operator-friendly GUI summary plus a full **Markdown** technical report per run (same underlying model). |
 | **Subnet calculator** | IPv4 CIDR / dotted-mask math; refresh local IPv4, gateway, DNS, and public IP hints. |
+| **IP scan** | ICMP liveness for an IPv4 CIDR/range; sorted results, search, CSV export. |
+| **MAC scan** | **Local subnet only**: ICMP + `arp -a` for IP/MAC/vendor/remarks; optional hostname resolution. See [`docs/mac-scan-design.md`](docs/mac-scan-design.md). |
 | **Switch console** | Serial console or **SSH (PTY)**; SSH host keys land under the writable `switch_console/` tree. |
 | **Database diagnostics** | **SQLite / MySQL / PostgreSQL / SQL Server / Oracle** connectivity and inventory-style checks, Markdown output; scheduled monitoring snapshots. |
 | **ARP security** | Poll `arp -a`, baseline the **default gateway MAC**, and warn on suspicious drift (lightweight LAN-side watch). |

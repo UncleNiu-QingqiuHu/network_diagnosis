@@ -17,6 +17,8 @@
 | **AI助手** | 自然语言对话驱动本机能力：大模型配置、流式回复、Markdown 渲染、**Skills** 扩展；可自动执行网络诊断、子网计算、数据库诊断等（详见 [`docs/ai-assistant.md`](docs/ai-assistant.md)）。 |
 | **网络诊断** | 双输出：面向非技术用户的 GUI 摘要 + 每次任务一份完整 **Markdown** 技术报告（同源数据模型）。 |
 | **子网计算** | IPv4 CIDR / 点分掩码计算；可刷新本机 IPv4、网关、DNS 与公网地址参考信息。 |
+| **IP 扫描** | 指定 IPv4 网段/范围 ICMP 存活探测；结果按 IP 排序，支持搜索与 CSV 导出。 |
+| **MAC 扫描** | **仅本机所在网段**：ICMP + `arp -a` 展示 IP/MAC/厂商/备注；可选计算机名解析。详见 [`docs/mac-scan-design.md`](docs/mac-scan-design.md)。 |
 | **交换机配置** | 串口 Console 或 **SSH（PTY）** 会话；SSH 未知主机密钥写入可写目录下的 `switch_console/`。 |
 | **数据库诊断** | 连接 **SQLite / MySQL / PostgreSQL / SQL Server / Oracle**，运行连通性与信息收集，输出 Markdown；支持周期性监控快照导出。 |
 | **ARP 安全** | 以 `arp -a` 轮询本机 ARP 表，对**默认网关 MAC** 做基线对比；异常变化时提示疑似 ARP 欺骗（内网侧轻量监视）。 |
