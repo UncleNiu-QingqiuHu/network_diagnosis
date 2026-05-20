@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import ipaddress
 import queue
 import threading
 import tkinter as tk
@@ -33,6 +34,8 @@ class IpScanFrame(ttk.Frame):
         self._busy = False
         self._worker: threading.Thread | None = None
         self._cancel_event = threading.Event()
+        self._scan_data: dict[str, tuple[bool, float | None]] = {}
+        self._tree_refresh_after_id: str | None = None
         self._build_ui()
         self.after(180, self._poll_queue)
 
@@ -68,7 +71,7 @@ class IpScanFrame(ttk.Frame):
 
         frm_ops.columnconfigure(0, weight=1)
 
-        frm_out.rowconfigure(1, weight=1)
+        frm_out.rowconfigure(2, weight=1)
         frm_out.columnconfigure(0, weight=1)
 
         hint = ttk.Labelframe(frm_ops, text="合规提示", bootstyle=WARNING, padding=(10, 10, 10, 8))
@@ -176,8 +179,20 @@ class IpScanFrame(ttk.Frame):
         hdr = ttk.Label(frm_out, text="扫描结果", font=("Microsoft YaHei UI", 12, "bold"))
         hdr.grid(row=0, column=0, sticky=W, pady=(0, 8))
 
+        search_row = ttk.Frame(frm_out)
+        search_row.grid(row=1, column=0, sticky=EW, pady=(0, 8))
+        search_row.columnconfigure(1, weight=1)
+        ttk.Label(search_row, text="搜索").grid(row=0, column=0, sticky=W)
+        self.var_search = tk.StringVar()
+        ent_search = ttk.Entry(search_row, textvariable=self.var_search)
+        ent_search.grid(row=0, column=1, sticky=EW, padx=(8, 8))
+        ent_search.bind("<KeyRelease>", self._on_search_changed)
+        ttk.Button(search_row, text="清空", command=self._clear_search, bootstyle=SECONDARY).grid(
+            row=0, column=2, sticky=W
+        )
+
         wrap = ttk.Frame(frm_out)
-        wrap.grid(row=1, column=0, sticky=NSEW)
+        wrap.grid(row=2, column=0, sticky=NSEW)
         wrap.rowconfigure(0, weight=1)
         wrap.columnconfigure(0, weight=1)
         self._scan_wrap = wrap
@@ -212,7 +227,7 @@ class IpScanFrame(ttk.Frame):
             self.tree.tag_configure("dead", foreground="#dc322f")
 
         self.lbl_summary = ttk.Label(frm_out, text="", bootstyle=SECONDARY)
-        self.lbl_summary.grid(row=2, column=0, sticky=W, pady=(10, 0))
+        self.lbl_summary.grid(row=3, column=0, sticky=W, pady=(10, 0))
 
         self.after_idle(self._sync_scan_tree_columns)
         self.after(180, self._init_ip_scan_sash)
@@ -269,20 +284,84 @@ class IpScanFrame(ttk.Frame):
             self.btn_start.configure(state=tk.NORMAL)
             self.btn_stop.configure(state=tk.DISABLED)
 
+    def _ip_sort_key(self, ip: str) -> int:
+        return int(ipaddress.ip_address(ip))
+
+    def _cancel_tree_refresh(self) -> None:
+        if self._tree_refresh_after_id is not None:
+            try:
+                self.after_cancel(self._tree_refresh_after_id)
+            except tk.TclError:
+                pass
+            self._tree_refresh_after_id = None
+
+    def _schedule_tree_refresh(self, *, immediate: bool = False) -> None:
+        if immediate:
+            self._cancel_tree_refresh()
+            self._refresh_scan_tree()
+            return
+        if self._tree_refresh_after_id is not None:
+            return
+        self._tree_refresh_after_id = self.after(120, self._run_scheduled_tree_refresh)
+
+    def _run_scheduled_tree_refresh(self) -> None:
+        self._tree_refresh_after_id = None
+        self._refresh_scan_tree()
+
+    def _summary_without_filter_hint(self) -> str:
+        text = self.lbl_summary.cget("text")
+        marker = "　显示 "
+        if marker in text:
+            return text.rsplit(marker, 1)[0]
+        return text
+
+    def _refresh_scan_tree(self) -> None:
+        needle = self.var_search.get().strip().lower()
+        for iid in self.tree.get_children():
+            self.tree.delete(iid)
+        shown = 0
+        for ip in sorted(self._scan_data.keys(), key=self._ip_sort_key):
+            if needle and needle not in ip.lower():
+                continue
+            alive, rtt = self._scan_data[ip]
+            tag = "alive" if alive else "dead"
+            st = _STATUS_ONLINE_DISP if alive else _STATUS_OFFLINE_DISP
+            rtt_s = "" if rtt is None else f"{rtt:.0f}"
+            self.tree.insert("", END, values=(ip, st, rtt_s), tags=(tag,))
+            shown += 1
+        total = len(self._scan_data)
+        core = self._summary_without_filter_hint()
+        if needle and total:
+            self.lbl_summary.configure(text=f"{core}　显示 {shown}/{total}")
+        elif "　显示 " in self.lbl_summary.cget("text"):
+            self.lbl_summary.configure(text=core)
+
+    def _on_search_changed(self, _event: tk.Event | None = None) -> None:
+        if not self._scan_data:
+            return
+        self._schedule_tree_refresh(immediate=True)
+
+    def _clear_search(self) -> None:
+        self.var_search.set("")
+        if self._scan_data:
+            self._schedule_tree_refresh(immediate=True)
+
     def _clear_grid(self) -> None:
         if self._busy:
             messagebox.showinfo("IP 扫描", "扫描进行中，请稍候或先停止。", parent=self)
             return
+        self._cancel_tree_refresh()
+        self._scan_data.clear()
         for iid in self.tree.get_children():
             self.tree.delete(iid)
         self.lbl_summary.configure(text="")
 
     def _copy_alive(self) -> None:
         lines: list[str] = []
-        for iid in self.tree.get_children():
-            ip, alive, _rtt = self.tree.item(iid, "values")
-            if str(alive).endswith("在线"):
-                lines.append(str(ip))
+        for ip in sorted(self._scan_data.keys(), key=self._ip_sort_key):
+            alive, _rtt = self._scan_data[ip]
+            if alive:
+                lines.append(ip)
         if not lines:
             messagebox.showinfo("IP 扫描", "当前没有「在线」地址可复制。", parent=self)
             return
@@ -296,10 +375,15 @@ class IpScanFrame(ttk.Frame):
         messagebox.showinfo("IP 扫描", f"已复制 {len(lines)} 条在线地址到剪贴板。", parent=self)
 
     def _export_csv(self) -> None:
-        rows = [self.tree.item(iid, "values") for iid in self.tree.get_children()]
-        if not rows:
+        if not self._scan_data:
             messagebox.showinfo("IP 扫描", "表格为空。", parent=self)
             return
+        rows: list[tuple[str, str, str]] = []
+        for ip in sorted(self._scan_data.keys(), key=self._ip_sort_key):
+            alive, rtt = self._scan_data[ip]
+            plain = "在线" if alive else "离线"
+            rtt_s = "" if rtt is None else f"{rtt:.0f}"
+            rows.append((ip, plain, rtt_s))
         path = filedialog.asksaveasfilename(
             parent=self,
             title="导出 CSV",
@@ -312,8 +396,7 @@ class IpScanFrame(ttk.Frame):
             with open(path, "w", newline="", encoding="utf-8-sig") as f:
                 w = csv.writer(f)
                 w.writerow(["IPv4", "状态", "RTT_ms"])
-                for ip, alive, rtt in rows:
-                    plain = "离线" if str(alive).endswith("离线") else "在线"
+                for ip, plain, rtt in rows:
                     w.writerow([ip, plain, rtt])
         except OSError as e:
             messagebox.showerror("IP 扫描", f"写入失败：{e}", parent=self)
@@ -368,6 +451,8 @@ class IpScanFrame(ttk.Frame):
             messagebox.showwarning("IP 扫描", str(e), parent=self)
             return
 
+        self._cancel_tree_refresh()
+        self._scan_data.clear()
         for iid in self.tree.get_children():
             self.tree.delete(iid)
 
@@ -401,10 +486,8 @@ class IpScanFrame(ttk.Frame):
                 kind, *rest = self._q.get_nowait()
                 if kind == "row":
                     ip, alive, rtt = rest[0], rest[1], rest[2]
-                    tag = "alive" if alive else "dead"
-                    st = _STATUS_ONLINE_DISP if alive else _STATUS_OFFLINE_DISP
-                    rtt_s = "" if rtt is None else f"{rtt:.0f}"
-                    self.tree.insert("", END, values=(ip, st, rtt_s), tags=(tag,))
+                    self._scan_data[str(ip)] = (bool(alive), rtt if rtt is None else float(rtt))
+                    self._schedule_tree_refresh()
                 elif kind == "prog":
                     done, total = int(rest[0]), int(rest[1])
                     self.lbl_status.configure(text=f"扫描中… {done}/{total}")
@@ -419,13 +502,14 @@ class IpScanFrame(ttk.Frame):
                     self._apply_busy(False)
                     self._worker = None
                     if cancelled:
-                        n_done = len(self.tree.get_children())
+                        n_done = len(self._scan_data)
                         self.lbl_status.configure(
                             text=f"已中止：已记录 {n_done} 条结果（其中在线 {alive_total}）。"
                         )
                     else:
                         self.lbl_status.configure(text=f"完成。在线 {alive_total} / {total}")
                     self.lbl_summary.configure(text=f"范围摘要：{summary_text}　在线 {alive_total}/{total}")
+                    self._schedule_tree_refresh(immediate=True)
                     _log.info("IP 扫描结束 alive=%s total=%s cancelled=%s", alive_total, total, cancelled)
                 elif kind == "error":
                     self._busy = False
