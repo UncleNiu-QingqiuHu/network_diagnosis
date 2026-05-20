@@ -68,26 +68,29 @@ class MacScanFrame(ttk.Frame):
         self.rowconfigure(0, weight=1)
         self.columnconfigure(0, weight=1)
 
-        pw = ttk.Panedwindow(self, orient=tk.HORIZONTAL)
+        # 上下分栏：上方参数区、下方结果表占满宽度（多列不易挤）
+        pw = ttk.Panedwindow(self, orient=tk.VERTICAL)
         pw.grid(row=0, column=0, sticky=NSEW)
         self._pw_mac_scan = pw
 
-        frm_ops = ttk.Frame(pw, padding=(14, 14, 8, 14))
-        frm_out = ttk.Frame(pw, padding=(8, 14, 14, 14))
-        pw.add(frm_ops, weight=1)
+        frm_ops = ttk.Frame(pw, padding=(14, 12, 14, 8))
+        frm_out = ttk.Frame(pw, padding=(14, 8, 14, 14))
+        pw.add(frm_ops, weight=0)
         pw.add(frm_out, weight=1)
         try:
-            pw.pane(frm_ops, weight=1)
+            pw.pane(frm_ops, weight=0)
             pw.pane(frm_out, weight=1)
         except tk.TclError:
             pass
 
-        frm_ops.columnconfigure(0, weight=1)
+        frm_ops.columnconfigure(0, weight=2)
+        frm_ops.columnconfigure(1, weight=3)
+        frm_ops.rowconfigure(0, weight=1)
         frm_out.rowconfigure(2, weight=1)
         frm_out.columnconfigure(0, weight=1)
 
         hint = ttk.Labelframe(frm_ops, text="合规提示", bootstyle=WARNING, padding=(10, 10, 10, 8))
-        hint.grid(row=0, column=0, sticky=EW)
+        hint.grid(row=0, column=0, sticky=NSEW, padx=(0, 10))
         hint.columnconfigure(0, weight=1)
         hint_msg = (
             "批量 ICMP 与读取本机 **ARP 表** 可能被安全设备记录；请在 **已获得授权** 的内网或测试环境中使用。\n"
@@ -96,8 +99,8 @@ class MacScanFrame(ttk.Frame):
         txt_hint = tk.Text(
             hint,
             wrap=tk.WORD,
-            width=36,
-            height=5,
+            width=28,
+            height=4,
             relief=tk.FLAT,
             padx=4,
             pady=4,
@@ -107,7 +110,7 @@ class MacScanFrame(ttk.Frame):
             borderwidth=0,
             takefocus=False,
         )
-        txt_hint.grid(row=0, column=0, sticky=EW)
+        txt_hint.grid(row=0, column=0, sticky=NSEW)
         configure_simple_markdown_tags(
             txt_hint,
             base_font=("Microsoft YaHei UI", 10),
@@ -118,21 +121,43 @@ class MacScanFrame(ttk.Frame):
         txt_hint.configure(state=tk.DISABLED)
 
         lf = ttk.Labelframe(frm_ops, text="扫描参数", padding=(12, 10, 12, 10))
-        lf.grid(row=1, column=0, sticky=EW, pady=(12, 0))
+        lf.grid(row=0, column=1, sticky=NSEW)
         lf.columnconfigure(1, weight=1)
 
         ttk.Label(lf, text="范围").grid(row=0, column=0, sticky=W, pady=(0, 6))
         self.var_range = tk.StringVar(value="192.168.1.0/24")
-        ttk.Entry(lf, textvariable=self.var_range).grid(row=0, column=1, sticky=EW, pady=(0, 6), padx=(8, 0))
+        ttk.Entry(lf, textvariable=self.var_range).grid(
+            row=0, column=1, columnspan=5, sticky=EW, pady=(0, 6), padx=(8, 0)
+        )
 
-        tip = (
-            "① IPv4 CIDR，例如 192.168.1.0/24\n"
-            "② 起止地址：192.168.1.1-192.168.1.254\n"
-            "③ 单个地址：10.0.0.5"
+        opts = ttk.Frame(lf)
+        opts.grid(row=1, column=0, columnspan=6, sticky=W, pady=(0, 8))
+        self.var_resolve_name = tk.BooleanVar(value=False)
+        ttk.Checkbutton(
+            opts,
+            text="解析计算机名",
+            variable=self.var_resolve_name,
+            command=self._on_resolve_name_toggle,
+            bootstyle="round-toggle",
+        ).pack(side=LEFT, padx=(0, 14))
+        self.var_dns = tk.BooleanVar(value=False)
+        self.chk_dns = ttk.Checkbutton(
+            opts,
+            text="含 DNS 反向解析",
+            variable=self.var_dns,
+            bootstyle="round-toggle",
+            state=tk.DISABLED,
         )
-        ttk.Label(lf, text=tip, bootstyle=SECONDARY, justify=tk.LEFT).grid(
-            row=1, column=0, columnspan=2, sticky=W, pady=(0, 10)
+        self.chk_dns.pack(side=LEFT, padx=(0, 14))
+        self.var_netbios = tk.BooleanVar(value=False)
+        self.chk_netbios = ttk.Checkbutton(
+            opts,
+            text="含 NetBIOS",
+            variable=self.var_netbios,
+            bootstyle="round-toggle",
+            state=tk.DISABLED,
         )
+        self.chk_netbios.pack(side=LEFT)
 
         ttk.Label(lf, text="单次上限").grid(row=2, column=0, sticky=W)
         self.var_max_hosts = tk.IntVar(value=512)
@@ -141,16 +166,16 @@ class MacScanFrame(ttk.Frame):
             from_=16,
             to=MAX_SCAN_HOSTS_HARD_LIMIT,
             textvariable=self.var_max_hosts,
-            width=8,
-        ).grid(row=2, column=1, sticky=W, padx=(8, 0))
+            width=7,
+        ).grid(row=2, column=1, sticky=W, padx=(6, 0))
 
-        ttk.Label(lf, text="并发数").grid(row=3, column=0, sticky=W, pady=(8, 0))
+        ttk.Label(lf, text="并发数").grid(row=2, column=2, sticky=W, padx=(14, 0))
         self.var_workers = tk.IntVar(value=48)
-        ttk.Spinbox(lf, from_=1, to=256, textvariable=self.var_workers, width=8).grid(
-            row=3, column=1, sticky=W, padx=(8, 0), pady=(8, 0)
+        ttk.Spinbox(lf, from_=1, to=256, textvariable=self.var_workers, width=7).grid(
+            row=2, column=3, sticky=W, padx=(6, 0)
         )
 
-        ttk.Label(lf, text="ICMP 等待(ms)").grid(row=4, column=0, sticky=W, pady=(8, 0))
+        ttk.Label(lf, text="ICMP 等待(ms)").grid(row=2, column=4, sticky=W, padx=(14, 0))
         self.var_timeout_ms = tk.IntVar(value=800)
         ttk.Spinbox(
             lf,
@@ -158,8 +183,8 @@ class MacScanFrame(ttk.Frame):
             to=5000,
             increment=50,
             textvariable=self.var_timeout_ms,
-            width=8,
-        ).grid(row=4, column=1, sticky=W, padx=(8, 0), pady=(8, 0))
+            width=7,
+        ).grid(row=2, column=5, sticky=W, padx=(6, 0))
 
         self.var_authorized = tk.BooleanVar(value=False)
         ttk.Checkbutton(
@@ -167,62 +192,32 @@ class MacScanFrame(ttk.Frame):
             text="我已确认对扫描对象已获得有效授权",
             variable=self.var_authorized,
             bootstyle="round-toggle",
-        ).grid(row=5, column=0, columnspan=2, sticky=W, pady=(14, 0))
+        ).grid(row=3, column=0, columnspan=6, sticky=W, pady=(10, 0))
 
-        self.var_resolve_name = tk.BooleanVar(value=False)
-        chk_name = ttk.Checkbutton(
-            lf,
-            text="解析计算机名",
-            variable=self.var_resolve_name,
-            command=self._on_resolve_name_toggle,
-            bootstyle="round-toggle",
-        )
-        chk_name.grid(row=6, column=0, columnspan=2, sticky=W, pady=(10, 0))
+        actions = ttk.Frame(frm_ops)
+        actions.grid(row=1, column=0, columnspan=2, sticky=EW, pady=(10, 0))
+        actions.columnconfigure(6, weight=1)
 
-        self.var_dns = tk.BooleanVar(value=False)
-        self.chk_dns = ttk.Checkbutton(
-            lf,
-            text="　含 DNS 反向查询",
-            variable=self.var_dns,
-            bootstyle="round-toggle",
-            state=tk.DISABLED,
-        )
-        self.chk_dns.grid(row=7, column=0, columnspan=2, sticky=W)
-
-        self.var_netbios = tk.BooleanVar(value=False)
-        self.chk_netbios = ttk.Checkbutton(
-            lf,
-            text="　含 NetBIOS（较慢）",
-            variable=self.var_netbios,
-            bootstyle="round-toggle",
-            state=tk.DISABLED,
-        )
-        self.chk_netbios.grid(row=8, column=0, columnspan=2, sticky=W)
-
-        btn_row = ttk.Frame(frm_ops)
-        btn_row.grid(row=2, column=0, sticky=EW, pady=(14, 0))
-        self.btn_start = ttk.Button(btn_row, text="开始扫描", command=self._on_start, bootstyle=PRIMARY)
-        self.btn_start.pack(fill=X, pady=(0, 6))
+        self.btn_start = ttk.Button(actions, text="开始扫描", command=self._on_start, bootstyle=PRIMARY)
+        self.btn_start.grid(row=0, column=0, padx=(0, 8))
         self.btn_stop = ttk.Button(
-            btn_row, text="停止", command=self._on_stop, bootstyle=SECONDARY, state=tk.DISABLED
+            actions, text="停止", command=self._on_stop, bootstyle=SECONDARY, state=tk.DISABLED
         )
-        self.btn_stop.pack(fill=X, pady=(0, 6))
-
-        btn_row2 = ttk.Frame(frm_ops)
-        btn_row2.grid(row=3, column=0, sticky=EW)
-        ttk.Button(btn_row2, text="清空表格", command=self._clear_grid, bootstyle=SECONDARY).pack(
-            side=LEFT, padx=(0, 8)
+        self.btn_stop.grid(row=0, column=1, padx=(0, 8))
+        ttk.Button(actions, text="清空表格", command=self._clear_grid, bootstyle=SECONDARY).grid(
+            row=0, column=2, padx=(0, 8)
         )
-        ttk.Button(btn_row2, text="导出 CSV…", command=self._export_csv, bootstyle=SECONDARY).pack(
-            side=LEFT, padx=(0, 8)
+        ttk.Button(actions, text="导出 CSV…", command=self._export_csv, bootstyle=SECONDARY).grid(
+            row=0, column=3, padx=(0, 8)
         )
-        ttk.Button(btn_row2, text="复制 IP+MAC", command=self._copy_ip_mac, bootstyle=SECONDARY).pack(
-            side=LEFT, padx=(0, 8)
+        ttk.Button(actions, text="复制 IP+MAC", command=self._copy_ip_mac, bootstyle=SECONDARY).grid(
+            row=0, column=4, padx=(0, 8)
         )
-        ttk.Button(btn_row2, text="复制在线列表", command=self._copy_alive, bootstyle=SECONDARY).pack(side=LEFT)
-
-        self.lbl_status = ttk.Label(frm_ops, text="就绪。", bootstyle=INFO)
-        self.lbl_status.grid(row=4, column=0, sticky=EW, pady=(14, 0))
+        ttk.Button(actions, text="复制在线列表", command=self._copy_alive, bootstyle=SECONDARY).grid(
+            row=0, column=5, padx=(0, 12)
+        )
+        self.lbl_status = ttk.Label(actions, text="就绪。", bootstyle=INFO)
+        self.lbl_status.grid(row=0, column=6, sticky=EW)
 
         ttk.Label(frm_out, text="扫描结果", font=("Microsoft YaHei UI", 12, "bold")).grid(
             row=0, column=0, sticky=W, pady=(0, 8)
@@ -262,6 +257,7 @@ class MacScanFrame(ttk.Frame):
         self.tree.grid(row=0, column=0, sticky=NSEW)
         scroll_y.grid(row=0, column=1, sticky="ns")
         scroll_x.grid(row=1, column=0, sticky=EW)
+        wrap.bind("<Configure>", self._sync_scan_tree_columns)
 
         try:
             style = ttk.Style()
@@ -274,9 +270,10 @@ class MacScanFrame(ttk.Frame):
             self.tree.tag_configure("alive", foreground="#2aa198")
             self.tree.tag_configure("dead", foreground="#dc322f")
 
-        self.lbl_summary = ttk.Label(frm_out, text="", bootstyle=SECONDARY, wraplength=520)
-        self.lbl_summary.grid(row=3, column=0, sticky=W, pady=(10, 0))
+        self.lbl_summary = ttk.Label(frm_out, text="", bootstyle=SECONDARY)
+        self.lbl_summary.grid(row=3, column=0, sticky=EW, pady=(10, 0))
 
+        self.after_idle(self._sync_scan_tree_columns)
         self.after(180, self._init_mac_scan_sash)
         self._apply_busy(False)
 
@@ -320,19 +317,54 @@ class MacScanFrame(ttk.Frame):
         for c in cols:
             self.tree.heading(c, text=headings[c])
             anchor = tk.W if c in ("ip", "mac", "vendor", "remark", "hostname", "dns_name") else tk.CENTER
-            self.tree.column(c, width=widths[c], anchor=anchor, stretch=False)
+            stretch = c == "ip"
+            self.tree.column(c, width=widths[c], anchor=anchor, stretch=stretch)
+        self.after_idle(self._sync_scan_tree_columns)
 
     def _init_mac_scan_sash(self, attempt: int = 0) -> None:
+        """上方面板约占 32% 高度，下方留给多列表格。"""
         if attempt > 40:
             return
         try:
             self.update_idletasks()
             pw = self._pw_mac_scan
-            w = pw.winfo_width()
-            if w <= 80:
+            h = pw.winfo_height()
+            if h <= 120:
                 self.after(80, lambda a=attempt + 1: self._init_mac_scan_sash(a))
                 return
-            pw.sashpos(0, max(w // 2, 120))
+            top_h = max(min(int(h * 0.34), 300), 220)
+            top_h = min(top_h, h - 160)
+            pw.sashpos(0, top_h)
+        except tk.TclError:
+            pass
+        self.after_idle(self._sync_scan_tree_columns)
+
+    def _sync_scan_tree_columns(self, event: tk.Event | None = None) -> None:
+        """窗口变宽时拉长 IPv4 列，减少多列挤在一起的感觉。"""
+        if event is not None and event.widget is not self._scan_wrap:
+            return
+        try:
+            ww = self._scan_wrap.winfo_width()
+        except tk.TclError:
+            return
+        if ww <= 80:
+            return
+        try:
+            sb_y = max(int(self._scan_scroll_y.winfo_width()), 16)
+        except tk.TclError:
+            sb_y = 18
+        inner = max(ww - sb_y - 8, 400)
+        fixed = 0
+        for c in self.tree["columns"]:
+            if str(c) == "ip":
+                continue
+            try:
+                fixed += int(self.tree.column(c, "width"))
+            except tk.TclError:
+                pass
+        ip_w = max(100, inner - fixed - 32)
+        try:
+            self.tree.column("ip", width=int(ip_w))
         except tk.TclError:
             pass
 
