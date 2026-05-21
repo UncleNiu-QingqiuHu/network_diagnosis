@@ -31,17 +31,21 @@ _SEARCH_PLACEHOLDER = "输入 IP、MAC、厂商或备注过滤"
 _STATUS_ONLINE_DISP = "\u25cf 在线"
 _STATUS_OFFLINE_DISP = "\u25cb 离线"
 
-_COL_ALIVE_W = 100
-_COL_MAC_W = 148
-_COL_TYPE_W = 72
-_COL_RTT_W = 72
-_COL_VENDOR_W = 100
-_COL_REMARK_W = 120
-_COL_HOST_W = 120
-_COL_DNS_W = 140
+# 列宽：IP/MAC/状态等关键列固定且设 minwidth；备注固定不拉伸；厂商/计算机名均分剩余宽度
+_COL_IP_W = 142
+_COL_ALIVE_W = 108
+_COL_MAC_W = 192
+_COL_TYPE_W = 76
+_COL_RTT_W = 92
+_COL_VENDOR_W = 108
+_COL_VENDOR_MIN = 88
+_COL_REMARK_W = 100
+_COL_HOST_W = 148
+_COL_HOST_MIN = 120
+_TREE_COL_GUTTER = 28
 
 _BASE_COLS = ("ip", "alive", "mac", "arp_type", "rtt", "vendor", "remark")
-_NAME_COLS = ("hostname", "dns_name")
+_NAME_COLS = ("hostname",)
 
 
 class MacScanFrame(ttk.Frame):
@@ -65,6 +69,7 @@ class MacScanFrame(ttk.Frame):
         self.update_idletasks()
         self.after_idle(lambda: self._init_mac_scan_sash(0))
         self.after(120, lambda: self._init_mac_scan_sash(0))
+        self.after(160, self._sync_scan_tree_columns)
 
     def _build_ui(self) -> None:
         self.rowconfigure(0, weight=1)
@@ -150,7 +155,7 @@ class MacScanFrame(ttk.Frame):
         self.var_dns = tk.BooleanVar(value=False)
         self.chk_dns = ttk.Checkbutton(
             opts,
-            text="含 DNS 反向解析",
+            text="DNS 反向补充计算机名",
             variable=self.var_dns,
             bootstyle="round-toggle",
             state=tk.DISABLED,
@@ -257,13 +262,13 @@ class MacScanFrame(ttk.Frame):
         self._tree_holder.columnconfigure(0, weight=1)
 
         self.tree = ttk.Treeview(self._tree_holder, show="headings", height=22, selectmode=tk.BROWSE)
-        self._rebuild_tree_columns(False)
 
         scroll_y = ttk.Scrollbar(wrap, orient=VERTICAL, command=self.tree.yview)
         scroll_x = ttk.Scrollbar(wrap, orient=tk.HORIZONTAL, command=self.tree.xview)
         self._scan_scroll_y = scroll_y
         self._scan_scroll_x = scroll_x
         self.tree.configure(yscrollcommand=scroll_y.set, xscrollcommand=scroll_x.set)
+        self._rebuild_tree_columns(False)
         self.tree.grid(row=0, column=0, sticky=NSEW)
         scroll_y.grid(row=0, column=1, sticky="ns")
         scroll_x.grid(row=1, column=0, sticky=EW)
@@ -283,8 +288,8 @@ class MacScanFrame(ttk.Frame):
         self.lbl_summary = ttk.Label(lf_out, text="", bootstyle=SECONDARY)
         self.lbl_summary.grid(row=2, column=0, sticky=EW, pady=(10, 0))
 
-        self.after_idle(self._sync_scan_tree_columns)
         self.after(180, self._init_mac_scan_sash)
+        self.after_idle(self._sync_scan_tree_columns)
         self._apply_busy(False)
 
     def _fit_readonly_text_height(self, txt: tk.Text) -> None:
@@ -322,6 +327,85 @@ class MacScanFrame(ttk.Frame):
             self.var_dns.set(False)
             self.var_netbios.set(False)
 
+    def _fixed_tree_columns(self) -> tuple[str, ...]:
+        return ("ip", "alive", "mac", "arp_type", "rtt", "remark")
+
+    def _flex_tree_columns(self) -> tuple[str, ...]:
+        cols: list[str] = ["vendor"]
+        if self._show_name_cols:
+            cols.append("hostname")
+        return tuple(cols)
+
+    def _tree_column_base_width(self, col: str) -> int:
+        return {
+            "ip": _COL_IP_W,
+            "alive": _COL_ALIVE_W,
+            "mac": _COL_MAC_W,
+            "arp_type": _COL_TYPE_W,
+            "rtt": _COL_RTT_W,
+            "vendor": _COL_VENDOR_W,
+            "remark": _COL_REMARK_W,
+            "hostname": _COL_HOST_W,
+        }[col]
+
+    def _tree_column_min_width(self, col: str) -> int:
+        if col == "vendor":
+            return _COL_VENDOR_MIN
+        if col == "hostname":
+            return _COL_HOST_MIN
+        return self._tree_column_base_width(col)
+
+    def _apply_tree_column_layout(self) -> None:
+        """固定列保证完整显示；备注不拉伸；厂商/计算机名均分剩余宽度。"""
+        if not hasattr(self, "tree"):
+            return
+        try:
+            cols = [str(c) for c in self.tree["columns"]]
+        except tk.TclError:
+            return
+        if not cols:
+            return
+
+        fixed_cols = [c for c in self._fixed_tree_columns() if c in cols]
+        flex_cols = [c for c in self._flex_tree_columns() if c in cols]
+
+        fixed_sum = sum(self._tree_column_base_width(c) for c in fixed_cols)
+        flex_base = sum(self._tree_column_base_width(c) for c in flex_cols) or 1
+        flex_min = sum(self._tree_column_min_width(c) for c in flex_cols)
+
+        try:
+            ww = self._scan_wrap.winfo_width()
+            sb = getattr(self, "_scan_scroll_y", None)
+            sb_y = max(int(sb.winfo_width()), 16) if sb is not None else 18
+        except tk.TclError:
+            ww, sb_y = 0, 18
+        inner = max(ww - sb_y - _TREE_COL_GUTTER, fixed_sum + flex_min)
+
+        flex_budget = max(inner - fixed_sum, flex_min)
+        flex_extra = max(0, flex_budget - sum(self._tree_column_base_width(c) for c in flex_cols))
+
+        for c in fixed_cols:
+            w = self._tree_column_base_width(c)
+            anchor = tk.W if c in ("ip", "mac", "remark") else tk.CENTER
+            self.tree.column(c, width=w, minwidth=w, anchor=anchor, stretch=False)
+
+        assigned = 0
+        for idx, c in enumerate(flex_cols):
+            base = self._tree_column_base_width(c)
+            if idx == len(flex_cols) - 1:
+                w = max(self._tree_column_min_width(c), flex_budget - assigned)
+            else:
+                share = base + int(flex_extra * base / flex_base)
+                w = max(self._tree_column_min_width(c), share)
+                assigned += w
+            anchor = tk.W
+            self.tree.column(c, width=w, minwidth=self._tree_column_min_width(c), anchor=anchor, stretch=False)
+
+    def _sync_scan_tree_columns(self, event: tk.Event | None = None) -> None:
+        if event is not None and event.widget is not self._scan_wrap:
+            return
+        self._apply_tree_column_layout()
+
     def _rebuild_tree_columns(self, show_names: bool) -> None:
         self._show_name_cols = show_names
         cols = list(_BASE_COLS)
@@ -337,24 +421,10 @@ class MacScanFrame(ttk.Frame):
             "vendor": "厂商",
             "remark": "备注",
             "hostname": "计算机名",
-            "dns_name": "DNS 名称",
-        }
-        widths = {
-            "ip": 120,
-            "alive": _COL_ALIVE_W,
-            "mac": _COL_MAC_W,
-            "arp_type": _COL_TYPE_W,
-            "rtt": _COL_RTT_W,
-            "vendor": _COL_VENDOR_W,
-            "remark": _COL_REMARK_W,
-            "hostname": _COL_HOST_W,
-            "dns_name": _COL_DNS_W,
         }
         for c in cols:
             self.tree.heading(c, text=headings[c])
-            anchor = tk.W if c in ("ip", "mac", "vendor", "remark", "hostname", "dns_name") else tk.CENTER
-            stretch = c == "ip"
-            self.tree.column(c, width=widths[c], anchor=anchor, stretch=stretch)
+        self._apply_tree_column_layout()
         self.after_idle(self._sync_scan_tree_columns)
 
     def _init_mac_scan_sash(self, attempt: int = 0) -> None:
@@ -375,35 +445,6 @@ class MacScanFrame(ttk.Frame):
             pass
         self.after_idle(self._sync_scan_tree_columns)
 
-    def _sync_scan_tree_columns(self, event: tk.Event | None = None) -> None:
-        """窗口变宽时拉长 IPv4 列，减少多列挤在一起的感觉。"""
-        if event is not None and event.widget is not self._scan_wrap:
-            return
-        try:
-            ww = self._scan_wrap.winfo_width()
-        except tk.TclError:
-            return
-        if ww <= 80:
-            return
-        try:
-            sb_y = max(int(self._scan_scroll_y.winfo_width()), 16)
-        except tk.TclError:
-            sb_y = 18
-        inner = max(ww - sb_y - 8, 400)
-        fixed = 0
-        for c in self.tree["columns"]:
-            if str(c) == "ip":
-                continue
-            try:
-                fixed += int(self.tree.column(c, "width"))
-            except tk.TclError:
-                pass
-        ip_w = max(100, inner - fixed - 32)
-        try:
-            self.tree.column("ip", width=int(ip_w))
-        except tk.TclError:
-            pass
-
     def _apply_busy(self, busy: bool) -> None:
         self._busy = busy
         self.btn_start.configure(state=tk.DISABLED if busy else tk.NORMAL)
@@ -418,7 +459,7 @@ class MacScanFrame(ttk.Frame):
         rtt_s = "" if row.rtt_ms is None else f"{row.rtt_ms:.0f}"
         base = (row.ip, st, mac_s, row.arp_type, rtt_s, row.vendor, row.remark)
         if self._show_name_cols:
-            return base + (row.computer_name, row.dns_name)
+            return base + (row.computer_name,)
         return base
 
     def _row_matches_search(self, row: MacScanRow, needle: str) -> bool:
@@ -431,7 +472,6 @@ class MacScanFrame(ttk.Frame):
             row.vendor,
             row.remark,
             row.computer_name,
-            row.dns_name,
         ]
         return any(needle in str(p).lower() for p in parts)
 
@@ -563,7 +603,7 @@ class MacScanFrame(ttk.Frame):
             return
         header = ["IPv4", "状态", "MAC", "类型", "RTT_ms", "厂商", "备注"]
         if self._show_name_cols:
-            header.extend(["计算机名", "DNS名称"])
+            header.append("计算机名")
         try:
             with open(path, "w", newline="", encoding="utf-8-sig") as f:
                 w = csv.writer(f)
@@ -582,7 +622,7 @@ class MacScanFrame(ttk.Frame):
                         row.remark,
                     ]
                     if self._show_name_cols:
-                        cells.extend([row.computer_name, row.dns_name])
+                        cells.append(row.computer_name)
                     w.writerow(cells)
         except OSError as e:
             messagebox.showerror("MAC 扫描", f"写入失败：{e}", parent=self)
@@ -732,12 +772,9 @@ class MacScanFrame(ttk.Frame):
                     self.lbl_status.configure(text=f"扫描中… 解析计算机名 0/{total}")
                 elif kind == "name":
                     ip = str(rest[0])
-                    cn, dns = rest[1], rest[2]
-                    if ip in self._scan_data:
-                        if cn:
-                            self._scan_data[ip].computer_name = str(cn)
-                        if dns:
-                            self._scan_data[ip].dns_name = str(dns)
+                    cn = rest[1]
+                    if ip in self._scan_data and cn:
+                        self._scan_data[ip].computer_name = str(cn)
                         self._schedule_tree_refresh()
                 elif kind == "prog":
                     done, total, phase = int(rest[0]), int(rest[1]), str(rest[2])

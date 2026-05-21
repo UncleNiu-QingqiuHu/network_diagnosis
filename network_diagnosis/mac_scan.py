@@ -9,7 +9,7 @@ import subprocess
 import sys
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from threading import Event
 
 from network_diagnosis.arp_monitor import (
@@ -37,6 +37,7 @@ class SelectedScanInterface:
     netmask: str
     gateway_ipv4: str | None
     network: ipaddress.IPv4Network
+    local_mac: str | None = None
 
     @property
     def interface_summary(self) -> str:
@@ -53,7 +54,6 @@ class MacScanRow:
     vendor: str = "—"
     remark: str = ""
     computer_name: str = "—"
-    dns_name: str = "—"
 
 
 def _creationflags_no_window() -> int:
@@ -110,6 +110,7 @@ def resolve_scan_interface(
         netmask=block.netmask.strip(),
         gateway_ipv4=gw,
         network=net,
+        local_mac=block.mac,
     )
 
 
@@ -161,6 +162,10 @@ def merge_scan_rows(
         arp_type = "—"
         if ip in arp:
             mac, arp_type = arp[ip]
+        elif ip == iface.local_ipv4 and iface.local_mac:
+            # 本机地址不会出现在 arp -a 中，改用所选网卡的 MAC。
+            mac = normalize_mac(iface.local_mac)
+            arp_type = "local"
         vendor = lookup_vendor(mac)
         remark = build_remark(
             ip,
