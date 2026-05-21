@@ -18,6 +18,8 @@ from network_diagnosis.runtime_log import get_logger
 
 _log = get_logger(__name__)
 
+_SEARCH_PLACEHOLDER = "输入 IPv4 地址过滤"
+
 # 状态列：实心圆 ● / 空心圆 ○（字形易区分）；行前景色再用主题绿/红强化在线/离线
 _STATUS_ONLINE_DISP = "\u25cf 在线"
 _STATUS_OFFLINE_DISP = "\u25cb 离线"
@@ -71,7 +73,7 @@ class IpScanFrame(ttk.Frame):
 
         frm_ops.columnconfigure(0, weight=1)
 
-        frm_out.rowconfigure(2, weight=1)
+        frm_out.rowconfigure(0, weight=1)
         frm_out.columnconfigure(0, weight=1)
 
         hint = ttk.Labelframe(frm_ops, text="合规提示", bootstyle=WARNING, padding=(10, 10, 10, 8))
@@ -176,23 +178,27 @@ class IpScanFrame(ttk.Frame):
         self.lbl_status = ttk.Label(frm_ops, text="就绪。", bootstyle=INFO)
         self.lbl_status.grid(row=4, column=0, sticky=EW, pady=(14, 0))
 
-        hdr = ttk.Label(frm_out, text="扫描结果", font=("Microsoft YaHei UI", 12, "bold"))
-        hdr.grid(row=0, column=0, sticky=W, pady=(0, 8))
+        lf_out = ttk.Labelframe(frm_out, text="扫描结果", padding=(12, 10, 12, 10))
+        lf_out.grid(row=0, column=0, sticky=NSEW)
+        lf_out.rowconfigure(1, weight=1)
+        lf_out.columnconfigure(0, weight=1)
 
-        search_row = ttk.Frame(frm_out)
-        search_row.grid(row=1, column=0, sticky=EW, pady=(0, 8))
-        search_row.columnconfigure(1, weight=1)
-        ttk.Label(search_row, text="搜索").grid(row=0, column=0, sticky=W)
-        self.var_search = tk.StringVar()
-        ent_search = ttk.Entry(search_row, textvariable=self.var_search)
-        ent_search.grid(row=0, column=1, sticky=EW, padx=(8, 8))
-        ent_search.bind("<KeyRelease>", self._on_search_changed)
+        search_row = ttk.Frame(lf_out)
+        search_row.grid(row=0, column=0, sticky=EW, pady=(0, 8))
+        search_row.columnconfigure(0, weight=1)
+        self._search_is_placeholder = True
+        self.var_search = tk.StringVar(value=_SEARCH_PLACEHOLDER)
+        self.ent_search = ttk.Entry(search_row, textvariable=self.var_search)
+        self.ent_search.grid(row=0, column=0, sticky=EW, padx=(0, 8))
+        self.ent_search.bind("<FocusIn>", self._on_search_focus_in)
+        self.ent_search.bind("<FocusOut>", self._on_search_focus_out)
+        self.ent_search.bind("<KeyRelease>", self._on_search_changed)
         ttk.Button(search_row, text="清空", command=self._clear_search, bootstyle=SECONDARY).grid(
-            row=0, column=2, sticky=W
+            row=0, column=1, sticky=W
         )
 
-        wrap = ttk.Frame(frm_out)
-        wrap.grid(row=2, column=0, sticky=NSEW)
+        wrap = ttk.Frame(lf_out)
+        wrap.grid(row=1, column=0, sticky=NSEW)
         wrap.rowconfigure(0, weight=1)
         wrap.columnconfigure(0, weight=1)
         self._scan_wrap = wrap
@@ -226,8 +232,8 @@ class IpScanFrame(ttk.Frame):
             self.tree.tag_configure("alive", foreground="#2aa198")
             self.tree.tag_configure("dead", foreground="#dc322f")
 
-        self.lbl_summary = ttk.Label(frm_out, text="", bootstyle=SECONDARY)
-        self.lbl_summary.grid(row=3, column=0, sticky=W, pady=(10, 0))
+        self.lbl_summary = ttk.Label(lf_out, text="", bootstyle=SECONDARY)
+        self.lbl_summary.grid(row=2, column=0, sticky=EW, pady=(10, 0))
 
         self.after_idle(self._sync_scan_tree_columns)
         self.after(180, self._init_ip_scan_sash)
@@ -315,8 +321,23 @@ class IpScanFrame(ttk.Frame):
             return text.rsplit(marker, 1)[0]
         return text
 
+    def _search_needle(self) -> str:
+        if self._search_is_placeholder:
+            return ""
+        return self.var_search.get().strip().lower()
+
+    def _on_search_focus_in(self, _event: tk.Event | None = None) -> None:
+        if self._search_is_placeholder:
+            self._search_is_placeholder = False
+            self.var_search.set("")
+
+    def _on_search_focus_out(self, _event: tk.Event | None = None) -> None:
+        if not self.var_search.get().strip():
+            self._search_is_placeholder = True
+            self.var_search.set(_SEARCH_PLACEHOLDER)
+
     def _refresh_scan_tree(self) -> None:
-        needle = self.var_search.get().strip().lower()
+        needle = self._search_needle()
         for iid in self.tree.get_children():
             self.tree.delete(iid)
         shown = 0
@@ -342,7 +363,8 @@ class IpScanFrame(ttk.Frame):
         self._schedule_tree_refresh(immediate=True)
 
     def _clear_search(self) -> None:
-        self.var_search.set("")
+        self._search_is_placeholder = True
+        self.var_search.set(_SEARCH_PLACEHOLDER)
         if self._scan_data:
             self._schedule_tree_refresh(immediate=True)
 

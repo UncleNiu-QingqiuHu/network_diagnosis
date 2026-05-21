@@ -26,6 +26,8 @@ from network_diagnosis.runtime_log import get_logger
 
 _log = get_logger(__name__)
 
+_SEARCH_PLACEHOLDER = "输入 IP、MAC、厂商或备注过滤"
+
 _STATUS_ONLINE_DISP = "\u25cf 在线"
 _STATUS_OFFLINE_DISP = "\u25cb 离线"
 
@@ -86,21 +88,22 @@ class MacScanFrame(ttk.Frame):
         frm_ops.columnconfigure(0, weight=2)
         frm_ops.columnconfigure(1, weight=3)
         frm_ops.rowconfigure(0, weight=1)
-        frm_out.rowconfigure(2, weight=1)
+        frm_out.rowconfigure(0, weight=1)
         frm_out.columnconfigure(0, weight=1)
 
         hint = ttk.Labelframe(frm_ops, text="合规提示", bootstyle=WARNING, padding=(10, 10, 10, 8))
         hint.grid(row=0, column=0, sticky=NSEW, padx=(0, 10))
         hint.columnconfigure(0, weight=1)
+        hint.rowconfigure(0, weight=1)
         hint_msg = (
             "批量 ICMP 与读取本机 **ARP 表** 可能被安全设备记录；请在 **已获得授权** 的内网或测试环境中使用。\n"
             "**仅支持本机已连接网段**（不支持跨网段）；MAC 与计算机名不保证 100% 完整。"
         )
-        txt_hint = tk.Text(
+        self._txt_hint = tk.Text(
             hint,
             wrap=tk.WORD,
             width=28,
-            height=4,
+            height=2,
             relief=tk.FLAT,
             padx=4,
             pady=4,
@@ -110,15 +113,19 @@ class MacScanFrame(ttk.Frame):
             borderwidth=0,
             takefocus=False,
         )
-        txt_hint.grid(row=0, column=0, sticky=NSEW)
+        self._txt_hint.grid(row=0, column=0, sticky=NSEW)
         configure_simple_markdown_tags(
-            txt_hint,
+            self._txt_hint,
             base_font=("Microsoft YaHei UI", 10),
             theme_colors=ttk.Style().colors,
         )
-        txt_hint.configure(state=tk.NORMAL)
-        append_simple_markdown(txt_hint, hint_msg.rstrip() + "\n")
-        txt_hint.configure(state=tk.DISABLED)
+        self._txt_hint.configure(state=tk.NORMAL)
+        append_simple_markdown(self._txt_hint, hint_msg.rstrip() + "\n")
+        self._fit_readonly_text_height(self._txt_hint)
+        self._txt_hint.configure(state=tk.DISABLED)
+        self._hint_labelframe = hint
+        hint.bind("<Configure>", self._sync_hint_text_layout)
+        self.after_idle(self._sync_hint_text_layout)
 
         lf = ttk.Labelframe(frm_ops, text="扫描参数", padding=(12, 10, 12, 10))
         lf.grid(row=0, column=1, sticky=NSEW)
@@ -219,24 +226,27 @@ class MacScanFrame(ttk.Frame):
         self.lbl_status = ttk.Label(actions, text="就绪。", bootstyle=INFO)
         self.lbl_status.grid(row=0, column=6, sticky=EW)
 
-        ttk.Label(frm_out, text="扫描结果", font=("Microsoft YaHei UI", 12, "bold")).grid(
-            row=0, column=0, sticky=W, pady=(0, 8)
-        )
+        lf_out = ttk.Labelframe(frm_out, text="扫描结果", padding=(12, 10, 12, 10))
+        lf_out.grid(row=0, column=0, sticky=NSEW)
+        lf_out.rowconfigure(1, weight=1)
+        lf_out.columnconfigure(0, weight=1)
 
-        search_row = ttk.Frame(frm_out)
-        search_row.grid(row=1, column=0, sticky=EW, pady=(0, 8))
-        search_row.columnconfigure(1, weight=1)
-        ttk.Label(search_row, text="搜索").grid(row=0, column=0, sticky=W)
-        self.var_search = tk.StringVar()
-        ent_search = ttk.Entry(search_row, textvariable=self.var_search)
-        ent_search.grid(row=0, column=1, sticky=EW, padx=(8, 8))
-        ent_search.bind("<KeyRelease>", self._on_search_changed)
+        search_row = ttk.Frame(lf_out)
+        search_row.grid(row=0, column=0, sticky=EW, pady=(0, 8))
+        search_row.columnconfigure(0, weight=1)
+        self._search_is_placeholder = True
+        self.var_search = tk.StringVar(value=_SEARCH_PLACEHOLDER)
+        self.ent_search = ttk.Entry(search_row, textvariable=self.var_search)
+        self.ent_search.grid(row=0, column=0, sticky=EW, padx=(0, 8))
+        self.ent_search.bind("<FocusIn>", self._on_search_focus_in)
+        self.ent_search.bind("<FocusOut>", self._on_search_focus_out)
+        self.ent_search.bind("<KeyRelease>", self._on_search_changed)
         ttk.Button(search_row, text="清空", command=self._clear_search, bootstyle=SECONDARY).grid(
-            row=0, column=2, sticky=W
+            row=0, column=1, sticky=W
         )
 
-        wrap = ttk.Frame(frm_out)
-        wrap.grid(row=2, column=0, sticky=NSEW)
+        wrap = ttk.Frame(lf_out)
+        wrap.grid(row=1, column=0, sticky=NSEW)
         wrap.rowconfigure(0, weight=1)
         wrap.columnconfigure(0, weight=1)
         self._scan_wrap = wrap
@@ -270,12 +280,38 @@ class MacScanFrame(ttk.Frame):
             self.tree.tag_configure("alive", foreground="#2aa198")
             self.tree.tag_configure("dead", foreground="#dc322f")
 
-        self.lbl_summary = ttk.Label(frm_out, text="", bootstyle=SECONDARY)
-        self.lbl_summary.grid(row=3, column=0, sticky=EW, pady=(10, 0))
+        self.lbl_summary = ttk.Label(lf_out, text="", bootstyle=SECONDARY)
+        self.lbl_summary.grid(row=2, column=0, sticky=EW, pady=(10, 0))
 
         self.after_idle(self._sync_scan_tree_columns)
         self.after(180, self._init_mac_scan_sash)
         self._apply_busy(False)
+
+    def _fit_readonly_text_height(self, txt: tk.Text) -> None:
+        """只读提示文本按实际行数设定高度，避免固定行数裁切内容。"""
+        try:
+            txt.update_idletasks()
+            line_count = int(float(txt.index("end-1c")))
+            txt.configure(height=max(line_count, 2))
+        except tk.TclError:
+            pass
+
+    def _sync_hint_text_layout(self, event: tk.Event | None = None) -> None:
+        """左侧合规提示区随宽度换行并重算高度，不改变左右分栏布局。"""
+        if event is not None and event.widget is not self._hint_labelframe:
+            return
+        try:
+            w_px = self._hint_labelframe.winfo_width() - 28
+        except tk.TclError:
+            return
+        if w_px <= 48:
+            return
+        try:
+            chars = max(22, w_px // 11)
+            self._txt_hint.configure(width=chars)
+            self._fit_readonly_text_height(self._txt_hint)
+        except tk.TclError:
+            pass
 
     def _on_resolve_name_toggle(self) -> None:
         on = self.var_resolve_name.get()
@@ -332,7 +368,7 @@ class MacScanFrame(ttk.Frame):
             if h <= 120:
                 self.after(80, lambda a=attempt + 1: self._init_mac_scan_sash(a))
                 return
-            top_h = max(min(int(h * 0.34), 300), 220)
+            top_h = max(min(int(h * 0.36), 320), 232)
             top_h = min(top_h, h - 160)
             pw.sashpos(0, top_h)
         except tk.TclError:
@@ -427,8 +463,23 @@ class MacScanFrame(ttk.Frame):
             return text.rsplit(marker, 1)[0]
         return text
 
+    def _search_needle(self) -> str:
+        if self._search_is_placeholder:
+            return ""
+        return self.var_search.get().strip().lower()
+
+    def _on_search_focus_in(self, _event: tk.Event | None = None) -> None:
+        if self._search_is_placeholder:
+            self._search_is_placeholder = False
+            self.var_search.set("")
+
+    def _on_search_focus_out(self, _event: tk.Event | None = None) -> None:
+        if not self.var_search.get().strip():
+            self._search_is_placeholder = True
+            self.var_search.set(_SEARCH_PLACEHOLDER)
+
     def _refresh_scan_tree(self) -> None:
-        needle = self.var_search.get().strip().lower()
+        needle = self._search_needle()
         for iid in self.tree.get_children():
             self.tree.delete(iid)
         shown = 0
@@ -451,7 +502,8 @@ class MacScanFrame(ttk.Frame):
             self._schedule_tree_refresh(immediate=True)
 
     def _clear_search(self) -> None:
-        self.var_search.set("")
+        self._search_is_placeholder = True
+        self.var_search.set(_SEARCH_PLACEHOLDER)
         if self._scan_data:
             self._schedule_tree_refresh(immediate=True)
 
