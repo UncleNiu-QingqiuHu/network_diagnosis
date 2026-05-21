@@ -33,6 +33,7 @@ from network_diagnosis.gui.db_diagnosis_frame import DbDiagnosisFrame
 from network_diagnosis.gui.intranet_arp_frame import IntranetArpMonitorFrame
 from network_diagnosis.gui.ip_scan_frame import IpScanFrame
 from network_diagnosis.gui.mac_scan_frame import MacScanFrame
+from network_diagnosis.gui.dhcp_diagnosis_frame import DhcpDiagnosisFrame
 from network_diagnosis.gui.main_app_common import parse_ports, scaled_photo_from_png, try_set_window_icon
 from network_diagnosis.gui.main_app_network_views import NetworkViewsMixin
 from network_diagnosis.gui.main_app_report_text import (
@@ -156,6 +157,7 @@ class NetworkDiagnosisApp(NetworkViewsMixin, SubnetViewsMixin, StaticViewsMixin,
             ("subnet", "子网计算"),
             ("ip_scan", "IP扫描"),
             ("mac_scan", "MAC扫描"),
+            ("dhcp_diagnosis", "DHCP诊断"),
             ("switch", "交换机配置"),
             ("database", "数据库诊断"),
             ("arp_intranet", "ARP安全"),
@@ -219,6 +221,8 @@ class NetworkDiagnosisApp(NetworkViewsMixin, SubnetViewsMixin, StaticViewsMixin,
         self._view_frames["ip_scan"] = self._ip_scan
         self._mac_scan = MacScanFrame(self._content_host)
         self._view_frames["mac_scan"] = self._mac_scan
+        self._dhcp_diagnosis = DhcpDiagnosisFrame(self._content_host, app=self)
+        self._view_frames["dhcp_diagnosis"] = self._dhcp_diagnosis
         self._switch_console = SwitchConsoleFrame(self._content_host)
         self._view_frames["switch"] = self._switch_console
         self._db_diagnosis = DbDiagnosisFrame(self._content_host)

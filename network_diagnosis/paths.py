@@ -26,6 +26,18 @@ def switch_console_data_dir() -> Path:
     return p
 
 
+def dhcp_diagnosis_report_dir(task_id: str) -> Path:
+    """单次 DHCP 诊断报告目录：`reports/dhcp_diagnosis/<task_id>/`。"""
+    d = report_root() / "dhcp_diagnosis" / task_id
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def dhcp_diagnosis_config_path() -> Path:
+    """DHCP 诊断白名单与作用域配置 JSON。"""
+    return user_config_dir() / "dhcp_diagnosis.json"
+
+
 def db_diagnosis_report_dir(task_id: str) -> Path:
     """单次数据库诊断或监控导出目录：`reports/db_diagnosis/<task_id>/`。"""
     d = report_root() / "db_diagnosis" / task_id
@@ -113,6 +125,7 @@ def resolve_sidebar_nav_icon_png(module_key: str) -> Path | None:
         "subnet": "fluent--globe-12-filled.png",
         "ip_scan": "streamline-flex--iris-scan-solid.png",
         "mac_scan": "icon-park-solid--i-mac.png",
+        "dhcp_diagnosis": "mdi--server-network.png",
         "switch": "streamline-ultimate--ethernet-port-bold.png",
         "database": "teenyicons--database-solid.png",
         "arp_intranet": "ion--shield-checkmark.png",

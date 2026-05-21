@@ -79,7 +79,7 @@ class StaticViewsMixin:
 
         intro = (
             "左侧「功能导航」可在各模块间切换。下方按标签页分模块说明："
-            "「网络诊断」「子网计算」「IP扫描」「MAC扫描」「交换机配置」「数据库诊断」「ARP安全」「安全诊断」「数字签名」「SSL证书」。"
+            "「网络诊断」「子网计算」「IP扫描」「MAC扫描」「DHCP诊断」「交换机配置」「数据库诊断」「ARP安全」「安全诊断」「数字签名」「SSL证书」。"
         )
         ttk.Label(
             frm,
@@ -434,6 +434,46 @@ class StaticViewsMixin:
 
   • 批量 ICMP 与 ARP 读取可能被记录；仅用于已授权内网。详见 [`docs/mac-scan-design.md`](../docs/mac-scan-design.md)。"""
 
+        body_dhcp_diagnosis = """【本模块用途】
+  • **本机 DHCP 客户端诊断**：解析 **ipconfig /all**、DHCP 客户端事件日志，检查 APIPA、租约、网关/DNS、DHCP 服务器可达性等。
+  • **多 DHCP 服务器探测（DHCP 污染）**：在勾选授权后，通过 **Nmap broadcast-dhcp-discover** 发送 **DHCP DISCOVER**，
+    汇总 OFFER 中的 **Server Identifier**；若同一网段出现 **≥2 个不同 Server ID**，提示 **疑似 DHCP 污染**。
+  • 详见设计文档 [`docs/dhcp-diagnosis-design.md`](../docs/dhcp-diagnosis-design.md)。
+
+══════════════════════════════════════
+一、参数说明
+══════════════════════════════════════
+
+  • **绑定接口**：诊断与探测使用的本机 IPv4 网卡（须在本机所在网段）。
+  • **合法 DHCP**：白名单 Server ID（逗号分隔）；不在名单的服务器标为未知/非法。
+  • **作用域 CIDR**：可选；用于检测本机 **静态 IP** 是否落在 DHCP 池内。
+  • **探测轮次**：默认 3 轮，间隔约 1.5 s，降低误报。
+  • **Nmap**：主动探测依赖 **nmap.exe**（PATH / Program Files / ThirdParty/Nmap）。
+
+══════════════════════════════════════
+二、结论优先级
+══════════════════════════════════════
+
+  1. **疑似 DHCP 污染**（多 Server ID，且非热备白名单场景）
+  2. **未知 DHCP 服务器**（仅 1 个响应但不在白名单）
+  3. **本机 APIPA / 租约 / 服务器不可达**
+  4. **未收到 OFFER**（可能无服务、跨 VLAN 或需管理员运行 Nmap）
+
+══════════════════════════════════════
+三、与其它模块
+══════════════════════════════════════
+
+  • **子网计算** → 确认网段与 CIDR → **DHCP 诊断**
+  • 疑似污染 → **MAC 扫描** 定位非法 Server IP → **交换机配置** 查端口
+  • DHCP 服务器不可达 → **网络诊断** Ping 探测
+
+══════════════════════════════════════
+四、合规
+══════════════════════════════════════
+
+  • 主动 DHCP DISCOVER 可能被安全设备记录；须勾选 **授权确认** 后方可探测。
+  • 本工具 **不** 伪造 DHCP ACK、不抢占租约。"""
+
         body_switch = """一、模式
   • 「串口 (COM)」：经 RS-232/USB 转串口连接设备 Console。
   • 「SSH (PTY)」：经网络登录设备，终端为伪终端文本会话。
@@ -622,6 +662,7 @@ class StaticViewsMixin:
         add_guide_tab("子网计算", body_subnet)
         add_guide_tab("IP扫描", body_ip_scan)
         add_guide_tab("MAC扫描", body_mac_scan)
+        add_guide_tab("DHCP诊断", body_dhcp_diagnosis)
         add_guide_tab("交换机配置", body_switch)
         add_guide_tab("数据库诊断", body_database)
         add_guide_tab("ARP安全", body_arp_intranet)
