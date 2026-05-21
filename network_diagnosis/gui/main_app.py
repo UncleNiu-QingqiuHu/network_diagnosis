@@ -30,10 +30,11 @@ from ttkbootstrap.constants import (
 from network_diagnosis.gui.ai_assistant_frame import AiAssistantFrame
 from network_diagnosis.gui.code_signing_frame import CodeSigningFrame
 from network_diagnosis.gui.db_diagnosis_frame import DbDiagnosisFrame
+from network_diagnosis.gui.dhcp_diagnosis_frame import DhcpDiagnosisFrame
+from network_diagnosis.gui.domain_frame import DomainFrame
 from network_diagnosis.gui.intranet_arp_frame import IntranetArpMonitorFrame
 from network_diagnosis.gui.ip_scan_frame import IpScanFrame
 from network_diagnosis.gui.mac_scan_frame import MacScanFrame
-from network_diagnosis.gui.dhcp_diagnosis_frame import DhcpDiagnosisFrame
 from network_diagnosis.gui.main_app_common import parse_ports, scaled_photo_from_png, try_set_window_icon
 from network_diagnosis.gui.main_app_network_views import NetworkViewsMixin
 from network_diagnosis.gui.main_app_report_text import (
@@ -161,6 +162,7 @@ class NetworkDiagnosisApp(NetworkViewsMixin, SubnetViewsMixin, StaticViewsMixin,
             ("switch", "交换机配置"),
             ("database", "数据库诊断"),
             ("arp_intranet", "ARP安全"),
+            ("domain", "域与策略"),
             ("security", "安全诊断"),
             ("code_sign", "数字签名"),
             ("ssl_cert", "SSL证书"),
@@ -229,6 +231,8 @@ class NetworkDiagnosisApp(NetworkViewsMixin, SubnetViewsMixin, StaticViewsMixin,
         self._view_frames["database"] = self._db_diagnosis
         self._intranet_arp = IntranetArpMonitorFrame(self._content_host)
         self._view_frames["arp_intranet"] = self._intranet_arp
+        self._domain = DomainFrame(self._content_host, app=self)
+        self._view_frames["domain"] = self._domain
         self._security_diagnosis = SecurityDiagnosisFrame(self._content_host)
         self._view_frames["security"] = self._security_diagnosis
         self._code_signing = CodeSigningFrame(self._content_host)

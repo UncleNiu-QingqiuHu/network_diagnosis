@@ -38,6 +38,18 @@ def dhcp_diagnosis_config_path() -> Path:
     return user_config_dir() / "dhcp_diagnosis.json"
 
 
+def domain_ops_report_dir(task_id: str) -> Path:
+    """域与组策略操作/诊断报告：`reports/domain_ops/<task_id>/`。"""
+    d = report_root() / "domain_ops" / task_id
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def domain_ops_config_path() -> Path:
+    """域模块默认域 DNS、工作组等配置 JSON。"""
+    return user_config_dir() / "domain_ops.json"
+
+
 def db_diagnosis_report_dir(task_id: str) -> Path:
     """单次数据库诊断或监控导出目录：`reports/db_diagnosis/<task_id>/`。"""
     d = report_root() / "db_diagnosis" / task_id
@@ -126,6 +138,7 @@ def resolve_sidebar_nav_icon_png(module_key: str) -> Path | None:
         "ip_scan": "streamline-flex--iris-scan-solid.png",
         "mac_scan": "icon-park-solid--i-mac.png",
         "dhcp_diagnosis": "mdi--server-network.png",
+        "domain": "mingcute--ad-circle-fill.png",
         "switch": "streamline-ultimate--ethernet-port-bold.png",
         "database": "teenyicons--database-solid.png",
         "arp_intranet": "ion--shield-checkmark.png",
