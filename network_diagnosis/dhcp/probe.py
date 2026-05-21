@@ -10,7 +10,8 @@ from collections.abc import Callable
 from threading import Event
 
 from network_diagnosis.dhcp.models import DhcpOffer, DhcpProbeRound
-from network_diagnosis.host_l3_info import _creationflags_no_window, _decode_output
+from network_diagnosis.dhcp.text_encoding import decode_nmap_output
+from network_diagnosis.host_l3_info import _creationflags_no_window
 from network_diagnosis.paths import resolve_nmap_exe_path
 
 _RESPONSE_BLOCK_RE = re.compile(r"\|\s*Response\s+\d+\s+of\s+\d+\s*:", re.I)
@@ -116,7 +117,7 @@ def run_nmap_dhcp_discover_round(
     except OSError as e:
         return DhcpProbeRound(round_index=round_index, error=str(e))
 
-    text = _decode_output((pr.stdout or b"") + (pr.stderr or b""))
+    text = decode_nmap_output((pr.stdout or b"") + (pr.stderr or b""))
     err = None
     if pr.returncode != 0 and "Response" not in text:
         err = f"nmap 退出码 {pr.returncode}"

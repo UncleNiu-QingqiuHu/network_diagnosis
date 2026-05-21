@@ -9,7 +9,8 @@ import sys
 from datetime import datetime, timedelta
 
 from network_diagnosis.dhcp.models import DhcpClientSnapshot
-from network_diagnosis.host_l3_info import _creationflags_no_window, _decode_output, _is_ipv4
+from network_diagnosis.dhcp.text_encoding import decode_powershell_output
+from network_diagnosis.host_l3_info import _creationflags_no_window, _is_ipv4
 from network_diagnosis.ip_scan import ping_ipv4_once
 
 _IPCONFIG_TIMEOUT_SEC = 35
@@ -28,11 +29,13 @@ def run_ipconfig_all_text() -> tuple[str, str | None]:
             ["ipconfig", "/all"],
             capture_output=True,
             timeout=_IPCONFIG_TIMEOUT_SEC,
+            encoding="gbk",
+            errors="replace",
             creationflags=_creationflags_no_window(),
         )
     except (OSError, subprocess.TimeoutExpired) as e:
         return "", str(e)
-    text = _decode_output((pr.stdout or b"") + (pr.stderr or b""))
+    text = (pr.stdout or "") + (pr.stderr or "")
     if not text.strip():
         return "", "ipconfig /all 无输出"
     return text, None
@@ -173,6 +176,8 @@ def fetch_dhcp_client_event_log(max_events: int = _EVENT_LOG_MAX) -> tuple[str, 
     if sys.platform != "win32":
         return "", "非 Windows，跳过 DHCP 客户端事件日志。"
     ps = (
+        "[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); "
+        "$OutputEncoding = [Console]::OutputEncoding; "
         f"$e = Get-WinEvent -LogName 'Microsoft-Windows-Dhcp-Client/Operational' "
         f"-MaxEvents {int(max_events)} -ErrorAction SilentlyContinue; "
         "if (-not $e) { '（无记录或日志不可用）' } else { "
@@ -182,15 +187,12 @@ def fetch_dhcp_client_event_log(max_events: int = _EVENT_LOG_MAX) -> tuple[str, 
         pr = subprocess.run(
             ["powershell", "-NoProfile", "-NonInteractive", "-Command", ps],
             capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
             timeout=20,
             creationflags=_creationflags_no_window(),
         )
     except (OSError, subprocess.TimeoutExpired) as e:
         return "", str(e)
-    text = (pr.stdout or "").strip()
+    text = decode_powershell_output((pr.stdout or b"") + (pr.stderr or b"")).strip()
     if not text:
         err = (pr.stderr or "").strip()
         return "", err or "未能读取 DHCP 客户端事件日志"

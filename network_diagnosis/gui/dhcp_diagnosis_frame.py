@@ -227,7 +227,7 @@ class DhcpDiagnosisFrame(ttk.Frame):
         self.txt_raw = tk.Text(
             tab_raw,
             wrap=tk.NONE,
-            font=("Consolas", 10),
+            font=("Microsoft YaHei UI", 10),
             relief=tk.FLAT,
             padx=6,
             pady=6,
