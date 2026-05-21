@@ -10,6 +10,7 @@ from tkinter.scrolledtext import ScrolledText
 import ttkbootstrap as ttk
 from ttkbootstrap.constants import END, EW, NSEW, PRIMARY, SECONDARY, SUCCESS, W
 
+from network_diagnosis.arp_monitor import ipv4_interface_network
 from network_diagnosis.gui.main_app_common import bind_label_wraplength
 from network_diagnosis.host_l3_info import (
     AdapterIPv4Block,
@@ -217,6 +218,13 @@ class SubnetViewsMixin:
             ]
         )
 
+    @staticmethod
+    def _format_adapter_network_cidr(ipv4: str, netmask: str) -> str:
+        net = ipv4_interface_network(ipv4, netmask)
+        if net is None:
+            return "—"
+        return net.with_prefixlen
+
     def _subnet_on_compute(self) -> None:
         combo = self.var_subnet_combo.get().strip()
         try:
@@ -349,6 +357,9 @@ class SubnetViewsMixin:
                 if b.mac:
                     lines.append(f"   MAC：{b.mac}")
                 lines.append(f"   IPv4 / 掩码：{b.ipv4} / {b.netmask}")
+                lines.append(
+                    f"   所属网段：{self._format_adapter_network_cidr(b.ipv4, b.netmask)}"
+                )
                 lines.append(
                     f"   默认网关：{'；'.join(b.gateways) if b.gateways else '—'}"
                 )
