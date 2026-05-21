@@ -19,6 +19,7 @@
 | **子网计算** | IPv4 CIDR / 点分掩码计算；可刷新本机 IPv4、网关、DNS 与公网地址参考信息。 |
 | **IP 扫描** | 指定 IPv4 网段/范围 ICMP 存活探测；结果按 IP 排序，支持搜索与 CSV 导出。 |
 | **MAC 扫描** | **仅本机所在网段**：ICMP + `arp -a` 展示 IP/MAC/厂商/备注；可选计算机名解析。详见 [`docs/mac-scan-design.md`](docs/mac-scan-design.md)。 |
+| **DHCP 诊断** | 本机 **DHCP 客户端**状态（`ipconfig /all`、DHCP 客户端事件日志）与 **Nmap broadcast-dhcp-discover** 多 DHCP 服务器（**DHCP 污染**）探测；支持合法 DHCP 白名单与作用域 CIDR。详见 [`docs/dhcp-diagnosis-design.md`](docs/dhcp-diagnosis-design.md)。 |
 | **交换机配置** | 串口 Console 或 **SSH（PTY）** 会话；SSH 未知主机密钥写入可写目录下的 `switch_console/`。 |
 | **数据库诊断** | 连接 **SQLite / MySQL / PostgreSQL / SQL Server / Oracle**，运行连通性与信息收集，输出 Markdown；支持周期性监控快照导出。 |
 | **ARP 安全** | 以 `arp -a` 轮询本机 ARP 表，对**默认网关 MAC** 做基线对比；异常变化时提示疑似 ARP 欺骗（内网侧轻量监视）。 |
@@ -46,7 +47,7 @@
 - 将 **`tcping.exe`** 放到 `ThirdParty/tcping/tcping.exe`（否则端口探测会降级并在报告中说明）。
 - 将 **`tshark.exe`** 放到 `ThirdParty/Wireshark/`（否则抓包功能不可用）。
 - 将 **`iperf3.exe`** 放到 `ThirdParty/iperf3/`（否则带宽测速功能不可用）。
-- 将 **`nmap.exe`** 放到 `ThirdParty/Nmap/`（否则端口扫描功能不可用）。
+- 将 **`nmap.exe`** 放到 `ThirdParty/Nmap/`（否则安全诊断端口扫描与 **DHCP 诊断**主动探测不可用）。
 
 ## 界面截图
 
@@ -115,6 +116,12 @@ reports/db_diagnosis/<任务ID>/
 reports/security_diagnosis/
 ```
 
+**DHCP 诊断**导出的 Markdown 与原始日志位于：
+
+```text
+reports/dhcp_diagnosis/<任务ID>/
+```
+
 **交换机 Console**（如 SSH `known_hosts`）默认可写目录：**`switch_console/`**。
 
 以上目录若不存在会在首次使用时创建；**`reports/`、`logs/`、`switch_console/`** 已加入 `.gitignore`。
@@ -126,7 +133,7 @@ reports/security_diagnosis/
 | tcping | `ThirdParty/tcping/tcping.exe` | 必放；应用不依赖系统 PATH。 |
 | iperf3 | `ThirdParty/iperf3/iperf3.exe` | 可选；网络诊断选择「iperf3」带宽时使用；亦可依赖系统 PATH。完整离线包建议随包放置，见 [docs/packaging.md](docs/packaging.md)。 |
 | Wireshark 安装包 | `ThirdParty/Wireshark/*.exe` | 可选；未检测到 `tshark` 时可在界面中打开安装。 |
-| Nmap | `ThirdParty/Nmap/*.exe`（安装包）或便携 **`ThirdParty/Nmap/` 整目录**（含 `nmap.exe` 及 DLL） | 可选；安全诊断勾选「使用 nmap」时使用；探测顺序为 PATH → 默认安装目录 → `ThirdParty/Nmap/nmap.exe`（见 `paths.resolve_nmap_exe_path`）。离线包请带入完整便携目录，见 [docs/packaging.md](docs/packaging.md)。 |
+| Nmap | `ThirdParty/Nmap/*.exe`（安装包）或便携 **`ThirdParty/Nmap/` 整目录**（含 `nmap.exe` 及 DLL） | 可选；**安全诊断**勾选「使用 nmap」与 **DHCP 诊断**主动探测（`broadcast-dhcp-discover`）时使用；探测顺序为 PATH → 默认安装目录 → `ThirdParty/Nmap/nmap.exe`（见 `paths.resolve_nmap_exe_path`）。离线包请带入完整便携目录，见 [docs/packaging.md](docs/packaging.md)。 |
 | LICENSE | 仓库根 `LICENSE` | 内置「许可」页读取；打包时请一并打入发行包，见 [docs/packaging.md](docs/packaging.md)。 |
 
 再分发第三方软件须遵守各自许可证（详见设计文档第 6 节）。

@@ -18,6 +18,7 @@ The main window uses a left-hand navigation rail with the following modules:
 | **Subnet calculator** | IPv4 CIDR / dotted-mask math; refresh local IPv4, gateway, DNS, and public IP hints. |
 | **IP scan** | ICMP liveness for an IPv4 CIDR/range; sorted results, search, CSV export. |
 | **MAC scan** | **Local subnet only**: ICMP + `arp -a` for IP/MAC/vendor/remarks; optional hostname resolution. See [`docs/mac-scan-design.md`](docs/mac-scan-design.md). |
+| **DHCP diagnostics** | Local **DHCP client** state (`ipconfig /all`, DHCP client event log) plus **Nmap broadcast-dhcp-discover** to detect **multiple DHCP servers (DHCP pollution)**; authorized-server whitelist and scope CIDR. See [`docs/dhcp-diagnosis-design.md`](docs/dhcp-diagnosis-design.md). |
 | **Switch console** | Serial console or **SSH (PTY)**; SSH host keys land under the writable `switch_console/` tree. |
 | **Database diagnostics** | **SQLite / MySQL / PostgreSQL / SQL Server / Oracle** connectivity and inventory-style checks, Markdown output; scheduled monitoring snapshots. |
 | **ARP security** | Poll `arp -a`, baseline the **default gateway MAC**, and warn on suspicious drift (lightweight LAN-side watch). |
@@ -45,7 +46,7 @@ The main window uses a left-hand navigation rail with the following modules:
 - Place **`tcping.exe`** at `ThirdParty/tcping/tcping.exe` (otherwise TCP port checks degrade and the report notes it).
 - Place **`tshark.exe`** under `ThirdParty/Wireshark/` (otherwise capture is unavailable).
 - Place **`iperf3.exe`** under `ThirdParty/iperf3/` (otherwise iperf3 bandwidth mode is unavailable).
-- Place **`nmap.exe`** under `ThirdParty/Nmap/` (otherwise the port-scan backend is unavailable).
+- Place **`nmap.exe`** under `ThirdParty/Nmap/` (otherwise security port scan and **DHCP diagnostics** active probing are unavailable).
 
 ## Screenshots
 
@@ -113,6 +114,12 @@ reports/db_diagnosis/<task_id>/
 reports/security_diagnosis/
 ```
 
+**DHCP diagnostics** Markdown and raw logs:
+
+```text
+reports/dhcp_diagnosis/<task_id>/
+```
+
 **Switch console** writable data (e.g. SSH `known_hosts`): **`switch_console/`**.
 
 Directories are created on first use; **`reports/`**, **`logs/`**, **`switch_console/`** are listed in `.gitignore`.
@@ -124,7 +131,7 @@ Directories are created on first use; **`reports/`**, **`logs/`**, **`switch_con
 | tcping | `ThirdParty/tcping/tcping.exe` | Required for full port checks; the app does not rely on PATH for tcping. |
 | iperf3 | `ThirdParty/iperf3/iperf3.exe` | Optional; used when iperf3 bandwidth mode is selected; PATH fallback allowed. Recommended in full offline bundles ([docs/packaging.en.md](docs/packaging.en.md)). |
 | Wireshark installer | `ThirdParty/Wireshark/*.exe` | Optional; UI can launch the installer when `tshark` is missing. |
-| Nmap | `ThirdParty/Nmap/*.exe` (installer) or portable **`ThirdParty/Nmap/`** (`nmap.exe` + DLLs) | Optional; used when security diagnostics enables nmap; resolution order: PATH → default install dirs → `ThirdParty/Nmap/nmap.exe` (`paths.resolve_nmap_exe_path`). Ship the full portable folder when bundling ([docs/packaging.en.md](docs/packaging.en.md)). |
+| Nmap | `ThirdParty/Nmap/*.exe` (installer) or portable **`ThirdParty/Nmap/`** (`nmap.exe` + DLLs) | Optional; used when **security diagnostics** enables nmap and for **DHCP diagnostics** active probing (`broadcast-dhcp-discover`); resolution order: PATH → default install dirs → `ThirdParty/Nmap/nmap.exe` (`paths.resolve_nmap_exe_path`). Ship the full portable folder when bundling ([docs/packaging.en.md](docs/packaging.en.md)). |
 | LICENSE | repo root `LICENSE` | Read by the License tab; include in frozen bundles per [docs/packaging.en.md](docs/packaging.en.md). |
 
 Redistributing third-party binaries must comply with their licenses (see design doc §6).
