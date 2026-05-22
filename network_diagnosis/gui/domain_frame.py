@@ -195,6 +195,10 @@ class DomainFrame(ttk.Frame):
         self.var_domain_dns = tk.StringVar(value=self._settings.default_domain_dns)
         self.var_ou_path = tk.StringVar()
         self.var_post_join_user = tk.StringVar()
+        self.var_join_cred_user = tk.StringVar()
+        self.var_join_cred_pass = tk.StringVar()
+        self.var_unjoin_cred_user = tk.StringVar()
+        self.var_unjoin_cred_pass = tk.StringVar()
         self.var_workgroup = tk.StringVar(value=self._settings.default_workgroup)
         self.var_unjoin_confirm = tk.BooleanVar(value=False)
 
@@ -374,16 +378,32 @@ class DomainFrame(ttk.Frame):
             self._form_label(row, "OU 路径（可选）")
             self._form_entry(row, self.var_ou_path)
             row += 1
+            self._form_label(row, "加域凭据用户")
+            self._form_entry(row, self.var_join_cred_user)
+            row += 1
+            self._form_label(row, "加域凭据密码")
+            self._form_entry(row, self.var_join_cred_pass, show="*")
+            row += 1
             self._form_label(row, "加域后 Power Users 用户")
             self._form_entry(row, self.var_post_join_user)
             row += 1
-            ttk.Label(
+            hint_lbl = ttk.Label(
                 self.frm_form,
-                text="如 CORP\\zhangsan；Domain Admins 组不会被移除",
+                text="凭据用户需有权将计算机加入域；Power Users 用户如 CORP\\zhangsan",
                 bootstyle=SECONDARY,
-            ).grid(row=row, column=1, sticky=W, padx=(8, 0))
+                wraplength=300,
+                justify=tk.LEFT,
+            )
+            hint_lbl.grid(row=row, column=0, columnspan=2, sticky=W, pady=(2, 0))
+            self._form_widgets.append(hint_lbl)
 
         elif mode == "unjoin":
+            self._form_label(row, "退域凭据用户")
+            self._form_entry(row, self.var_unjoin_cred_user)
+            row += 1
+            self._form_label(row, "退域凭据密码")
+            self._form_entry(row, self.var_unjoin_cred_pass, show="*")
+            row += 1
             self._form_label(row, "目标工作组")
             self._form_entry(row, self.var_workgroup)
             row += 1
@@ -395,6 +415,16 @@ class DomainFrame(ttk.Frame):
             )
             chk.grid(row=row, column=0, columnspan=2, sticky=W, pady=6)
             self._form_widgets.append(chk)
+            row += 1
+            hint_lbl = ttk.Label(
+                self.frm_form,
+                text="凭据用户需有权从域中删除/禁用本计算机账户",
+                bootstyle=SECONDARY,
+                wraplength=300,
+                justify=tk.LEFT,
+            )
+            hint_lbl.grid(row=row, column=0, columnspan=2, sticky=W)
+            self._form_widgets.append(hint_lbl)
 
     def _append_md(self, chunk: str) -> None:
         self.txt.configure(state=tk.NORMAL)
@@ -416,6 +446,10 @@ class DomainFrame(ttk.Frame):
         dlg = _CredentialDialog(self, title=title, default_user=default_user)
         self.wait_window(dlg)
         return dlg.result
+
+    def _clear_join_unjoin_passwords(self) -> None:
+        self.var_join_cred_pass.set("")
+        self.var_unjoin_cred_pass.set("")
 
     def _confirm_write(self, message: str) -> bool:
         return messagebox.askyesno("确认", message, parent=self.winfo_toplevel())
@@ -515,22 +549,25 @@ class DomainFrame(ttk.Frame):
         if mode == "join":
             domain = self.var_domain_dns.get().strip()
             post_user = self.var_post_join_user.get().strip()
+            join_user = self.var_join_cred_user.get().strip()
+            join_pass = self.var_join_cred_pass.get()
             if not domain or not post_user:
                 messagebox.showwarning("加域", "请填写域 DNS 名与 Power Users 用户。", parent=self.winfo_toplevel())
+                return
+            if not join_user or not join_pass:
+                messagebox.showwarning("加域", "请填写加域凭据用户名与密码。", parent=self.winfo_toplevel())
                 return
             if not self._confirm_write(
                 f"将加入域「{domain}」，并将 {post_user} 加入本地 Power Users。\n完成后必须重启。是否继续？"
             ):
                 return
-            cred = self._ask_credentials("域凭据（加域）")
-            if not cred:
-                return
             self._persist_settings()
+            self._clear_join_unjoin_passwords()
             self._start_worker(
                 "join",
                 domain_dns=domain,
-                join_username=cred[0],
-                join_password=cred[1],
+                join_username=join_user,
+                join_password=join_pass,
                 post_join_user=post_user,
                 ou_path=self.var_ou_path.get().strip(),
             )
@@ -544,16 +581,19 @@ class DomainFrame(ttk.Frame):
                     parent=self.winfo_toplevel(),
                 )
                 return
+            unjoin_user = self.var_unjoin_cred_user.get().strip()
+            unjoin_pass = self.var_unjoin_cred_pass.get()
+            if not unjoin_user or not unjoin_pass:
+                messagebox.showwarning("退域", "请填写退域凭据用户名与密码。", parent=self.winfo_toplevel())
+                return
             if not self._confirm_write("退域后域账户将无法登录本机，且必须重启。此操作风险极高。是否继续？"):
                 return
-            cred = self._ask_credentials("域凭据（退域）")
-            if not cred:
-                return
             self._persist_settings()
+            self._clear_join_unjoin_passwords()
             self._start_worker(
                 "unjoin",
-                unjoin_username=cred[0],
-                unjoin_password=cred[1],
+                unjoin_username=unjoin_user,
+                unjoin_password=unjoin_pass,
                 workgroup=self.var_workgroup.get().strip() or "WORKGROUP",
             )
 
