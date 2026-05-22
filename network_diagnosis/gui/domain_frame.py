@@ -26,6 +26,7 @@ from network_diagnosis.domain.operations import (
     run_unjoin_domain,
 )
 from network_diagnosis.domain.report_md import render_diagnosis_markdown, render_gpresult_markdown
+from network_diagnosis.gui.main_app_common import bind_label_wraplength
 from network_diagnosis.gui.simple_markdown_text import append_simple_markdown, configure_simple_markdown_tags
 from network_diagnosis.paths import domain_ops_report_dir
 from network_diagnosis.runtime_log import get_logger
@@ -311,6 +312,26 @@ class DomainFrame(ttk.Frame):
         ent.grid(row=row, column=1, sticky=EW, padx=(8, 0), pady=3)
         self._form_widgets.append(ent)
 
+    def _form_hint(
+        self,
+        row: int,
+        text: str,
+        *,
+        column: int = 0,
+        columnspan: int = 2,
+        sticky: str = EW,
+        pady: tuple[int, int] | int = (2, 0),
+    ) -> None:
+        lbl = ttk.Label(
+            self.frm_form,
+            text=text,
+            bootstyle=SECONDARY,
+            justify=tk.LEFT,
+        )
+        lbl.grid(row=row, column=column, columnspan=columnspan, sticky=sticky, pady=pady)
+        bind_label_wraplength(lbl)
+        self._form_widgets.append(lbl)
+
     def _apply_mode(self, mode: OperationMode) -> None:
         self._mode = mode
         self._clear_form()
@@ -330,13 +351,7 @@ class DomainFrame(ttk.Frame):
             self._form_label(row, "探测域 DNS（可选）")
             self._form_entry(row, self.var_probe_domain)
             row += 1
-            hint_lbl = ttk.Label(
-                self.frm_form,
-                text="未入域时可填目标域；已入域留空则用当前域",
-                bootstyle=SECONDARY,
-            )
-            hint_lbl.grid(row=row, column=1, sticky=W, padx=(8, 0))
-            self._form_widgets.append(hint_lbl)
+            self._form_hint(row, "未入域时可填目标域；已入域留空则用当前域", column=1, columnspan=1, sticky=EW)
 
         elif mode == "view_policy":
             self._form_label(row, "范围")
@@ -347,15 +362,7 @@ class DomainFrame(ttk.Frame):
             self._form_widgets.append(frm)
 
         elif mode == "gpupdate":
-            lbl = ttk.Label(
-                self.frm_form,
-                text="将刷新本机计算机策略与当前登录用户策略，无需额外参数。",
-                bootstyle=SECONDARY,
-                wraplength=300,
-                justify=tk.LEFT,
-            )
-            lbl.grid(row=row, column=0, columnspan=2, sticky=W, pady=3)
-            self._form_widgets.append(lbl)
+            self._form_hint(row, "将刷新本机计算机策略与当前登录用户策略，无需额外参数。")
 
         elif mode == "rename":
             idn = fetch_domain_identity()
@@ -387,15 +394,10 @@ class DomainFrame(ttk.Frame):
             self._form_label(row, "加域后 Power Users 用户")
             self._form_entry(row, self.var_post_join_user)
             row += 1
-            hint_lbl = ttk.Label(
-                self.frm_form,
-                text="凭据用户需有权将计算机加入域；Power Users 用户如 CORP\\zhangsan",
-                bootstyle=SECONDARY,
-                wraplength=300,
-                justify=tk.LEFT,
+            self._form_hint(
+                row,
+                "凭据用户需有权将计算机加入域；Power Users 用户如 CORP\\zhangsan",
             )
-            hint_lbl.grid(row=row, column=0, columnspan=2, sticky=W, pady=(2, 0))
-            self._form_widgets.append(hint_lbl)
 
         elif mode == "unjoin":
             self._form_label(row, "退域凭据用户")
@@ -416,15 +418,7 @@ class DomainFrame(ttk.Frame):
             chk.grid(row=row, column=0, columnspan=2, sticky=W, pady=6)
             self._form_widgets.append(chk)
             row += 1
-            hint_lbl = ttk.Label(
-                self.frm_form,
-                text="凭据用户需有权从域中删除/禁用本计算机账户",
-                bootstyle=SECONDARY,
-                wraplength=300,
-                justify=tk.LEFT,
-            )
-            hint_lbl.grid(row=row, column=0, columnspan=2, sticky=W)
-            self._form_widgets.append(hint_lbl)
+            self._form_hint(row, "凭据用户需有权从域中删除/禁用本计算机账户")
 
     def _append_md(self, chunk: str) -> None:
         self.txt.configure(state=tk.NORMAL)
