@@ -8,11 +8,24 @@ import sys
 import threading
 import tkinter as tk
 import webbrowser
+from datetime import datetime
 from pathlib import Path
 from tkinter import messagebox
 
 import ttkbootstrap as ttk
-from ttkbootstrap.constants import DANGER, END, EW, INFO, NSEW, PRIMARY, ROUND, SECONDARY, SUCCESS, WARNING, W
+from ttkbootstrap.constants import (
+    DANGER,
+    END,
+    EW,
+    INFO,
+    NSEW,
+    PRIMARY,
+    ROUND,
+    SECONDARY,
+    SUCCESS,
+    WARNING,
+    W,
+)
 
 from network_diagnosis.domain.collect import fetch_domain_identity, run_domain_diagnosis, run_gpresult
 from network_diagnosis.domain.config import DomainOpsSettings, load_domain_ops_settings, save_domain_ops_settings
@@ -97,6 +110,7 @@ class DomainFrame(ttk.Frame):
         self._last_report_dir: Path | None = None
         self._last_gp_html: str = ""
         self._settings = load_domain_ops_settings()
+        self._status_refreshing = False
         self._build_ui()
         self._apply_mode("diagnose")
         self.after(180, self._poll_queue)
@@ -158,11 +172,23 @@ class DomainFrame(ttk.Frame):
         status = ttk.Labelframe(parent, text="当前状态", padding=(10, 8, 10, 8))
         status.grid(row=1, column=0, sticky=EW, pady=(10, 0))
         status.columnconfigure(0, weight=1)
-        self.lbl_status = ttk.Label(status, text="加载中…", wraplength=320, justify=tk.LEFT)
-        self.lbl_status.grid(row=0, column=0, sticky=W)
-        ttk.Button(status, text="刷新", command=self._refresh_status, bootstyle=SECONDARY).grid(
-            row=1, column=0, sticky=W, pady=(6, 0)
+
+        status_row = ttk.Frame(status)
+        status_row.grid(row=0, column=0, sticky=EW)
+        status_row.columnconfigure(0, weight=1)
+
+        self.lbl_status = ttk.Label(status_row, text="加载中…", justify=tk.LEFT)
+        self.lbl_status.grid(row=0, column=0, sticky=EW)
+        bind_label_wraplength(self.lbl_status)
+
+        self.btn_refresh_status = ttk.Button(
+            status_row,
+            text="刷新",
+            command=self._refresh_status,
+            bootstyle=SECONDARY,
+            width=6,
         )
+        self.btn_refresh_status.grid(row=0, column=1, sticky=tk.E, padx=(8, 0))
 
         actions = ttk.Labelframe(parent, text="操作", padding=(10, 8, 10, 8))
         actions.grid(row=2, column=0, sticky=EW, pady=(10, 0))
@@ -259,9 +285,15 @@ class DomainFrame(ttk.Frame):
             self.lbl_admin.configure(text="未以管理员运行；写操作将不可用。", bootstyle=WARNING)
 
     def _refresh_status(self) -> None:
+        if self._status_refreshing:
+            return
         if not is_windows():
             self.lbl_status.configure(text="非 Windows 环境")
             return
+
+        self._status_refreshing = True
+        self.btn_refresh_status.configure(state=tk.DISABLED)
+        self.lbl_status.configure(text="刷新中…")
 
         def worker() -> None:
             try:
@@ -280,19 +312,33 @@ class DomainFrame(ttk.Frame):
                             sc = "正常" if data else "异常"
                     except Exception:
                         sc = "—"
+                stamp = datetime.now().strftime("%H:%M:%S")
                 if idn.part_of_domain:
                     text = (
                         f"计算机：{idn.computer_name}\n"
                         f"域：{idn.domain}\n"
-                        f"已入域 | 安全通道：{sc}"
+                        f"已入域 | 安全通道：{sc}\n"
+                        f"（刷新于 {stamp}）"
                     )
                 else:
-                    text = f"计算机：{idn.computer_name}\n工作组：{idn.workgroup}\n未加入域"
+                    text = (
+                        f"计算机：{idn.computer_name}\n"
+                        f"工作组：{idn.workgroup}\n"
+                        f"未加入域\n"
+                        f"（刷新于 {stamp}）"
+                    )
                 self._q.put(("status", text))
             except Exception as e:
                 self._q.put(("status", f"状态读取失败：{e}"))
 
         threading.Thread(target=worker, daemon=True).start()
+
+    def _finish_status_refresh(self) -> None:
+        self._status_refreshing = False
+        try:
+            self.btn_refresh_status.configure(state=tk.NORMAL)
+        except tk.TclError:
+            pass
 
     def _clear_form(self) -> None:
         for w in self._form_widgets:
@@ -690,6 +736,7 @@ class DomainFrame(ttk.Frame):
                 kind, *rest = self._q.get_nowait()
                 if kind == "status":
                     self.lbl_status.configure(text=str(rest[0]))
+                    self._finish_status_refresh()
                 elif kind == "diagnose_done":
                     self._set_busy(False, f"完成。reports/domain_ops/{rest[0].task_id}/")
                     self._worker = None
