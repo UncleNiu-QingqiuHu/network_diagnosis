@@ -663,6 +663,26 @@ class StaticViewsMixin:
         add_guide_tab("IP扫描", body_ip_scan)
         add_guide_tab("MAC扫描", body_mac_scan)
         add_guide_tab("DHCP诊断", body_dhcp_diagnosis)
+        body_packet_capture = """【本模块用途】
+
+  • **实时抓包**：自选网卡、BPF 捕获过滤器、手动或定时停止；依赖 **Wireshark/tshark** 与 **Npcap**。
+  • **离线分析**：导入 pcap/pcapng，或从 **网络诊断** 历史载入；生成中文摘要、协议统计与 Markdown 报告。
+  • 详见 [`docs/packet-capture-design.md`](../docs/packet-capture-design.md)。
+
+══════════════════════════════════════
+二、前置条件
+══════════════════════════════════════
+
+  • 安装 Wireshark（勾选 Npcap）；部分环境须 **以管理员身份运行** 本程序。
+  • 空 BPF 会抓取大量流量，启动前会二次确认；建议设置定时或文件大小上限。
+
+══════════════════════════════════════
+三、与其它模块
+══════════════════════════════════════
+
+  • **网络诊断** 勾选「抓包」后，可在诊断结果区 **「在抓包分析中打开」** 深入分析。
+  • 与 **DHCP 诊断**、**ARP 安全** 对照时，可在 Display Filter 中使用 `bootp`、`arp` 等。"""
+        add_guide_tab("抓包分析", body_packet_capture)
         add_guide_tab("交换机配置", body_switch)
         add_guide_tab("数据库诊断", body_database)
         add_guide_tab("ARP安全", body_arp_intranet)

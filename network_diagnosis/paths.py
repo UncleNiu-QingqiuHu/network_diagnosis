@@ -50,6 +50,18 @@ def domain_ops_config_path() -> Path:
     return user_config_dir() / "domain_ops.json"
 
 
+def packet_capture_report_dir(task_id: str) -> Path:
+    """单次抓包/分析任务目录：`reports/packet_capture/<task_id>/`。"""
+    d = report_root() / "packet_capture" / task_id
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def packet_capture_config_path() -> Path:
+    """抓包分析用户配置 JSON。"""
+    return user_config_dir() / "packet_capture.json"
+
+
 def db_diagnosis_report_dir(task_id: str) -> Path:
     """单次数据库诊断或监控导出目录：`reports/db_diagnosis/<task_id>/`。"""
     d = report_root() / "db_diagnosis" / task_id
@@ -138,6 +150,7 @@ def resolve_sidebar_nav_icon_png(module_key: str) -> Path | None:
         "ip_scan": "streamline-flex--iris-scan-solid.png",
         "mac_scan": "icon-park-solid--i-mac.png",
         "dhcp_diagnosis": "mdi--server-network.png",
+        "packet_capture": "simple-icons--scan.png",
         "domain": "mingcute--ad-circle-fill.png",
         "switch": "streamline-ultimate--ethernet-port-bold.png",
         "database": "teenyicons--database-solid.png",
@@ -194,6 +207,21 @@ def find_tshark() -> Path | None:
         Path(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)"))
         / "Wireshark"
         / "tshark.exe",
+        third_party_wireshark_dir() / "tshark.exe",
+    ]
+    for c in candidates:
+        if c.is_file():
+            return c
+    return None
+
+
+def find_wireshark_gui() -> Path | None:
+    """Wireshark 图形界面（打开 pcap 用）。"""
+    candidates = [
+        Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "Wireshark" / "Wireshark.exe",
+        Path(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)"))
+        / "Wireshark"
+        / "Wireshark.exe",
     ]
     for c in candidates:
         if c.is_file():

@@ -28,6 +28,7 @@ from ttkbootstrap.constants import (
 )
 
 from network_diagnosis.gui.ai_assistant_frame import AiAssistantFrame
+from network_diagnosis.gui.capture_frame import CaptureFrame
 from network_diagnosis.gui.code_signing_frame import CodeSigningFrame
 from network_diagnosis.gui.db_diagnosis_frame import DbDiagnosisFrame
 from network_diagnosis.gui.dhcp_diagnosis_frame import DhcpDiagnosisFrame
@@ -159,6 +160,7 @@ class NetworkDiagnosisApp(NetworkViewsMixin, SubnetViewsMixin, StaticViewsMixin,
             ("ip_scan", "IP扫描"),
             ("mac_scan", "MAC扫描"),
             ("dhcp_diagnosis", "DHCP诊断"),
+            ("packet_capture", "抓包分析"),
             ("switch", "交换机配置"),
             ("database", "数据库诊断"),
             ("arp_intranet", "ARP安全"),
@@ -218,6 +220,8 @@ class NetworkDiagnosisApp(NetworkViewsMixin, SubnetViewsMixin, StaticViewsMixin,
 
         self.after(200, self._poll_queue)
 
+        self.protocol("WM_DELETE_WINDOW", self._on_window_close)
+
         self._build_subnet_view()
         self._ip_scan = IpScanFrame(self._content_host)
         self._view_frames["ip_scan"] = self._ip_scan
@@ -225,6 +229,8 @@ class NetworkDiagnosisApp(NetworkViewsMixin, SubnetViewsMixin, StaticViewsMixin,
         self._view_frames["mac_scan"] = self._mac_scan
         self._dhcp_diagnosis = DhcpDiagnosisFrame(self._content_host, app=self)
         self._view_frames["dhcp_diagnosis"] = self._dhcp_diagnosis
+        self._packet_capture = CaptureFrame(self._content_host, app=self)
+        self._view_frames["packet_capture"] = self._packet_capture
         self._switch_console = SwitchConsoleFrame(self._content_host)
         self._view_frames["switch"] = self._switch_console
         self._db_diagnosis = DbDiagnosisFrame(self._content_host)
@@ -387,7 +393,8 @@ class NetworkDiagnosisApp(NetworkViewsMixin, SubnetViewsMixin, StaticViewsMixin,
             if fr is not None:
                 leave = getattr(fr, "on_leave", None)
                 if callable(leave):
-                    leave()
+                    if leave() is False:
+                        return
         self._active_module = module_key
         for k, btn in self._sidebar_btn_by_module.items():
             btn.configure(
@@ -408,6 +415,16 @@ class NetworkDiagnosisApp(NetworkViewsMixin, SubnetViewsMixin, StaticViewsMixin,
             if callable(shown):
                 shown()
         _log.info("切换导航模块 %s -> %s", prev, module_key)
+
+    def _on_window_close(self) -> None:
+        cap = getattr(self, "_packet_capture", None)
+        if cap is not None and cap.is_capturing():
+            if not cap.confirm_exit():
+                return
+        try:
+            self.destroy()
+        except tk.TclError:
+            pass
 
     def _configure_sidebar_nav_styles(self) -> None:
         c = self.style.colors
@@ -565,6 +582,15 @@ class NetworkDiagnosisApp(NetworkViewsMixin, SubnetViewsMixin, StaticViewsMixin,
         if not self._last_md:
             return
         self._startfile(self._last_md)
+
+    def _open_last_capture_in_analyzer(self) -> None:
+        if not self._last_pcap:
+            return
+        cap = getattr(self, "_packet_capture", None)
+        if cap is None:
+            return
+        self._select_module("packet_capture")
+        cap.load_pcap(self._last_pcap, source="from_diagnosis")
 
     def _open_last_dir(self) -> None:
         if not self._last_dir:
@@ -810,6 +836,13 @@ class NetworkDiagnosisApp(NetworkViewsMixin, SubnetViewsMixin, StaticViewsMixin,
         self._last_dir = str(rep.meta.report_dir.resolve())
         self.btn_open_md.configure(state=tk.NORMAL)
         self.btn_open_dir.configure(state=tk.NORMAL)
+        pcap_path = rep.capture.pcap_path
+        if rep.capture.ran and pcap_path is not None and pcap_path.is_file():
+            self._last_pcap = str(pcap_path.resolve())
+            self.btn_open_capture.configure(state=tk.NORMAL)
+        else:
+            self._last_pcap = None
+            self.btn_open_capture.configure(state=tk.DISABLED)
 
         q = rep.network_quality.grade
         self._status_shell.configure(text=f"任务状态（网络质量：{q}）")

@@ -1,5 +1,14 @@
 # 变更日志
 
+## [3.4.0] — 2026-05-26
+
+### 新增
+- **抓包分析**独立模块：实时抓包（自选网卡、BPF 过滤器、定时/大小限制）、pcap/pcapng 离线分析、Display Filter、报文预览、Markdown 报告（`reports/packet_capture/`）。
+- 网络诊断结果区 **「在抓包分析中打开」**，可从诊断历史载入 pcap 深入分析。
+- 帮助页新增 **抓包分析** 说明；设计文档 [`docs/packet-capture-design.md`](docs/packet-capture-design.md) 状态更新为 v1 已实现。
+
+---
+
 ## [2.1.6] — 2026-05-15
 
 ### 新增

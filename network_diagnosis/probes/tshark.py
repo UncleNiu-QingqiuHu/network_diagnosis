@@ -155,6 +155,9 @@ class TsharkCaptureSession:
         pcap_path: Path,
         capture_filter: str,
         log_dir: Path,
+        *,
+        duration_sec: int = 0,
+        filesize_kb: int = 0,
     ) -> tuple[Path, Path]:
         log_dir.mkdir(parents=True, exist_ok=True)
         out_log = log_dir / "tshark_capture.stdout.log"
@@ -165,9 +168,13 @@ class TsharkCaptureSession:
             iface_idx,
             "-w",
             str(pcap_path),
-            "-f",
-            capture_filter,
         ]
+        if capture_filter.strip():
+            argv.extend(["-f", capture_filter.strip()])
+        if filesize_kb > 0:
+            argv.extend(["-a", f"filesize:{filesize_kb}"])
+        if duration_sec > 0:
+            argv.extend(["-a", f"duration:{int(duration_sec)}"])
         self._stdout_f = out_log.open("wb")
         self._stderr_f = err_log.open("wb")
         self._proc = subprocess.Popen(  # noqa: S603
@@ -177,6 +184,10 @@ class TsharkCaptureSession:
             **_popen_kwargs_capture(),
         )
         return out_log, err_log
+
+    def is_running(self) -> bool:
+        proc = self._proc
+        return proc is not None and proc.poll() is None
 
     def stop(self) -> int | None:
         proc = self._proc

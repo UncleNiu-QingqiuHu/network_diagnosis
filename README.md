@@ -24,6 +24,7 @@
 | **数据库诊断** | 连接 **SQLite / MySQL / PostgreSQL / SQL Server / Oracle**，运行连通性与信息收集，输出 Markdown；支持周期性监控快照导出。 |
 | **ARP 安全** | 以 `arp -a` 轮询本机 ARP 表，对**默认网关 MAC** 做基线对比；异常变化时提示疑似 ARP 欺骗（内网侧轻量监视）。 |
 | **域与策略** | Windows **Active Directory**：域诊断、本机 **gpresult** 查看、**gpupdate** 刷新、信任修复、计算机重命名、加域（指定用户入 **Power Users**）、退域；详见 [`docs/domain-module-design.md`](docs/domain-module-design.md)。报告位于 `reports/domain_ops/`。 |
+| **抓包分析** | 独立 **实时抓包** 与 **pcap/pcapng 离线分析**（基于 **tshark/Npcap**）；与网络诊断「可选抓包」互补。详见 [`docs/packet-capture-design.md`](docs/packet-capture-design.md)。报告位于 `reports/packet_capture/`。 |
 | **安全诊断** | 本机 TCP 监听与 Windows 防火墙只读摘要；本机 CPU/GPU/内存/用户策略与临时清理（Windows）；授权前提下 HTTPS TLS/证书与安全响应头、DNS 对比、**单主机 IPv4 TCP 端口扫描**（Python 默认可选 nmap `-sT`）；详见 [`docs/network-security-diagnosis-design.md`](docs/network-security-diagnosis-design.md)。导出至 `reports/security_diagnosis/`。 |
 | **数字签名** | Windows **Authenticode**：`signtool` + PFX 对 exe/dll **仅签名与校验**；exe「详细信息」请在 **Nuitka/PyInstaller 构建时**写入。自签名 PFX 由 **PowerShell / .NET** 一键生成；`signtool` 来自 Windows SDK 或 PATH。 |
 | **SSL证书** | **Let's Encrypt**（DNS-01，阿里云 / 腾讯云 DNS API）与 **私有 CA**（`cryptography`）；详见内置「SSL证书」帮助与 [`docs/ssl_certificate_scheme.md`](docs/ssl_certificate_scheme.md)。 |
@@ -127,6 +128,12 @@ reports/dhcp_diagnosis/<任务ID>/
 
 ```text
 reports/domain_ops/<任务ID>/
+```
+
+**抓包分析**导出的 Markdown、analysis.json 与 pcap 位于：
+
+```text
+reports/packet_capture/<任务ID>/
 ```
 
 **交换机 Console**（如 SSH `known_hosts`）默认可写目录：**`switch_console/`**。

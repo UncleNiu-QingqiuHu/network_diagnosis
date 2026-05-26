@@ -436,6 +436,14 @@ class NetworkViewsMixin:
             bootstyle=OUTLINE,
         )
         self.btn_open_dir.pack(side=tk.LEFT, padx=(10, 0))
+        self.btn_open_capture = ttk.Button(
+            btn2,
+            text="在抓包分析中打开",
+            command=self._open_last_capture_in_analyzer,
+            state=tk.DISABLED,
+            bootstyle=OUTLINE,
+        )
+        self.btn_open_capture.pack(side=tk.LEFT, padx=(10, 0))
 
         # \u2014\u2014\u0020\u53f3\u4fa7\uff1a\u8bca\u65ad\u7ed3\u679c + \u8fdb\u5ea6\u8be6\u60c5 \u2014\u2014
         right.columnconfigure(0, weight=1)
@@ -477,6 +485,7 @@ class NetworkViewsMixin:
 
         self._last_md: str | None = None
         self._last_dir: str | None = None
+        self._last_pcap: str | None = None
 
     def _sync_bw_panels(self) -> None:
         m = self.var_bw_mode.get()
