@@ -159,12 +159,29 @@ class CaptureFrame(ttk.Frame):
         txt_hint.configure(state=tk.NORMAL)
         append_simple_markdown(txt_hint, hint_msg.rstrip() + "\n")
         txt_hint.configure(state=tk.DISABLED)
-        ttk.Button(hint, text="安装 Wireshark", command=self._open_wireshark_installer, bootstyle=SECONDARY).grid(
-            row=1, column=0, sticky=W, pady=(6, 0)
-        )
 
-        self.lbl_tshark = ttk.Label(frm_ops, text="tshark：检测中…", bootstyle=INFO)
-        self.lbl_tshark.grid(row=1, column=0, sticky=EW, pady=(8, 0))
+        dep_row = ttk.Frame(frm_ops)
+        dep_row.grid(row=1, column=0, sticky=EW, pady=(8, 0))
+        dep_row.columnconfigure(0, weight=1)
+
+        self.lbl_tshark = ttk.Label(dep_row, text="tshark：检测中…", bootstyle=INFO)
+        self.lbl_tshark.grid(row=0, column=0, sticky=EW)
+
+        dep_btns = ttk.Frame(dep_row)
+        dep_btns.grid(row=0, column=1, sticky=tk.E, padx=(12, 0))
+        ttk.Button(
+            dep_btns,
+            text="检测 Tshark",
+            command=self._probe_tshark,
+            bootstyle=SECONDARY,
+        ).pack(side=LEFT, padx=(0, 6))
+        self.btn_install_wireshark = ttk.Button(
+            dep_btns,
+            text="安装 Wireshark",
+            command=self._open_wireshark_installer,
+            bootstyle=INFO,
+        )
+        self.btn_install_wireshark.pack(side=LEFT)
 
         lf_live = ttk.Labelframe(frm_ops, text="实时抓包", padding=(12, 10, 12, 10))
         lf_live.grid(row=2, column=0, sticky=EW, pady=(10, 0))
@@ -352,13 +369,36 @@ class CaptureFrame(ttk.Frame):
         app = self._app
         if app is not None and hasattr(app, "_open_wireshark_installer"):
             app._open_wireshark_installer()
+            self.after(800, self._refresh_tshark_status)
+            self.after(800, self._refresh_interfaces)
             return
         messagebox.showinfo("抓包分析", "请将 Wireshark 安装包放入 ThirdParty/Wireshark/。", parent=self)
+
+    def _probe_tshark(self) -> None:
+        app = self._app
+        if app is not None and hasattr(app, "_probe_tshark"):
+            app._probe_tshark()
+        else:
+            p = find_tshark()
+            if p:
+                messagebox.showinfo("Tshark", f"已找到:\n{p}", parent=self)
+            else:
+                messagebox.showwarning(
+                    "Tshark",
+                    "未找到 tshark。请先安装 Wireshark（含 Npcap），或将安装包放入 ThirdParty/Wireshark/。",
+                    parent=self,
+                )
+        self._refresh_tshark_status()
+        self._refresh_interfaces()
 
     def _refresh_tshark_status(self) -> None:
         p = find_tshark()
         if p is None:
             self.lbl_tshark.configure(text="tshark：未找到（请安装 Wireshark / Npcap）", bootstyle=WARNING)
+            try:
+                self.btn_install_wireshark.configure(bootstyle=WARNING)
+            except tk.TclError:
+                pass
             return
         ver = ""
         try:
@@ -369,6 +409,10 @@ class CaptureFrame(ttk.Frame):
         except OSError:
             pass
         self.lbl_tshark.configure(text=f"tshark：{p}{ver}", bootstyle=INFO)
+        try:
+            self.btn_install_wireshark.configure(bootstyle=INFO)
+        except tk.TclError:
+            pass
 
     def _refresh_interfaces(self) -> None:
         tshark = find_tshark()

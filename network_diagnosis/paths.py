@@ -150,7 +150,7 @@ def resolve_sidebar_nav_icon_png(module_key: str) -> Path | None:
         "ip_scan": "streamline-flex--iris-scan-solid.png",
         "mac_scan": "icon-park-solid--i-mac.png",
         "dhcp_diagnosis": "mdi--server-network.png",
-        "packet_capture": "simple-icons--scan.png",
+        "packet_capture": "simple-icons--wireshark.png",
         "domain": "mingcute--ad-circle-fill.png",
         "switch": "streamline-ultimate--ethernet-port-bold.png",
         "database": "teenyicons--database-solid.png",
