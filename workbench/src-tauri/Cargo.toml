@@ -1,0 +1,24 @@
+[package]
+name = "qqhu-app"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "青丘狐网络工作台 —— Tauri 桌面应用层"
+
+[lib]
+name = "qqhu_app_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+qqhu-core = { path = "../crates/qqhu-core" }
+qqhu-sys = { path = "../crates/qqhu-sys" }
