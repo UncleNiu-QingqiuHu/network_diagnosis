@@ -8,6 +8,21 @@ use qqhu_core::{calc_from_cidr_combo, calc_subnet, subdivide_ipv4_equal_children
 use qqhu_sys::{host, CapabilitySet, CapabilityLevel, PlatformKind};
 use serde::Serialize;
 
+pub const APP_NAME: &str = "青丘湖网络工作台";
+pub const APP_NAME_EN: &str = "Qingqiuhu Network Workbench";
+pub const AUTHOR_NAME: &str = "Mr. Z";
+pub const AUTHOR_EMAIL: &str = "mr.zed@qq.com";
+pub const AUTHOR_QQ: &str = "40061980";
+pub const AUTHOR_QQ_GROUP: &str = "292621190";
+pub const WEBSITE_URL: &str = "https://www.qingqiuhu.net";
+pub const REPO_URL: &str = "https://github.com/UncleNiu-QingqiuHu/network_diagnosis";
+pub const COMMUNITY_URL: &str = "https://www.pheks.com/community/";
+pub const COPYRIGHT: &str = "Copyright © 2025-2026 Mr. Z";
+pub const LICENSE_NAME: &str = "MIT License";
+
+/// 许可全文在编译期嵌入，运行期不依赖外部文件（避免打包漏带）。
+pub const LICENSE_TEXT: &str = include_str!("../../LICENSE");
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ModuleInfo {
@@ -57,7 +72,61 @@ fn available_modules(caps: &CapabilitySet) -> Vec<ModuleInfo> {
     push_if(&mut out, caps.mac_scan, "macScan", "MAC 扫描", "net");
     push_if(&mut out, caps.ssl_cert, "sslCert", "SSL 证书", "tool");
 
+    // 关于与许可为纯信息页，与平台能力无关，恒定可用。
+    out.push(module("about", "关于", "info"));
+    out.push(module("license", "许可", "info"));
+
     out
+}
+
+/// 「关于」页所需的静态信息 + 运行环境快照。
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AboutInfo {
+    pub name: String,
+    pub name_en: String,
+    pub version: String,
+    pub platform_display: String,
+    pub hostname: String,
+    pub os_summary: String,
+    pub elevated: bool,
+    pub author: String,
+    pub email: String,
+    pub qq: String,
+    pub qq_group: String,
+    pub website: String,
+    pub repository: String,
+    pub community: String,
+    pub copyright: String,
+    pub license: String,
+}
+
+#[tauri::command]
+pub fn about_info() -> AboutInfo {
+    let h = host();
+    AboutInfo {
+        name: APP_NAME.into(),
+        name_en: APP_NAME_EN.into(),
+        version: qqhu_core::APP_VERSION.into(),
+        platform_display: h.kind().display().into(),
+        hostname: h.hostname(),
+        os_summary: h.os_summary(),
+        elevated: h.is_elevated(),
+        author: AUTHOR_NAME.into(),
+        email: AUTHOR_EMAIL.into(),
+        qq: AUTHOR_QQ.into(),
+        qq_group: AUTHOR_QQ_GROUP.into(),
+        website: WEBSITE_URL.into(),
+        repository: REPO_URL.into(),
+        community: COMMUNITY_URL.into(),
+        copyright: COPYRIGHT.into(),
+        license: LICENSE_NAME.into(),
+    }
+}
+
+#[tauri::command]
+pub fn license_text() -> &'static str {
+    LICENSE_TEXT
 }
 
 pub fn build_app_info() -> AppInfo {
@@ -117,7 +186,16 @@ mod tests {
         let info = build_app_info();
         let keys: Vec<&str> = info.modules.iter().map(|m| m.key.as_str()).collect();
         assert!(keys.contains(&"subnet"), "子网计算必须始终可用");
+        assert!(keys.contains(&"about"), "关于页恒定可用");
+        assert!(keys.contains(&"license"), "许可页恒定可用");
         assert!(!keys.contains(&"aiChat"), "AI 是常驻侧栏，不应出现在导航");
+    }
+
+    #[test]
+    fn license_text_is_embedded() {
+        assert!(LICENSE_TEXT.contains("MIT License"));
+        assert!(LICENSE_TEXT.contains("Mr. Z"));
+        assert!(!LICENSE_TEXT.contains("[year]"), "许可占位符必须已替换");
     }
 
     #[test]

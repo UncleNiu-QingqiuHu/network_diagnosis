@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { AppInfo, SubnetCalcResult } from "./types";
+import type { AboutInfo, AppInfo, SubnetCalcResult } from "./types";
 
 /** 是否运行在 Tauri 容器内。浏览器直接 `pnpm dev` 时为 false。 */
 export const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -72,4 +72,14 @@ export async function subnetSubdivide(
 export async function aiChat(message: string): Promise<string> {
   if (!isTauri) throw new Error("AI 通道需要 Rust 后端。");
   return invoke<string>("ai_chat", { message });
+}
+
+export async function aboutInfo(): Promise<AboutInfo> {
+  if (!isTauri) throw new Error("关于信息需要 Rust 后端。");
+  return invoke<AboutInfo>("about_info");
+}
+
+export async function licenseText(): Promise<string> {
+  if (!isTauri) throw new Error("许可全文需要 Rust 后端。");
+  return invoke<string>("license_text");
 }

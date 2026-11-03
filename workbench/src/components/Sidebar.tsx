@@ -5,9 +5,10 @@ const GROUP_LABEL: Record<string, string> = {
   core: "核心",
   net: "网络",
   tool: "工具",
+  info: "信息",
 };
 
-const GROUP_ORDER = ["core", "net", "tool"];
+const GROUP_ORDER = ["core", "net", "tool", "info"];
 
 interface Props {
   info: AppInfo | null;
@@ -28,7 +29,7 @@ export default function Sidebar({ info, modules, active, onSelect }: Props) {
       <div className="brand">
         <div className="brand-mark" style={markStyle} />
         <div className="brand-text">
-          <div className="brand-title">青丘狐网络工作台</div>
+          <div className="brand-title">青丘湖网络工作台</div>
           <div className="brand-sub">workbench</div>
         </div>
       </div>

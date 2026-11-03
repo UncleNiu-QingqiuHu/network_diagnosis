@@ -47,6 +47,25 @@ export interface AppInfo {
   modules: ModuleInfo[];
 }
 
+export interface AboutInfo {
+  name: string;
+  nameEn: string;
+  version: string;
+  platformDisplay: string;
+  hostname: string;
+  osSummary: string;
+  elevated: boolean;
+  author: string;
+  email: string;
+  qq: string;
+  qqGroup: string;
+  website: string;
+  repository: string;
+  community: string;
+  copyright: string;
+  license: string;
+}
+
 export interface SubnetCalcResult {
   inputInterface: string;
   networkCidr: string;

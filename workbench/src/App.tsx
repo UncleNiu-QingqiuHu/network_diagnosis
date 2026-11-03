@@ -6,6 +6,8 @@ import { appInfo, isTauri } from "./lib/api";
 import type { AppInfo } from "./lib/types";
 import Placeholder from "./modules/Placeholder";
 import SubnetCalc from "./modules/SubnetCalc";
+import About from "./modules/About";
+import License from "./modules/License";
 
 interface ModuleView {
   title: string;
@@ -68,6 +70,16 @@ const VIEWS: Record<string, ModuleView> = {
         items={["DNS-01 签发（阿里云 / 腾讯云 DNS）", "私有 CA 与站点证书", "PFX 导出"]}
       />
     ),
+  },
+  about: {
+    title: "关于",
+    desc: "版本、作者与运行环境",
+    render: () => <About />,
+  },
+  license: {
+    title: "许可",
+    desc: "开源许可全文",
+    render: () => <License />,
   },
 };
 

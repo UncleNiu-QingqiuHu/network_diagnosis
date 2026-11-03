@@ -1,4 +1,4 @@
-# 青丘狐网络工作台 · Rust + Tauri 重构版
+# 青丘湖网络工作台 · Rust + Tauri 重构版
 
 本目录是 `feat/rust-tauri-rewrite` 分支上的重写实现，与仓库根目录的 Python 版并存，
 用于逐模块替换与结果对拍。Python 版在过渡期内保持可用。
@@ -10,9 +10,18 @@
 | 三栏骨架（导航 / 模块 / AI Agent 右栏） | 已完成 |
 | 平台抽象层 + 能力矩阵 | 已完成 |
 | 子网计算（首个端到端功能） | 已完成 |
+| 关于 / 许可 | 已完成 |
 | 网络诊断 | 排期 M2 |
 | IP 扫描 / MAC 扫描 | 排期 M3 |
 | SSL 证书 / AI 接入 | 排期 M4 |
+
+## 版本约定
+
+采用主版本序列 `4.0.0-alpha.x`：表示「下一代重写」，与 Python 版 `v3.x` 明确区分。
+每完成一个功能合并到本分支并打 tag（如 `v4.0.0-alpha.1`），正式可替换现有版本时发布 `v4.0.0`。
+
+版本号唯一来源：`Cargo.toml` 的 `[workspace.package].version`；
+`tauri.conf.json`、`package.json` 的 version 必须同步（打包元信息读取这两处）。
 
 ## 目录结构
 
