@@ -80,6 +80,10 @@ cargo test        # 跑 Rust 单测
 `app_info` 命令返回当前构建可用的模块列表。Windows 专有模块用 `cfg(target_os = "windows")`
 编译，mac/Linux 构建里根本不存在这些入口——不需要运行期判断平台。
 
+每个模块同时返回 `icon` 语义名（`wave` / `split` / `radar` / `chip` / `shield` / `info` / `doc`），
+前端 `src/components/icons.tsx` 按名查表渲染 SVG。新增模块只需后端加一行，图标位不会空白；
+未登记的名称回退默认图标，并有单测拦截空图标名。
+
 **2. 能力矩阵而非散落的 cfg**
 
 `CapabilitySet` 一次性给出各模块的 `full / partial / unavailable`，前端据此决定

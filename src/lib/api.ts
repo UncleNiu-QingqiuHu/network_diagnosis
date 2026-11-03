@@ -31,11 +31,13 @@ const BROWSER_INFO: AppInfo = {
     notes: [],
   },
   modules: [
-    { key: "network", label: "网络诊断", group: "core" },
-    { key: "subnet", label: "子网计算", group: "core" },
-    { key: "ipScan", label: "IP 扫描", group: "net" },
-    { key: "macScan", label: "MAC 扫描", group: "net" },
-    { key: "sslCert", label: "SSL 证书", group: "tool" },
+    { key: "network", label: "网络诊断", icon: "wave" },
+    { key: "subnet", label: "子网计算", icon: "split" },
+    { key: "ipScan", label: "IP 扫描", icon: "radar" },
+    { key: "macScan", label: "MAC 扫描", icon: "chip" },
+    { key: "sslCert", label: "SSL 证书", icon: "shield" },
+    { key: "about", label: "关于", icon: "info" },
+    { key: "license", label: "许可", icon: "doc" },
   ],
 };
 

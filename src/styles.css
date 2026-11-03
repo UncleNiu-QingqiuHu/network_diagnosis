@@ -125,22 +125,11 @@ textarea {
   padding: 12px 8px;
 }
 
-.nav-group + .nav-group {
-  margin-top: 14px;
-}
-
-.nav-group-label {
-  padding: 0 8px 6px;
-  font-size: 10px;
-  letter-spacing: 0.6px;
-  color: var(--text-faint);
-  text-transform: uppercase;
-}
-
 .nav-item {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 10px;
   width: 100%;
   padding: 8px 10px;
   margin-bottom: 2px;
@@ -150,6 +139,7 @@ textarea {
   color: var(--text-dim);
   cursor: pointer;
   text-align: left;
+  font-size: 12.5px;
   transition: background 0.12s, color 0.12s;
 }
 
@@ -163,17 +153,38 @@ textarea {
   color: var(--accent);
 }
 
-.nav-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: currentColor;
-  opacity: 0.5;
-  flex: none;
+/* 选中态左侧竖条，避免只靠背景色区分（低对比环境下更清楚） */
+.nav-item.active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 2px;
+  height: 16px;
+  border-radius: 0 2px 2px 0;
+  background: var(--accent);
 }
 
-.nav-item.active .nav-dot {
+.nav-icon {
+  flex: none;
+  opacity: 0.7;
+  transition: opacity 0.12s;
+}
+
+.nav-item:hover .nav-icon {
+  opacity: 0.9;
+}
+
+.nav-item.active .nav-icon {
   opacity: 1;
+}
+
+.nav-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .sidebar-foot {

@@ -30,8 +30,9 @@ pub const LICENSE_TEXT: &str = include_str!("../../LICENSE");
 pub struct ModuleInfo {
     pub key: String,
     pub label: String,
-    /// 侧栏分组：core / net / tool
-    pub group: String,
+    /// 侧栏图标语义名（wave / split / radar / chip / shield / info / doc）。
+    /// 前端按名查图标注册表，未知名称回退默认图标，避免新增模块时导航空白。
+    pub icon: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -47,11 +48,11 @@ pub struct AppInfo {
     pub modules: Vec<ModuleInfo>,
 }
 
-fn module(key: &str, label: &str, group: &str) -> ModuleInfo {
+fn module(key: &str, label: &str, icon: &str) -> ModuleInfo {
     ModuleInfo {
         key: key.into(),
         label: label.into(),
-        group: group.into(),
+        icon: icon.into(),
     }
 }
 
@@ -62,21 +63,21 @@ fn module(key: &str, label: &str, group: &str) -> ModuleInfo {
 fn available_modules(caps: &CapabilitySet) -> Vec<ModuleInfo> {
     let mut out = Vec::new();
 
-    let push_if = |out: &mut Vec<ModuleInfo>, level: CapabilityLevel, key: &str, label: &str, group: &str| {
+    let push_if = |out: &mut Vec<ModuleInfo>, level: CapabilityLevel, key: &str, label: &str, icon: &str| {
         if level.is_usable() {
-            out.push(module(key, label, group));
+            out.push(module(key, label, icon));
         }
     };
 
-    push_if(&mut out, caps.network_probe, "network", "网络诊断", "core");
-    push_if(&mut out, caps.subnet, "subnet", "子网计算", "core");
-    push_if(&mut out, caps.ip_scan, "ipScan", "IP 扫描", "net");
-    push_if(&mut out, caps.mac_scan, "macScan", "MAC 扫描", "net");
-    push_if(&mut out, caps.ssl_cert, "sslCert", "SSL 证书", "tool");
+    push_if(&mut out, caps.network_probe, "network", "网络诊断", "wave");
+    push_if(&mut out, caps.subnet, "subnet", "子网计算", "split");
+    push_if(&mut out, caps.ip_scan, "ipScan", "IP 扫描", "radar");
+    push_if(&mut out, caps.mac_scan, "macScan", "MAC 扫描", "chip");
+    push_if(&mut out, caps.ssl_cert, "sslCert", "SSL 证书", "shield");
 
     // 关于与许可为纯信息页，与平台能力无关，恒定可用。
     out.push(module("about", "关于", "info"));
-    out.push(module("license", "许可", "info"));
+    out.push(module("license", "许可", "doc"));
 
     out
 }
@@ -262,6 +263,20 @@ mod tests {
         assert!(keys.contains(&"about"), "关于页恒定可用");
         assert!(keys.contains(&"license"), "许可页恒定可用");
         assert!(!keys.contains(&"aiChat"), "AI 是常驻侧栏，不应出现在导航");
+    }
+
+    /// 每个导航项都必须带图标语义名 —— 新增模块若忘写，侧栏会出现空白图标位。
+    #[test]
+    fn every_module_has_icon() {
+        let info = build_app_info();
+        for m in &info.modules {
+            assert!(!m.icon.is_empty(), "模块 {} 缺少图标名", m.key);
+            assert!(
+                m.icon.chars().all(|c| c.is_ascii_lowercase()),
+                "图标名 {} 应为小写语义名（前端按名查表）",
+                m.icon
+            );
+        }
     }
 
     #[test]

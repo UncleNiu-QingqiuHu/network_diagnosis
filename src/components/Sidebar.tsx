@@ -1,14 +1,6 @@
 import type { CSSProperties } from "react";
 import type { AppInfo, ModuleInfo } from "../lib/types";
-
-const GROUP_LABEL: Record<string, string> = {
-  core: "核心",
-  net: "网络",
-  tool: "工具",
-  info: "信息",
-};
-
-const GROUP_ORDER = ["core", "net", "tool", "info"];
+import NavIcon from "./icons";
 
 interface Props {
   info: AppInfo | null;
@@ -18,12 +10,6 @@ interface Props {
 }
 
 export default function Sidebar({ info, modules, active, onSelect }: Props) {
-  const groups = GROUP_ORDER.map((g) => ({
-    key: g,
-    label: GROUP_LABEL[g] ?? g,
-    items: modules.filter((m) => m.group === g),
-  })).filter((g) => g.items.length > 0);
-
   return (
     <aside className="sidebar">
       <div className="brand">
@@ -35,21 +21,17 @@ export default function Sidebar({ info, modules, active, onSelect }: Props) {
       </div>
 
       <nav className="nav">
-        {groups.map((g) => (
-          <div className="nav-group" key={g.key}>
-            <div className="nav-group-label">{g.label}</div>
-            {g.items.map((m) => (
-              <button
-                key={m.key}
-                className={`nav-item${m.key === active ? " active" : ""}`}
-                onClick={() => onSelect(m.key)}
-                type="button"
-              >
-                <span className="nav-dot" />
-                <span>{m.label}</span>
-              </button>
-            ))}
-          </div>
+        {modules.map((m) => (
+          <button
+            key={m.key}
+            className={`nav-item${m.key === active ? " active" : ""}`}
+            onClick={() => onSelect(m.key)}
+            type="button"
+            title={m.label}
+          >
+            <NavIcon name={m.icon} />
+            <span className="nav-label">{m.label}</span>
+          </button>
         ))}
       </nav>
 

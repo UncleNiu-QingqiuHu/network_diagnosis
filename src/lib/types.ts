@@ -33,7 +33,8 @@ export interface CapabilitySet {
 export interface ModuleInfo {
   key: string;
   label: string;
-  group: "core" | "net" | "tool" | string;
+  /** 侧栏图标语义名，未知值前端回退默认图标 */
+  icon: string;
 }
 
 export interface AppInfo {
