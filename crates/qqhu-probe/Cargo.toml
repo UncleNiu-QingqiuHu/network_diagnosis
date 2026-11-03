@@ -8,6 +8,7 @@ description = "青丘湖网络工作台 —— 原生探针（ICMP / TCP），�
 
 [dependencies]
 qqhu-core = { path = "../qqhu-core" }
+qqhu-sys = { path = "../qqhu-sys" }
 serde = { workspace = true }
 thiserror = { workspace = true }
 chrono = { workspace = true }
@@ -16,5 +17,4 @@ tracing = { workspace = true }
 surge-ping = "0.9"
 
 [dev-dependencies]
-qqhu-sys = { path = "../qqhu-sys" }
 qqhu-report = { path = "../qqhu-report" }

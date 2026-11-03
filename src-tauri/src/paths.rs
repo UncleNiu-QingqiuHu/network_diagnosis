@@ -35,3 +35,17 @@ pub fn ipscan_dir() -> PathBuf {
     let _ = std::fs::create_dir_all(&dir);
     dir
 }
+
+/// MAC 扫描结果目录：`reports/macscan/`。
+pub fn macscan_dir() -> PathBuf {
+    let dir = report_root().join("macscan");
+    let _ = std::fs::create_dir_all(&dir);
+    dir
+}
+
+/// 配置目录：`config/`，用户可放 `oui.csv` 扩展厂商库。
+pub fn config_dir() -> PathBuf {
+    let dir = install_root().join("config");
+    let _ = std::fs::create_dir_all(&dir);
+    dir
+}

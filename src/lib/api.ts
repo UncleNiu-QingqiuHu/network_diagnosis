@@ -7,6 +7,9 @@ import type {
   IpScanProgress,
   IpScanReport,
   IpScanRequest,
+  MacScanProgress,
+  MacScanReport,
+  MacScanRequest,
   SubnetCalcResult,
 } from "./types";
 
@@ -135,7 +138,13 @@ export async function startIpScan(req: IpScanRequest): Promise<IpScanReport> {
   });
 }
 
-export async function cancelIpScan(): Promise<void> {
+/**
+ * 取消当前正在进行的扫描。
+ *
+ * IP 扫描与 MAC 扫描共用后端的同一个取消开关（两者都是长任务，
+ * 同时只可能有一个在跑），所以这里是一个通用入口而不是按模块命名。
+ */
+export async function cancelScan(): Promise<void> {
   if (!isTauri) return;
   await invoke("ip_scan_cancel");
 }
@@ -152,4 +161,28 @@ export async function onIpScanProgress(
 ): Promise<() => void> {
   if (!isTauri) return () => undefined;
   return listen<IpScanProgress>("ipscan-progress", (e) => handler(e.payload));
+}
+
+// ---------------------------------------------------------------- MAC 扫描
+
+export async function runMacScan(req: MacScanRequest): Promise<MacScanReport> {
+  if (!isTauri) throw new Error("MAC 扫描需要 Rust 后端，请在 Tauri 窗口中运行。");
+  return invoke<MacScanReport>("mac_scan_run", {
+    probeInput: req.probeInput,
+    concurrency: req.concurrency,
+    timeoutMs: req.timeoutMs,
+  });
+}
+
+export async function exportMacScanCsv(report: MacScanReport): Promise<string> {
+  if (!isTauri) throw new Error("导出需要 Rust 后端。");
+  return invoke<string>("mac_scan_export_csv", { report });
+}
+
+/** 订阅 MAC 扫描进度，返回取消订阅函数。 */
+export async function onMacScanProgress(
+  handler: (p: MacScanProgress) => void,
+): Promise<() => void> {
+  if (!isTauri) return () => undefined;
+  return listen<MacScanProgress>("macscan-progress", (e) => handler(e.payload));
 }

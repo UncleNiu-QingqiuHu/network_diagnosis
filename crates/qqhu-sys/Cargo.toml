@@ -7,6 +7,7 @@ license.workspace = true
 description = "青丘湖网络工作台 —— 平台抽象层（Windows / macOS / Linux）"
 
 [dependencies]
+qqhu-core = { path = "../qqhu-core" }
 serde = { workspace = true }
 tracing = { workspace = true }
 
@@ -15,6 +16,9 @@ windows-sys = { version = "0.61", features = [
     "Win32_Foundation",
     "Win32_System_Threading",
     "Win32_Security",
+    "Win32_NetworkManagement_IpHelper",
+    "Win32_NetworkManagement_Ndis",
+    "Win32_Networking_WinSock",
 ] }
 
 [target.'cfg(unix)'.dependencies]

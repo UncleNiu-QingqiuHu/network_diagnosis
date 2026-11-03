@@ -18,6 +18,8 @@ pub fn run() {
             commands::ip_scan_start,
             commands::ip_scan_cancel,
             commands::ip_scan_export_csv,
+            commands::mac_scan_run,
+            commands::mac_scan_export_csv,
             commands::ai_chat,
         ])
         .run(tauri::generate_context!())

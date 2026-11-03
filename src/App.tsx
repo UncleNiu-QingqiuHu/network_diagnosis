@@ -8,6 +8,7 @@ import Placeholder from "./modules/Placeholder";
 import SubnetCalc from "./modules/SubnetCalc";
 import NetworkDiag from "./modules/NetworkDiag";
 import IpScan from "./modules/IpScan";
+import MacScan from "./modules/MacScan";
 import About from "./modules/About";
 import License from "./modules/License";
 
@@ -35,14 +36,8 @@ const VIEWS: Record<string, ModuleView> = {
   },
   macScan: {
     title: "MAC 扫描",
-    desc: "本网段 IP / MAC / 厂商对应关系",
-    render: () => (
-      <Placeholder
-        title="MAC 扫描"
-        milestone="M3"
-        items={["本网段 ARP 表采集（三平台分别实现）", "OUI 厂商库匹配", "可选计算机名解析"]}
-      />
-    ),
+    desc: "本机 ARP 邻居表、厂商识别与 IP-MAC 对照",
+    render: () => <MacScan />,
   },
   sslCert: {
     title: "SSL 证书",

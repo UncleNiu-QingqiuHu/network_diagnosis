@@ -849,6 +849,30 @@ textarea {
   color: var(--warning);
 }
 
+/* ---------------------------------------------------------------- MAC 扫描 */
+
+/* 三格统计用更窄的最小宽度，避免窄容器下退化成 2+1 留出大片空白 */
+.result-grid.compact {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+.tag.info {
+  border-color: rgba(90, 169, 230, 0.4);
+  color: var(--info);
+  background: rgba(90, 169, 230, 0.1);
+}
+
+/* 行内代码：用于在说明文案里点出配置路径这类固定值 */
+code {
+  font-family: var(--mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-size: 11px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+
 /* ---------------------------------------------------------------- 关于 / 许可 */
 
 .about-hero {

@@ -6,11 +6,11 @@
 
 use qqhu_core::{
     calc_from_cidr_combo, calc_subnet, parse_scan_scope, subdivide_ipv4_equal_children,
-    DiagnosticReport, IpScanReport, SubnetCalcResult, MAX_SCAN_HOSTS,
+    DiagnosticReport, IpScanReport, MacScanReport, OuiDb, SubnetCalcResult, MAX_SCAN_HOSTS,
 };
 use qqhu_probe::{
-    run_diagnosis as probe_run, scan_scope, DiagContext, DiagOptions, IpScanOptions, PingOptions,
-    ScanProgress, TcpProbeOptions,
+    run_diagnosis as probe_run, run_mac_scan, scan_scope, DiagContext, DiagOptions, IpScanOptions,
+    MacScanOptions, MacScanProgress, PingOptions, ScanProgress, TcpProbeOptions,
 };
 use qqhu_sys::{host, CapabilitySet, CapabilityLevel, PlatformKind};
 use serde::Serialize;
@@ -389,6 +389,126 @@ pub fn ip_scan_export_csv(report: IpScanReport) -> Result<String, String> {
     Ok(path.to_string_lossy().to_string())
 }
 
+// ------------------------------------------------------------------ MAC 扫描
+
+/// 事件名：MAC 扫描进度。
+pub const MACSCAN_PROGRESS_EVENT: &str = "macscan-progress";
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MacScanProgressPayload {
+    pub message: String,
+    pub done: usize,
+    pub total: usize,
+}
+
+/// 构造 OUI 厂商库。
+///
+/// 内置库只收录确信的前缀；用户把 IEEE 的 `oui.csv` 放到 `config/oui.csv`
+/// 即可补齐全量数据，外部条目优先。每次扫描都重新读文件，
+/// 好处是放进去的库立即生效，不必重启应用。
+fn oui_db() -> OuiDb {
+    let mut db = OuiDb::builtin();
+    let path = crate::paths::config_dir().join("oui.csv");
+    if let Ok(text) = std::fs::read_to_string(&path) {
+        let (extra, n) = OuiDb::from_csv(&text);
+        if n > 0 {
+            tracing::info!("已从 {} 加载 {n} 条 OUI 记录", path.display());
+            db.extend(extra);
+        }
+    }
+    db
+}
+
+/// 执行一次 MAC 扫描。
+///
+/// `probe_input` 为空表示只读 ARP 表；填写网段则先主动探活再读表。
+#[tauri::command]
+pub async fn mac_scan_run(
+    app: AppHandle,
+    state: State<'_, ScanState>,
+    probe_input: Option<String>,
+    concurrency: usize,
+    timeout_ms: u64,
+) -> Result<MacScanReport, String> {
+    let probe = probe_input.map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
+
+    let probe_scope = match &probe {
+        Some(input) => Some(parse_scan_scope(input, MAX_SCAN_HOSTS).map_err(|e| e.to_string())?),
+        None => None,
+    };
+
+    state.reset();
+    let cancel = state.flag();
+
+    let timeout = Duration::from_millis(timeout_ms.clamp(100, 5000));
+    let opts = MacScanOptions {
+        probe_scope,
+        probe_input: probe.unwrap_or_default(),
+        ip_scan: IpScanOptions {
+            count: 1,
+            timeout,
+            interval: Duration::from_millis(80),
+            concurrency: concurrency.clamp(1, 256),
+            tcp_fallback_ports: Vec::new(),
+            tcp_timeout: timeout,
+        },
+    };
+
+    let emitter = app.clone();
+    let on_progress = move |p: MacScanProgress| {
+        let _ = emitter.emit(
+            MACSCAN_PROGRESS_EVENT,
+            MacScanProgressPayload {
+                message: p.message,
+                done: p.done,
+                total: p.total,
+            },
+        );
+    };
+
+    run_mac_scan(&opts, &oui_db(), cancel, on_progress).await
+}
+
+/// 把 MAC 扫描结果导出为 CSV。
+#[tauri::command]
+pub fn mac_scan_export_csv(report: MacScanReport) -> Result<String, String> {
+    use std::io::Write;
+
+    let dir = crate::paths::macscan_dir();
+    let stamp = chrono::Local::now().format("%Y%m%d-%H%M%S");
+    let path = dir.join(format!("macscan-{stamp}.csv"));
+
+    let file = std::fs::File::create(&path).map_err(|e| format!("创建 CSV 失败：{e}"))?;
+    let mut w = std::io::BufWriter::new(file);
+    w.write_all(&[0xEF, 0xBB, 0xBF])
+        .map_err(|e| format!("写入 CSV 失败：{e}"))?;
+
+    writeln!(w, "IP,MAC,厂商,OUI,接口,状态,在线").map_err(|e| format!("写入 CSV 失败：{e}"))?;
+
+    for e in &report.entries {
+        writeln!(
+            w,
+            "{},{},{},{},{},{},{}",
+            e.ip,
+            e.mac,
+            e.vendor,
+            OuiDb::oui_prefix(&e.mac).unwrap_or_default(),
+            e.interface,
+            e.state.zh(),
+            match e.alive {
+                Some(true) => "在线",
+                Some(false) => "离线",
+                None => "",
+            }
+        )
+        .map_err(|e| format!("写入 CSV 失败：{e}"))?;
+    }
+
+    w.flush().map_err(|e| format!("写入 CSV 失败：{e}"))?;
+    Ok(path.to_string_lossy().to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -484,6 +604,59 @@ mod tests {
         );
         assert_eq!(lines.next().unwrap(), "127.0.0.1,存活,ICMP,0.4,0.0,");
         assert_eq!(lines.next().unwrap(), "127.0.0.2,无响应,无响应,,100.0,");
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// MAC 扫描 CSV：厂商未知时留空、OUI 单独成列、在线状态三态化。
+    #[test]
+    fn mac_csv_export_rows() {
+        use qqhu_core::{ArpEntry, ArpState};
+
+        let report = MacScanReport {
+            collected_at: "2026-11-03 16:47:06".into(),
+            raw_count: 2,
+            entries: vec![
+                ArpEntry {
+                    ip: "192.168.60.62".into(),
+                    mac: "aa:bb:cc:dd:ee:ff".into(),
+                    vendor: "Cisco".into(),
+                    interface: "以太网".into(),
+                    state: ArpState::Reachable,
+                    randomized: false,
+                    alive: Some(true),
+                },
+                ArpEntry {
+                    ip: "192.168.60.63".into(),
+                    mac: "02:11:22:33:44:55".into(),
+                    vendor: String::new(),
+                    interface: String::new(),
+                    state: ArpState::Stale,
+                    randomized: true,
+                    alive: None,
+                },
+            ],
+            probed: 30,
+            probed_alive: 13,
+            warnings: vec![],
+        };
+
+        let path = mac_scan_export_csv(report).expect("导出应成功");
+        let bytes = std::fs::read(&path).expect("应能读回");
+        assert_eq!(&bytes[..3], &[0xEF, 0xBB, 0xBF], "必须带 UTF-8 BOM");
+
+        let text = String::from_utf8_lossy(&bytes[3..]).to_string();
+        let mut lines = text.lines();
+        assert_eq!(lines.next().unwrap(), "IP,MAC,厂商,OUI,接口,状态,在线");
+        assert_eq!(
+            lines.next().unwrap(),
+            "192.168.60.62,aa:bb:cc:dd:ee:ff,Cisco,AABBCC,以太网,可达,在线"
+        );
+        // 厂商未知留空；未探测时在线列留空
+        assert_eq!(
+            lines.next().unwrap(),
+            "192.168.60.63,02:11:22:33:44:55,,021122,,陈旧,"
+        );
 
         let _ = std::fs::remove_file(&path);
     }

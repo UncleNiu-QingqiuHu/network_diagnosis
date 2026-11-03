@@ -243,3 +243,42 @@ export interface IpScanRequest {
   concurrency: number;
   tcpPorts: number[];
 }
+
+// ---------------------------------------------------------------- MAC 扫描
+
+export type ArpState = "reachable" | "stale" | "permanent" | "incomplete" | "other";
+
+export interface ArpEntry {
+  ip: string;
+  mac: string;
+  /** OUI 厂商；未命中为空串 */
+  vendor: string;
+  /** 接口友好名 */
+  interface: string;
+  state: ArpState;
+  /** 本地管理地址（手机随机化 MAC 的典型特征） */
+  randomized: boolean;
+  /** 主动探测结果；null 表示本次未探测 */
+  alive: boolean | null;
+}
+
+export interface MacScanReport {
+  collectedAt: string;
+  rawCount: number;
+  entries: ArpEntry[];
+  probed: number;
+  probedAlive: number;
+  warnings: string[];
+}
+
+export interface MacScanProgress {
+  message: string;
+  done: number;
+  total: number;
+}
+
+export interface MacScanRequest {
+  probeInput: string | null;
+  concurrency: number;
+  timeoutMs: number;
+}

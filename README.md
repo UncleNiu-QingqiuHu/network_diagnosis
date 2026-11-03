@@ -21,9 +21,9 @@ Windows / macOS / Linux 桌面网络工作台，Rust + Tauri 2 + React 实现。
 | 网络诊断（ICMP / TCP / DNS / 质量评判） | 已完成 |
 | 诊断报告（Markdown 归档 + 历史对比） | 已完成 |
 | IP 扫描（并发探活 / TCP 兜底 / CSV 导出） | 已完成 |
+| MAC 扫描（ARP 邻居表 / OUI 厂商 / CSV 导出） | 已完成 |
 | 关于 / 许可 | 已完成 |
 | 网络诊断进阶（Traceroute / MTU / 带宽） | 排期 M2.1 |
-| MAC 扫描 | 排期 M3 |
 | SSL 证书 / AI 接入 | 排期 M4 |
 
 ## 环境要求
@@ -54,7 +54,7 @@ cargo test        # 跑 Rust 单测
 ├── Cargo.toml              # workspace 根
 ├── crates/
 │   ├── qqhu-core/          # 领域模型 / 子网计算 / 质量评分 / 扫描范围解析（零平台依赖）
-│   ├── qqhu-sys/           # 平台抽象层：HostPlatform trait + 能力矩阵
+│   ├── qqhu-sys/           # 平台抽象层：HostPlatform trait + 能力矩阵 + ARP 采集
 │   ├── qqhu-probe/         # 原生探针：ICMP / TCP / DNS / IP 扫描 / 诊断编排
 │   └── qqhu-report/        # Markdown 报告渲染 / 历史索引与对比
 ├── src-tauri/              # Tauri 应用层：IPC 命令
@@ -113,6 +113,21 @@ ICMP 走原生 socket、TCP 探测直接建连、DNS 用 `hickory-resolver`，
 另外不少企业网络出口禁 ICMP，"ping 不通" 不等于 "主机不在"。
 扫描可配 TCP 兜底端口：ICMP 无响应的地址会再试一次建连，命中即判存活并标注判定方式。
 这是 `probe_method` 字段存在的原因——结论要能说清是"怎么判出来的"。
+
+**7. MAC 扫描以 ARP 表为准，不做主动 ARP 扫描**
+
+主动发 ARP 请求需要 raw socket 或 `CAP_NET_RAW`，也就是要管理员权限，
+这与"装完就能用"的定位冲突。替代方案是同网段 ICMP 探活：
+ICMP 走二层，内核必须先解析 MAC 才能发包，探活完成后邻居表自然是满的。
+
+因此结果以邻居表为准，探活只用来给条目补在线状态。跨网段探活不会增加邻居表
+（不经过 ARP），界面会明确提示这一点，避免把"在线条目 0"误读成扫描失败。
+
+**8. 厂商库宁可留空也不猜**
+
+内置 OUI 表很短（22 条），只收录确信无疑的前缀。错误的厂商归属会让排障走错方向，
+比显示"未知"有害得多。未命中时展示 6 位前缀原值便于自行核实；
+需要全量数据时把 IEEE 的 `oui.csv` 放进 `config/` 即可，下次扫描生效。
 
 ## 待办
 

@@ -5,6 +5,7 @@
 
 pub mod error;
 pub mod ipscan;
+pub mod macscan;
 pub mod model;
 pub mod quality;
 pub mod subnet;
@@ -14,6 +15,10 @@ pub use error::{CoreError, CoreResult};
 pub use ipscan::{
     parse_scan_scope, IpScanHost, IpScanParams, IpScanReport, ProbeMethod, ScanScope,
     ScanScopeKind, MAX_SCAN_HOSTS,
+};
+pub use macscan::{
+    is_arp_displayable, is_broadcast, is_locally_administered, is_zero, normalize_mac, ArpEntry,
+    ArpState, MacScanReport, OuiDb,
 };
 pub use model::*;
 pub use quality::compute_network_quality;

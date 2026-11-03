@@ -6,6 +6,10 @@
 
 use serde::{Deserialize, Serialize};
 
+pub mod arp;
+
+pub use arp::{read_arp_table, ArpRecord};
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum PlatformKind {
@@ -85,6 +89,14 @@ pub trait HostPlatform: Send + Sync {
 
     /// 默认网关；无默认路由时返回 `None`。
     fn default_gateway(&self) -> Option<std::net::IpAddr>;
+
+    /// 当前 ARP 邻居表。
+    ///
+    /// 三平台共用同一入口（[`read_arp_table`] 内部按平台分派），
+    /// 因此这里给默认实现，各平台不必各写一遍。
+    fn arp_table(&self) -> Result<Vec<ArpRecord>, String> {
+        read_arp_table()
+    }
 
     /// 模块可用性矩阵。
     fn capabilities(&self) -> CapabilitySet;

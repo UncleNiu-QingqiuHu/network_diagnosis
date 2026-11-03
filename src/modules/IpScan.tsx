@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
-import { cancelIpScan, exportIpScanCsv, onIpScanProgress, startIpScan } from "../lib/api";
+import { cancelScan, exportIpScanCsv, onIpScanProgress, startIpScan } from "../lib/api";
 import type { IpScanProgress, IpScanReport, ProbeMethod } from "../lib/types";
 
 /** 表格一次性渲染的行数上限：/20 这种范围下全量渲染会把界面拖死，超出提示导出 CSV。 */
@@ -82,7 +82,7 @@ export default function IpScan() {
 
   async function stop() {
     try {
-      await cancelIpScan();
+      await cancelScan();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
@@ -241,7 +241,7 @@ export default function IpScan() {
               </span>
             </div>
 
-            <div className="result-grid">
+            <div className="result-grid compact">
               <Cell k="地址总数" v={String(report.total)} />
               <Cell k="存活主机" v={String(report.aliveCount)} />
               <Cell
