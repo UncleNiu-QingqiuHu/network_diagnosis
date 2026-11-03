@@ -19,8 +19,9 @@ Windows / macOS / Linux 桌面网络工作台，Rust + Tauri 2 + React 实现。
 | 平台抽象层 + 能力矩阵 | 已完成 |
 | 子网计算 | 已完成 |
 | 网络诊断（ICMP / TCP / DNS / 质量评判） | 已完成 |
+| 诊断报告（Markdown 归档 + 历史对比） | 已完成 |
 | 关于 / 许可 | 已完成 |
-| 网络诊断进阶（Traceroute / MTU / 带宽 / Markdown 报告） | 排期 M2.1 |
+| 网络诊断进阶（Traceroute / MTU / 带宽） | 排期 M2.1 |
 | IP 扫描 / MAC 扫描 | 排期 M3 |
 | SSL 证书 / AI 接入 | 排期 M4 |
 
@@ -51,8 +52,10 @@ cargo test        # 跑 Rust 单测
 .
 ├── Cargo.toml              # workspace 根
 ├── crates/
-│   ├── qqhu-core/          # 领域模型 / 子网计算 / 质量评分（零平台依赖，纯单测）
-│   └── qqhu-sys/           # 平台抽象层：HostPlatform trait + 能力矩阵
+│   ├── qqhu-core/          # 领域模型 / 子网计算 / 质量评分 / 结论摘要（零平台依赖）
+│   ├── qqhu-sys/           # 平台抽象层：HostPlatform trait + 能力矩阵
+│   ├── qqhu-probe/         # 原生探针：ICMP / TCP / DNS / 诊断编排
+│   └── qqhu-report/        # Markdown 报告渲染 / 历史索引与对比
 ├── src-tauri/              # Tauri 应用层：IPC 命令
 ├── src/                    # 前端 React + TS
 │   ├── components/         # Sidebar / AiPanel

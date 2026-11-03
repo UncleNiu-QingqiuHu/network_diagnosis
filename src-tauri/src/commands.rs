@@ -173,10 +173,18 @@ pub fn subnet_subdivide(parent: String, child_prefix: u8, max_list: usize) -> Re
 /// 事件名：诊断过程中的阶段文案。
 pub const DIAG_PROGRESS_EVENT: &str = "diag-progress";
 
-/// 执行一次网络诊断。
+/// 一次诊断的完整产物：结构化结果 + 报告落盘路径 + 与上次的对比。
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiagnosisOutcome {
+    pub report: DiagnosticReport,
+    pub report_path: String,
+    pub compare: Option<qqhu_report::HistoryCompare>,
+}
+
+/// 执行一次网络诊断并落盘 Markdown 报告。
 ///
-/// 阶段文案通过 `diag-progress` 事件推送，前端据此更新进度条；
-/// 结果直接作为返回值（同一份 `DiagnosticReport` 后续也会用于生成 Markdown）。
+/// 阶段文案通过 `diag-progress` 事件推送，前端据此更新进度条。
 #[tauri::command]
 pub async fn run_diagnosis(
     app: AppHandle,
@@ -185,7 +193,7 @@ pub async fn run_diagnosis(
     enable_ping: bool,
     ping_count: u32,
     samples_per_port: u32,
-) -> Result<DiagnosticReport, String> {
+) -> Result<DiagnosisOutcome, String> {
     let t = target.trim().to_string();
     if t.is_empty() {
         return Err("请填写诊断目标（域名或 IP）。".into());
@@ -212,7 +220,7 @@ pub async fn run_diagnosis(
     let ctx = DiagContext {
         hostname: h.hostname(),
         os_summary: h.os_summary(),
-        report_dir: report_base,
+        report_dir: report_base.clone(),
     };
 
     let emitter = app.clone();
@@ -220,7 +228,18 @@ pub async fn run_diagnosis(
         let _ = emitter.emit(DIAG_PROGRESS_EVENT, msg.to_string());
     };
 
-    probe_run(&opts, &ctx, &on_progress).await.map_err(|e| e.to_string())
+    let mut report = probe_run(&opts, &ctx, &on_progress)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    // ---- 报告落盘 + 历史索引（统一走 qqhu-report::persist）
+    let artifacts = qqhu_report::persist(&mut report, &report_base).map_err(|e| e.to_string())?;
+
+    Ok(DiagnosisOutcome {
+        report,
+        report_path: artifacts.report_path.to_string_lossy().to_string(),
+        compare: artifacts.compare,
+    })
 }
 
 /// AI Agent 通道。

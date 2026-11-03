@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
+import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { onDiagnosisProgress, runDiagnosis } from "../lib/api";
-import type { DiagnosticReport, Grade, OverallStatus, PortFailureClass } from "../lib/types";
+import type { DiagnosisOutcome, Grade, OverallStatus, PortFailureClass } from "../lib/types";
 
 const GRADE_LABEL: Record<Grade, string> = {
   excellent: "极佳",
@@ -35,7 +36,9 @@ export default function NetworkDiag() {
   const [running, setRunning] = useState(false);
   const [phase, setPhase] = useState("");
   const [error, setError] = useState("");
-  const [report, setReport] = useState<DiagnosticReport | null>(null);
+  const [outcome, setOutcome] = useState<DiagnosisOutcome | null>(null);
+
+  const report = outcome?.report ?? null;
 
   const unlistenRef = useRef<(() => void) | null>(null);
 
@@ -67,7 +70,7 @@ export default function NetworkDiag() {
 
   async function start() {
     setError("");
-    setReport(null);
+    setOutcome(null);
     setPhase("");
     setRunning(true);
     try {
@@ -80,12 +83,22 @@ export default function NetworkDiag() {
         pingCount,
         samplesPerPort: samples,
       });
-      setReport(r);
+      setOutcome(r);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setRunning(false);
       setPhase("");
+    }
+  }
+
+  async function revealReport() {
+    if (!outcome) return;
+    try {
+      await revealItemInDir(outcome.reportPath);
+    } catch {
+      await navigator.clipboard.writeText(outcome.reportPath).catch(() => undefined);
+      setError("无法定位文件，报告路径已复制到剪贴板。");
     }
   }
 
@@ -188,6 +201,41 @@ export default function NetworkDiag() {
               </ul>
             </div>
           )}
+        </section>
+      )}
+
+      {outcome?.compare && (
+        <section className="card">
+          <div className="card-head">
+            <span className="card-title">与上次诊断对比</span>
+            <span className="card-hint">
+              上次 {new Date(outcome.compare.previousFinishedAt).toLocaleString()}
+            </span>
+          </div>
+          <div className="result-grid">
+            <Cell
+              k="档位变化"
+              v={`${GRADE_LABEL[outcome.compare.previousGrade]} → ${GRADE_LABEL[outcome.compare.currentGrade]}`}
+            />
+            <Cell k="丢包变化" v={delta(outcome.compare.lossDelta, "%")} />
+            <Cell k="平均时延变化" v={delta(outcome.compare.latencyDeltaMs, " ms")} />
+            <Cell k="抖动变化" v={delta(outcome.compare.jitterDeltaMs, " ms")} />
+          </div>
+          <p className="compare-summary">{outcome.compare.summary}</p>
+        </section>
+      )}
+
+      {outcome && (
+        <section className="card report-bar">
+          <div style={{ minWidth: 0 }}>
+            <div className="cell-k">技术报告已生成</div>
+            <div className="kv-v mono" style={{ marginTop: 4 }}>
+              {outcome.reportPath}
+            </div>
+          </div>
+          <button className="btn" onClick={() => void revealReport()} type="button">
+            打开所在目录
+          </button>
         </section>
       )}
 
@@ -326,6 +374,12 @@ function Cell({ k, v }: { k: string; v: string }) {
 
 function fmt(v: number | null, unit: string) {
   return v === null ? "—" : `${v.toFixed(1)} ${unit}`;
+}
+
+function delta(v: number | null, unit: string) {
+  if (v === null) return "—";
+  if (Math.abs(v) < 0.05) return "持平";
+  return `${v > 0 ? "+" : "-"}${Math.abs(v).toFixed(1)}${unit}`;
 }
 
 function RttBars({ rtts }: { rtts: (number | null)[] }) {

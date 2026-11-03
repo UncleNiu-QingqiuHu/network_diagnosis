@@ -1,0 +1,15 @@
+[package]
+name = "qqhu-report"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "青丘湖网络工作台 —— Markdown 报告渲染与历史索引"
+
+[dependencies]
+qqhu-core = { path = "../qqhu-core" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }

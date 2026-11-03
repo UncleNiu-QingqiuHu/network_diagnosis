@@ -2706,10 +2706,11 @@ dependencies = [
 
 [[package]]
 name = "qqhu-app"
-version = "4.0.0-alpha.2"
+version = "4.0.0-alpha.3"
 dependencies = [
  "qqhu-core",
  "qqhu-probe",
+ "qqhu-report",
  "qqhu-sys",
  "serde",
  "serde_json",
@@ -2723,7 +2724,7 @@ dependencies = [
 
 [[package]]
 name = "qqhu-core"
-version = "4.0.0-alpha.2"
+version = "4.0.0-alpha.3"
 dependencies = [
  "chrono",
  "serde",
@@ -2734,10 +2735,11 @@ dependencies = [
 
 [[package]]
 name = "qqhu-probe"
-version = "4.0.0-alpha.2"
+version = "4.0.0-alpha.3"
 dependencies = [
  "chrono",
  "qqhu-core",
+ "qqhu-report",
  "qqhu-sys",
  "serde",
  "surge-ping",
@@ -2747,8 +2749,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "qqhu-report"
+version = "4.0.0-alpha.3"
+dependencies = [
+ "chrono",
+ "qqhu-core",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tracing",
+]
+
+[[package]]
 name = "qqhu-sys"
-version = "4.0.0-alpha.2"
+version = "4.0.0-alpha.3"
 dependencies = [
  "libc",
  "serde",

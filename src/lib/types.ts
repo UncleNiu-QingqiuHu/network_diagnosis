@@ -146,8 +146,23 @@ export interface TaskMeta {
   reportDir: string;
 }
 
-export interface DiagnosticReport {
-  meta: TaskMeta;
+export interface HistoryCompare {
+  previousFinishedAt: string;
+  previousGrade: Grade;
+  currentGrade: Grade;
+  lossDelta: number | null;
+  latencyDeltaMs: number | null;
+  jitterDeltaMs: number | null;
+  summary: string;
+}
+
+export interface DiagnosisOutcome {
+  report: DiagnosticReport;
+  reportPath: string;
+  compare: HistoryCompare | null;
+}
+
+export interface DiagnosticReport {  meta: TaskMeta;
   input: Record<string, unknown>;
   dns: DnsAnswer | null;
   ping: PingStats | null;

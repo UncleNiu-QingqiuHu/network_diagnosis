@@ -42,7 +42,25 @@ async fn main() {
     println!("=== 诊断 {target} 端口 {ports:?} ===");
 
     match run_diagnosis(&opts, &ctx, &progress).await {
-        Ok(r) => {
+        Ok(mut r) => {
+            // 报告落盘 + 历史登记，验证与 Tauri 命令走同一条路径
+            let base = std::env::temp_dir().join("qqhu-demo-reports");
+            match qqhu_report::persist(&mut r, &base) {
+                Ok(art) => {
+                    println!("\n报告: {}", art.report_path.display());
+                    match &art.compare {
+                        Some(c) => println!(
+                            "对比: {} → {}（{}）",
+                            c.previous_grade.zh(),
+                            c.current_grade.zh(),
+                            c.summary
+                        ),
+                        None => println!("对比: 首次诊断，无历史"),
+                    }
+                }
+                Err(e) => println!("\n报告落盘失败: {e}"),
+            }
+
             let s = r.summary.expect("摘要必须存在");
             println!("\n结论: {} [{}]", s.headline, s.grade.zh());
             for b in &s.bullets {

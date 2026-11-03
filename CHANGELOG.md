@@ -4,6 +4,26 @@
 > 从 4.0.0 起，本项目改用 Rust + Tauri 重写。下方 `3.x` 记录属于 Python + tkinter 实现，
 > 该实现已归档到 `legacy/python-v3` 分支，仅保留查阅。
 
+## [4.0.0-alpha.3] — 2026-11-03
+
+### 新增
+- **诊断报告归档**：每次诊断在 `reports/diagnosis/<task_id>/report.md` 生成完整
+  Markdown 技术报告，含任务信息、结论建议、输入参数、解析、ICMP 逐包结果、端口表、
+  质量评判、降级事件。
+- **历史索引与对比**：`reports/diagnosis/_history.json` 记录同目标历次结果（上限 500 条，
+  原子写入，损坏时降级为空不阻断诊断），自动生成「上次 vs 本次」档位、丢包、时延、抖动变化。
+- **qqhu-report crate**：`persist()` 统一报告落盘与历史登记，Tauri 命令与 CLI 共用同一路径。
+- 界面新增对比卡片与「打开所在目录」，可一键定位报告文件。
+
+### 变更
+- `run_diagnosis` 返回结构由 `DiagnosticReport` 改为 `DiagnosisOutcome`
+  （含 report / reportPath / compare）。
+
+### 验证
+- 单元测试 50 项通过；端到端连跑两次，第二次正确输出对比结论
+
+---
+
 ## [4.0.0-alpha.2] — 2026-11-03
 
 ### 新增

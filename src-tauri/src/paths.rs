@@ -28,10 +28,3 @@ fn install_root() -> PathBuf {
 pub fn report_root() -> PathBuf {
     install_root().join("reports")
 }
-
-/// 为一次诊断任务建立独立目录：`reports/diagnosis/<task_id>/`。
-pub fn diagnosis_dir(task_id: &str) -> PathBuf {
-    let dir = report_root().join("diagnosis").join(task_id);
-    let _ = std::fs::create_dir_all(&dir);
-    dir
-}

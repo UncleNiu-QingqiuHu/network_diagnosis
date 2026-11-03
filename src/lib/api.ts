@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import type { AboutInfo, AppInfo, DiagnosticReport, SubnetCalcResult } from "./types";
+import type { AboutInfo, AppInfo, DiagnosisOutcome, SubnetCalcResult } from "./types";
 
 /** 是否运行在 Tauri 容器内。浏览器直接 `pnpm dev` 时为 false。 */
 export const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -95,9 +95,9 @@ export interface DiagnosisRequest {
   samplesPerPort: number;
 }
 
-export async function runDiagnosis(req: DiagnosisRequest): Promise<DiagnosticReport> {
+export async function runDiagnosis(req: DiagnosisRequest): Promise<DiagnosisOutcome> {
   if (!isTauri) throw new Error("网络诊断需要 Rust 后端，请在 Tauri 窗口中运行。");
-  return invoke<DiagnosticReport>("run_diagnosis", {
+  return invoke<DiagnosisOutcome>("run_diagnosis", {
     target: req.target,
     ports: req.ports,
     enablePing: req.enablePing,
