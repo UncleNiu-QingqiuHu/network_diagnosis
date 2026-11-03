@@ -49,3 +49,5 @@ __main__.*
 # 本地 Nuitka 封装脚本（不入库；自行在 `scripts/` 下维护）
 scripts/build-nuitka-standalone.ps1
 config/
+# AI 助手工作区数据（本地记忆/日志，不入库）
+/.workbuddy/
