@@ -1,53 +1,29 @@
-venv/
-.venv/
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-*.log
-.hbuild/
+# ---------------------------------------------------------------- Rust
+/target/
+**/*.rs.bk
+
+# ---------------------------------------------------------------- 前端
+/node_modules/
+/dist/
+/src-tauri/gen/
+
+# ---------------------------------------------------------------- 运行期产物
+# 报告、日志、配置与交换机 Console 数据默认写在可执行文件同级的这些目录
+/reports/
+/logs/
+/config/
+/switch_console/
+
+# ---------------------------------------------------------------- 编辑器 / 系统
 .vscode/
 .idea/
-.pytest_cache/
-.ruff_cache/
-.mypy_cache/
-.coverage
-.coverage.*
-.coverage.xml
-.coverage.xml.gz
-node_modules/
-dist/
-media/app_packages/
-media/asset_images/
-media/asset_photos/
-media/contract_quotations/
-media/contracts/
-media/equipment_photos/
-media/equipment_qr_codes/
-media/qr_codes/
-media/site_settings/
-media/workflow_pdfs/
-unpackage/
-backups/
-logs/
-# 青丘狐网络工作台默认输出（项目目录 reports/）
-reports/
-# 交换机 Console 本地数据（SSH known_hosts 等）
-switch_console/
-_bmad/
-.cursor/commands/
-media/
+.DS_Store
+Thumbs.db
+
+# ---------------------------------------------------------------- 本地数据
+/.workbuddy/
+*.local
+
+# ---------------------------------------------------------------- 第三方安装包（不入库）
 Wireshark*.exe
 nmap*.exe
-__main__.*/
-__main__.*
-# Nuitka standalone（自定义 --output-folder-name 时也不再是 __main__.dist）
-*.dist/
-*.build/
-# setuptools / pip 可编辑安装（`pip install -e .`）生成的元数据目录
-*.egg-info/
-# 本地 Nuitka 封装脚本（不入库；自行在 `scripts/` 下维护）
-scripts/build-nuitka-standalone.ps1
-config/
-# AI 助手工作区数据（本地记忆/日志，不入库）
-/.workbuddy/
