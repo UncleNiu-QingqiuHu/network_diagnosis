@@ -29,4 +29,8 @@ pub enum CoreError {
 
     #[error("请使用 \"IP/前缀\" 或 \"IP/掩码\" 格式，或改用「单地址 + 子网」拆分填写。")]
     BadCidrCombo,
+
+    /// 通用输入错误：文案由调用方直接给出完整中文句子。
+    #[error("{0}")]
+    InvalidInput(String),
 }

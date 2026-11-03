@@ -194,3 +194,52 @@ export interface SubnetCalcResult {
   scopeNote: string;
   hostRoleNote: string;
 }
+
+// ---------------------------------------------------------------- IP 扫描
+
+export type ScanScopeKind = "cidr" | "range" | "single";
+export type ProbeMethod = "icmp" | "tcp" | "none";
+
+export interface IpScanHost {
+  ip: string;
+  alive: boolean;
+  method: ProbeMethod;
+  rttMs: number | null;
+  lossPercent: number;
+  openPort: number | null;
+}
+
+export interface IpScanParams {
+  count: number;
+  timeoutMs: number;
+  concurrency: number;
+  tcpFallbackPorts: number[];
+}
+
+export interface IpScanReport {
+  input: string;
+  scopeDesc: string;
+  startedAt: string;
+  durationMs: number;
+  total: number;
+  aliveCount: number;
+  hosts: IpScanHost[];
+  cancelled: boolean;
+  params: IpScanParams;
+  warnings: string[];
+}
+
+export interface IpScanProgress {
+  done: number;
+  total: number;
+  alive: number;
+  current: string;
+}
+
+export interface IpScanRequest {
+  input: string;
+  count: number;
+  timeoutMs: number;
+  concurrency: number;
+  tcpPorts: number[];
+}

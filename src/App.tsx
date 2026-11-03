@@ -7,6 +7,7 @@ import type { AppInfo } from "./lib/types";
 import Placeholder from "./modules/Placeholder";
 import SubnetCalc from "./modules/SubnetCalc";
 import NetworkDiag from "./modules/NetworkDiag";
+import IpScan from "./modules/IpScan";
 import About from "./modules/About";
 import License from "./modules/License";
 
@@ -29,14 +30,8 @@ const VIEWS: Record<string, ModuleView> = {
   },
   ipScan: {
     title: "IP 扫描",
-    desc: "指定网段的存活主机探测",
-    render: () => (
-      <Placeholder
-        title="IP 扫描"
-        milestone="M3"
-        items={["网段/范围输入与并发 ICMP 探测", "结果按 IP 排序、搜索与 CSV 导出"]}
-      />
-    ),
+    desc: "网段并发探活、TCP 兜底判定与结果导出",
+    render: () => <IpScan />,
   },
   macScan: {
     title: "MAC 扫描",

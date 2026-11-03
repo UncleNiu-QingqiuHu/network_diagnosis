@@ -4,12 +4,17 @@
 //! 只承载数据模型与纯计算，因此可以单元测试、可以在任何目标上编译。
 
 pub mod error;
+pub mod ipscan;
 pub mod model;
 pub mod quality;
 pub mod subnet;
 pub mod summary;
 
 pub use error::{CoreError, CoreResult};
+pub use ipscan::{
+    parse_scan_scope, IpScanHost, IpScanParams, IpScanReport, ProbeMethod, ScanScope,
+    ScanScopeKind, MAX_SCAN_HOSTS,
+};
 pub use model::*;
 pub use quality::compute_network_quality;
 pub use subnet::{calc_from_cidr_combo, calc_subnet, subdivide_ipv4_equal_children, SubnetCalcResult};

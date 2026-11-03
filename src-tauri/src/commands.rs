@@ -4,11 +4,20 @@
 //! 与 `src/lib/types.ts` 一一对应。前端不硬编码模块清单，
 //! 而是由 [`app_info`] 返回，平台差异在这里统一收敛。
 
-use qqhu_core::{calc_from_cidr_combo, calc_subnet, subdivide_ipv4_equal_children, DiagnosticReport, SubnetCalcResult};
-use qqhu_probe::{run_diagnosis as probe_run, DiagContext, DiagOptions, PingOptions, TcpProbeOptions};
+use qqhu_core::{
+    calc_from_cidr_combo, calc_subnet, parse_scan_scope, subdivide_ipv4_equal_children,
+    DiagnosticReport, IpScanReport, SubnetCalcResult, MAX_SCAN_HOSTS,
+};
+use qqhu_probe::{
+    run_diagnosis as probe_run, scan_scope, DiagContext, DiagOptions, IpScanOptions, PingOptions,
+    ScanProgress, TcpProbeOptions,
+};
 use qqhu_sys::{host, CapabilitySet, CapabilityLevel, PlatformKind};
 use serde::Serialize;
-use tauri::{AppHandle, Emitter};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use std::time::Duration;
+use tauri::{AppHandle, Emitter, State};
 
 pub const APP_NAME: &str = "青丘湖网络工作台";
 pub const APP_NAME_EN: &str = "Qingqiuhu Network Workbench";
@@ -251,6 +260,135 @@ pub fn ai_chat(_message: String) -> Result<String, String> {
     Err("AI 通道尚未接入模型（计划 M4 实现，复用旧版 OpenAI 兼容协议）。".into())
 }
 
+// ------------------------------------------------------------------ IP 扫描
+
+/// 事件名：扫描进度。
+pub const IPSCAN_PROGRESS_EVENT: &str = "ipscan-progress";
+
+/// 扫描的取消开关。
+///
+/// 放在 Tauri 托管状态里而不是命令参数：前端点「取消」时无法把句柄传回来，
+/// 只能通过一次独立的命令置位。每次新扫描开始时重置。
+#[derive(Default)]
+pub struct ScanState {
+    cancel: Arc<AtomicBool>,
+}
+
+impl ScanState {
+    pub fn reset(&self) {
+        self.cancel.store(false, Ordering::Relaxed);
+    }
+
+    pub fn request_cancel(&self) {
+        self.cancel.store(true, Ordering::Relaxed);
+    }
+
+    fn flag(&self) -> Arc<AtomicBool> {
+        self.cancel.clone()
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IpScanProgress {
+    pub done: usize,
+    pub total: usize,
+    pub alive: usize,
+    pub current: String,
+}
+
+/// 开始一次 IP 扫描。
+///
+/// 输入解析在 `qqhu_core::parse_scan_scope`（纯计算、有单测），
+/// 实际探测在 `qqhu_probe::scan_scope`（并发 ICMP + 可选 TCP 兜底）。
+#[tauri::command]
+pub async fn ip_scan_start(
+    app: AppHandle,
+    state: State<'_, ScanState>,
+    input: String,
+    count: u32,
+    timeout_ms: u64,
+    concurrency: usize,
+    tcp_ports: Vec<u16>,
+) -> Result<IpScanReport, String> {
+    let scope = parse_scan_scope(&input, MAX_SCAN_HOSTS).map_err(|e| e.to_string())?;
+
+    state.reset();
+    let cancel = state.flag();
+
+    let opts = IpScanOptions {
+        count: count.clamp(1, 5),
+        timeout: Duration::from_millis(timeout_ms.clamp(100, 5000)),
+        interval: Duration::from_millis(80),
+        concurrency: concurrency.clamp(1, 256),
+        tcp_fallback_ports: tcp_ports.into_iter().filter(|p| *p > 0).collect(),
+        tcp_timeout: Duration::from_millis(timeout_ms.clamp(100, 5000)),
+    };
+
+    let emitter = app.clone();
+    let on_progress = move |p: ScanProgress| {
+        let _ = emitter.emit(
+            IPSCAN_PROGRESS_EVENT,
+            IpScanProgress {
+                done: p.done,
+                total: p.total,
+                alive: p.alive,
+                current: p.current,
+            },
+        );
+    };
+
+    scan_scope(&input, &scope, &opts, cancel, on_progress)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// 请求取消当前扫描。命令本身立即返回，扫描任务在下一个检查点收尾。
+#[tauri::command]
+pub fn ip_scan_cancel(state: State<'_, ScanState>) {
+    state.request_cancel();
+}
+
+/// 把扫描结果导出为 CSV，落在 `reports/ipscan/`，返回文件绝对路径。
+///
+/// 由后端写盘而不是前端调浏览器下载：Tauri 的 WebView 不支持 `<a download>`，
+/// 且报告集中在便携目录里更符合这个工具的使用习惯。
+#[tauri::command]
+pub fn ip_scan_export_csv(report: IpScanReport) -> Result<String, String> {
+    use std::io::Write;
+
+    let dir = crate::paths::ipscan_dir();
+    let stamp = chrono::Local::now().format("%Y%m%d-%H%M%S");
+    let path = dir.join(format!("ipscan-{stamp}.csv"));
+
+    let file = std::fs::File::create(&path).map_err(|e| format!("创建 CSV 失败：{e}"))?;
+    let mut w = std::io::BufWriter::new(file);
+
+    // UTF-8 BOM：Excel 打开中文表头才不会乱码
+    w.write_all(&[0xEF, 0xBB, 0xBF])
+        .map_err(|e| format!("写入 CSV 失败：{e}"))?;
+
+    writeln!(w, "IP,状态,判定方式,RTT(ms),丢包率(%),开放端口")
+        .map_err(|e| format!("写入 CSV 失败：{e}"))?;
+
+    for h in &report.hosts {
+        writeln!(
+            w,
+            "{},{},{},{},{},{}",
+            h.ip,
+            if h.alive { "存活" } else { "无响应" },
+            h.method.zh(),
+            h.rtt_ms.map(|v| format!("{v:.1}")).unwrap_or_default(),
+            format!("{:.1}", h.loss_percent),
+            h.open_port.map(|p| p.to_string()).unwrap_or_default(),
+        )
+        .map_err(|e| format!("写入 CSV 失败：{e}"))?;
+    }
+
+    w.flush().map_err(|e| format!("写入 CSV 失败：{e}"))?;
+    Ok(path.to_string_lossy().to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -291,5 +429,62 @@ mod tests {
         let json = serde_json::to_string(&build_app_info()).unwrap();
         assert!(json.contains("\"platformDisplay\""));
         assert!(json.contains("\"osSummary\""));
+    }
+
+    /// CSV 导出：BOM、表头、存活与无响应两种行的格式都要稳定。
+    #[test]
+    fn csv_export_writes_bom_and_rows() {
+        use qqhu_core::{IpScanHost, IpScanParams, ProbeMethod};
+
+        let report = IpScanReport {
+            input: "127.0.0.1-127.0.0.2".into(),
+            scope_desc: "127.0.0.1 - 127.0.0.2 · 2 个地址".into(),
+            started_at: "2026-11-03 16:00:00".into(),
+            duration_ms: 123,
+            total: 2,
+            alive_count: 1,
+            hosts: vec![
+                IpScanHost {
+                    ip: "127.0.0.1".into(),
+                    alive: true,
+                    method: ProbeMethod::Icmp,
+                    rtt_ms: Some(0.4),
+                    loss_percent: 0.0,
+                    open_port: None,
+                },
+                IpScanHost {
+                    ip: "127.0.0.2".into(),
+                    alive: false,
+                    method: ProbeMethod::None,
+                    rtt_ms: None,
+                    loss_percent: 100.0,
+                    open_port: None,
+                },
+            ],
+            cancelled: false,
+            params: IpScanParams {
+                count: 1,
+                timeout_ms: 800,
+                concurrency: 64,
+                tcp_fallback_ports: vec![],
+            },
+            warnings: vec![],
+        };
+
+        let path = ip_scan_export_csv(report).expect("导出应成功");
+        let bytes = std::fs::read(&path).expect("应能读回 CSV");
+
+        assert_eq!(&bytes[..3], &[0xEF, 0xBB, 0xBF], "必须带 UTF-8 BOM，否则 Excel 中文乱码");
+
+        let text = String::from_utf8_lossy(&bytes[3..]).to_string();
+        let mut lines = text.lines();
+        assert_eq!(
+            lines.next().unwrap(),
+            "IP,状态,判定方式,RTT(ms),丢包率(%),开放端口"
+        );
+        assert_eq!(lines.next().unwrap(), "127.0.0.1,存活,ICMP,0.4,0.0,");
+        assert_eq!(lines.next().unwrap(), "127.0.0.2,无响应,无响应,,100.0,");
+
+        let _ = std::fs::remove_file(&path);
     }
 }

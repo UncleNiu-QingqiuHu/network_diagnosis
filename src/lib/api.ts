@@ -1,12 +1,20 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import type { AboutInfo, AppInfo, DiagnosisOutcome, SubnetCalcResult } from "./types";
+import type {
+  AboutInfo,
+  AppInfo,
+  DiagnosisOutcome,
+  IpScanProgress,
+  IpScanReport,
+  IpScanRequest,
+  SubnetCalcResult,
+} from "./types";
 
 /** 是否运行在 Tauri 容器内。浏览器直接 `pnpm dev` 时为 false。 */
 export const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
 const BROWSER_INFO: AppInfo = {
-  version: "4.0.0-dev",
+  version: __APP_VERSION__,
   platform: "windows",
   platformDisplay: "Windows",
   hostname: "browser-preview",
@@ -112,4 +120,36 @@ export async function runDiagnosis(req: DiagnosisRequest): Promise<DiagnosisOutc
 export async function onDiagnosisProgress(handler: (msg: string) => void): Promise<() => void> {
   if (!isTauri) return () => undefined;
   return listen<string>("diag-progress", (e) => handler(e.payload));
+}
+
+// ---------------------------------------------------------------- IP 扫描
+
+export async function startIpScan(req: IpScanRequest): Promise<IpScanReport> {
+  if (!isTauri) throw new Error("IP 扫描需要 Rust 后端，请在 Tauri 窗口中运行。");
+  return invoke<IpScanReport>("ip_scan_start", {
+    input: req.input,
+    count: req.count,
+    timeoutMs: req.timeoutMs,
+    concurrency: req.concurrency,
+    tcpPorts: req.tcpPorts,
+  });
+}
+
+export async function cancelIpScan(): Promise<void> {
+  if (!isTauri) return;
+  await invoke("ip_scan_cancel");
+}
+
+/** 后端写 CSV 到 reports/ipscan/，返回文件绝对路径。 */
+export async function exportIpScanCsv(report: IpScanReport): Promise<string> {
+  if (!isTauri) throw new Error("导出需要 Rust 后端。");
+  return invoke<string>("ip_scan_export_csv", { report });
+}
+
+/** 订阅扫描进度，返回取消订阅函数。 */
+export async function onIpScanProgress(
+  handler: (p: IpScanProgress) => void,
+): Promise<() => void> {
+  if (!isTauri) return () => undefined;
+  return listen<IpScanProgress>("ipscan-progress", (e) => handler(e.payload));
 }

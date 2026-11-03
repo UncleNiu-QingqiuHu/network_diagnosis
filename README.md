@@ -20,9 +20,10 @@ Windows / macOS / Linux 桌面网络工作台，Rust + Tauri 2 + React 实现。
 | 子网计算 | 已完成 |
 | 网络诊断（ICMP / TCP / DNS / 质量评判） | 已完成 |
 | 诊断报告（Markdown 归档 + 历史对比） | 已完成 |
+| IP 扫描（并发探活 / TCP 兜底 / CSV 导出） | 已完成 |
 | 关于 / 许可 | 已完成 |
 | 网络诊断进阶（Traceroute / MTU / 带宽） | 排期 M2.1 |
-| IP 扫描 / MAC 扫描 | 排期 M3 |
+| MAC 扫描 | 排期 M3 |
 | SSL 证书 / AI 接入 | 排期 M4 |
 
 ## 环境要求
@@ -52,9 +53,9 @@ cargo test        # 跑 Rust 单测
 .
 ├── Cargo.toml              # workspace 根
 ├── crates/
-│   ├── qqhu-core/          # 领域模型 / 子网计算 / 质量评分 / 结论摘要（零平台依赖）
+│   ├── qqhu-core/          # 领域模型 / 子网计算 / 质量评分 / 扫描范围解析（零平台依赖）
 │   ├── qqhu-sys/           # 平台抽象层：HostPlatform trait + 能力矩阵
-│   ├── qqhu-probe/         # 原生探针：ICMP / TCP / DNS / 诊断编排
+│   ├── qqhu-probe/         # 原生探针：ICMP / TCP / DNS / IP 扫描 / 诊断编排
 │   └── qqhu-report/        # Markdown 报告渲染 / 历史索引与对比
 ├── src-tauri/              # Tauri 应用层：IPC 命令
 ├── src/                    # 前端 React + TS
@@ -103,6 +104,15 @@ cargo test        # 跑 Rust 单测
 
 ICMP 走原生 socket、TCP 探测直接建连、DNS 用 `hickory-resolver`，
 三平台统一实现，不再需要 `tcping.exe` 与系统 `ping` 的文本解析。
+
+**6. IP 扫描共享一个 ICMP Client，并提供 TCP 兜底**
+
+`surge-ping` 的回包按 `(host, ident, seq)` 路由，因此多个 Pinger 可以共用同一 socket。
+逐个地址新建 Client 会为每个 IP 创建一次 raw socket，扫 /24 就是 254 次创建。
+
+另外不少企业网络出口禁 ICMP，"ping 不通" 不等于 "主机不在"。
+扫描可配 TCP 兜底端口：ICMP 无响应的地址会再试一次建连，命中即判存活并标注判定方式。
+这是 `probe_method` 字段存在的原因——结论要能说清是"怎么判出来的"。
 
 ## 待办
 

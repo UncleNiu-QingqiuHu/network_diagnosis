@@ -28,3 +28,10 @@ fn install_root() -> PathBuf {
 pub fn report_root() -> PathBuf {
     install_root().join("reports")
 }
+
+/// IP 扫描结果目录：`reports/ipscan/`，CSV 导出落在这里。
+pub fn ipscan_dir() -> PathBuf {
+    let dir = report_root().join("ipscan");
+    let _ = std::fs::create_dir_all(&dir);
+    dir
+}

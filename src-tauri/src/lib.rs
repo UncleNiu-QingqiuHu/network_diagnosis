@@ -6,6 +6,7 @@ pub mod paths;
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .manage(commands::ScanState::default())
         .invoke_handler(tauri::generate_handler![
             commands::app_info,
             commands::about_info,
@@ -14,6 +15,9 @@ pub fn run() {
             commands::subnet_from_cidr,
             commands::subnet_subdivide,
             commands::run_diagnosis,
+            commands::ip_scan_start,
+            commands::ip_scan_cancel,
+            commands::ip_scan_export_csv,
             commands::ai_chat,
         ])
         .run(tauri::generate_context!())
