@@ -19,6 +19,12 @@ pub enum OverallStatus {
     Failed,
 }
 
+impl Default for OverallStatus {
+    fn default() -> Self {
+        OverallStatus::Ok
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum PortFailureClass {

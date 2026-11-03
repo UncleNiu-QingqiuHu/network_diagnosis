@@ -617,6 +617,152 @@ textarea {
   text-align: right;
 }
 
+/* ---------------------------------------------------------------- 网络诊断 */
+
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  color: var(--text-dim);
+  cursor: pointer;
+  user-select: none;
+}
+
+.check input {
+  accent-color: var(--accent-dim);
+  width: 14px;
+  height: 14px;
+}
+
+.progress-line {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 14px;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.tag {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 99px;
+  font-size: 11px;
+  border: 1px solid var(--border-strong);
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+
+.tag.ok {
+  border-color: rgba(45, 212, 167, 0.45);
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.tag.warn {
+  border-color: rgba(230, 180, 80, 0.45);
+  color: var(--warning);
+  background: rgba(230, 180, 80, 0.1);
+}
+
+.tag.bad {
+  border-color: rgba(242, 119, 122, 0.45);
+  color: var(--danger);
+  background: rgba(242, 119, 122, 0.1);
+}
+
+.tag.muted {
+  color: var(--text-faint);
+}
+
+.headline {
+  font-size: 15px;
+  font-weight: 500;
+  margin-bottom: 10px;
+}
+
+.headline.ok {
+  color: var(--accent);
+}
+
+.headline.warn {
+  color: var(--warning);
+}
+
+.headline.bad {
+  color: var(--danger);
+}
+
+.bullets {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.actions {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--border);
+}
+
+.actions-title {
+  display: block;
+  font-size: 11px;
+  color: var(--text-faint);
+  margin-bottom: 6px;
+}
+
+.diag-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.table th {
+  text-align: left;
+  font-weight: 400;
+  font-size: 11px;
+  color: var(--text-faint);
+  padding: 0 10px 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.table td {
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-dim);
+}
+
+.table tr:last-child td {
+  border-bottom: 0;
+}
+
+.table .mono {
+  font-family: var(--mono);
+  color: var(--text);
+}
+
+.muted-cell {
+  color: var(--text-faint);
+  font-size: 11px;
+  max-width: 320px;
+  overflow-wrap: anywhere;
+}
+
 /* ---------------------------------------------------------------- 关于 / 许可 */
 
 .about-hero {

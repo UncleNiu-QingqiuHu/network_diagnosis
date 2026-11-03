@@ -18,8 +18,9 @@ Windows / macOS / Linux 桌面网络工作台，Rust + Tauri 2 + React 实现。
 | 三栏骨架（导航 / 模块 / AI Agent 右栏） | 已完成 |
 | 平台抽象层 + 能力矩阵 | 已完成 |
 | 子网计算 | 已完成 |
+| 网络诊断（ICMP / TCP / DNS / 质量评判） | 已完成 |
 | 关于 / 许可 | 已完成 |
-| 网络诊断 | 排期 M2 |
+| 网络诊断进阶（Traceroute / MTU / 带宽 / Markdown 报告） | 排期 M2.1 |
 | IP 扫描 / MAC 扫描 | 排期 M3 |
 | SSL 证书 / AI 接入 | 排期 M4 |
 

@@ -23,3 +23,4 @@ tokio = { workspace = true }
 tracing = { workspace = true }
 qqhu-core = { path = "../crates/qqhu-core" }
 qqhu-sys = { path = "../crates/qqhu-sys" }
+qqhu-probe = { path = "../crates/qqhu-probe" }

@@ -7,11 +7,13 @@ pub mod error;
 pub mod model;
 pub mod quality;
 pub mod subnet;
+pub mod summary;
 
 pub use error::{CoreError, CoreResult};
 pub use model::*;
 pub use quality::compute_network_quality;
 pub use subnet::{calc_from_cidr_combo, calc_subnet, subdivide_ipv4_equal_children, SubnetCalcResult};
+pub use summary::build_summary;
 
 /// 应用版本（唯一来源；Tauri 侧通过 build script 注入）。
 pub const APP_VERSION: &str = env!("CARGO_PKG_VERSION");

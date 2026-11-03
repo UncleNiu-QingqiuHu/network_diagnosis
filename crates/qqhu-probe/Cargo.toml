@@ -1,0 +1,19 @@
+[package]
+name = "qqhu-probe"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "青丘湖网络工作台 —— 原生探针（ICMP / TCP），跨平台且不依赖外部可执行文件"
+
+[dependencies]
+qqhu-core = { path = "../qqhu-core" }
+serde = { workspace = true }
+thiserror = { workspace = true }
+chrono = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+surge-ping = "0.9"
+
+[dev-dependencies]
+qqhu-sys = { path = "../qqhu-sys" }

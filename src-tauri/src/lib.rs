@@ -1,6 +1,7 @@
 //! 应用入口：注册命令、初始化日志。
 
 pub mod commands;
+pub mod paths;
 
 pub fn run() {
     tauri::Builder::default()
@@ -12,6 +13,7 @@ pub fn run() {
             commands::subnet_calc,
             commands::subnet_from_cidr,
             commands::subnet_subdivide,
+            commands::run_diagnosis,
             commands::ai_chat,
         ])
         .run(tauri::generate_context!())

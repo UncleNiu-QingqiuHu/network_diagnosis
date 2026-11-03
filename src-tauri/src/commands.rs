@@ -4,9 +4,11 @@
 //! 与 `src/lib/types.ts` 一一对应。前端不硬编码模块清单，
 //! 而是由 [`app_info`] 返回，平台差异在这里统一收敛。
 
-use qqhu_core::{calc_from_cidr_combo, calc_subnet, subdivide_ipv4_equal_children, SubnetCalcResult};
+use qqhu_core::{calc_from_cidr_combo, calc_subnet, subdivide_ipv4_equal_children, DiagnosticReport, SubnetCalcResult};
+use qqhu_probe::{run_diagnosis as probe_run, DiagContext, DiagOptions, PingOptions, TcpProbeOptions};
 use qqhu_sys::{host, CapabilitySet, CapabilityLevel, PlatformKind};
 use serde::Serialize;
+use tauri::{AppHandle, Emitter};
 
 pub const APP_NAME: &str = "青丘湖网络工作台";
 pub const APP_NAME_EN: &str = "Qingqiuhu Network Workbench";
@@ -168,8 +170,60 @@ pub fn subnet_subdivide(parent: String, child_prefix: u8, max_list: usize) -> Re
     subdivide_ipv4_equal_children(&parent, child_prefix, max_list).map_err(|e| e.to_string())
 }
 
-/// AI Agent 通道。
+/// 事件名：诊断过程中的阶段文案。
+pub const DIAG_PROGRESS_EVENT: &str = "diag-progress";
+
+/// 执行一次网络诊断。
 ///
+/// 阶段文案通过 `diag-progress` 事件推送，前端据此更新进度条；
+/// 结果直接作为返回值（同一份 `DiagnosticReport` 后续也会用于生成 Markdown）。
+#[tauri::command]
+pub async fn run_diagnosis(
+    app: AppHandle,
+    target: String,
+    ports: Vec<u16>,
+    enable_ping: bool,
+    ping_count: u32,
+    samples_per_port: u32,
+) -> Result<DiagnosticReport, String> {
+    let t = target.trim().to_string();
+    if t.is_empty() {
+        return Err("请填写诊断目标（域名或 IP）。".into());
+    }
+
+    let h = host();
+    let report_base = crate::paths::report_root().join("diagnosis");
+    let _ = std::fs::create_dir_all(&report_base);
+
+    let opts = DiagOptions {
+        target: t,
+        ports,
+        enable_ping,
+        ping: PingOptions {
+            count: ping_count.clamp(1, 20),
+            ..Default::default()
+        },
+        tcp: TcpProbeOptions {
+            samples: samples_per_port.clamp(1, 10),
+            ..Default::default()
+        },
+    };
+
+    let ctx = DiagContext {
+        hostname: h.hostname(),
+        os_summary: h.os_summary(),
+        report_dir: report_base,
+    };
+
+    let emitter = app.clone();
+    let on_progress = move |msg: &str| {
+        let _ = emitter.emit(DIAG_PROGRESS_EVENT, msg.to_string());
+    };
+
+    probe_run(&opts, &ctx, &on_progress).await.map_err(|e| e.to_string())
+}
+
+/// AI Agent 通道。
 /// 骨架阶段先把 IPC 打通、错误路径跑通；真正的 LLM 流式调用在 M4 接入
 /// （复用旧版 OpenAI 兼容协议 + tool calling）。
 #[tauri::command]

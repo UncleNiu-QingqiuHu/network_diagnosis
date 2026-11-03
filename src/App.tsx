@@ -6,6 +6,7 @@ import { appInfo, isTauri } from "./lib/api";
 import type { AppInfo } from "./lib/types";
 import Placeholder from "./modules/Placeholder";
 import SubnetCalc from "./modules/SubnetCalc";
+import NetworkDiag from "./modules/NetworkDiag";
 import About from "./modules/About";
 import License from "./modules/License";
 
@@ -18,20 +19,8 @@ interface ModuleView {
 const VIEWS: Record<string, ModuleView> = {
   network: {
     title: "网络诊断",
-    desc: "连通性、时延、丢包、路由路径与质量综合评判",
-    render: () => (
-      <Placeholder
-        title="网络诊断"
-        milestone="M2"
-        items={[
-          "ICMP 连通性与丢包统计（原生实现，不依赖系统 ping）",
-          "TCP 端口抽样（原生实现，不依赖 tcping.exe）",
-          "DNS 解析与可选指定 DNS 服务器对比",
-          "Traceroute / MTU 探测",
-          "质量综合评判 + Markdown 技术报告",
-        ]}
-      />
-    ),
+    desc: "连通性、时延、丢包与端口可达性",
+    render: () => <NetworkDiag />,
   },
   subnet: {
     title: "子网计算",
