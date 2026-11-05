@@ -4,6 +4,22 @@
 > 从 4.0.0 起，本项目改用 Rust + Tauri 重写。下方 `3.x` 记录属于 Python + tkinter 实现，
 > 该实现已归档到 `legacy/python-v3` 分支，仅保留查阅。
 
+## [4.0.0-alpha.7] — 2026-11-05
+
+### 新增
+- **本机网段自动识别**：IP 扫描与 MAC 扫描不再写死 `192.168.1.0/24`。
+  - `qqhu-sys::netif`：原生接口枚举 —— Windows `GetAdaptersAddresses`、
+    Linux/macOS `getifaddrs`；默认网关 —— Windows `GetIpForwardTable2`、
+    Linux `/proc/net/route`、macOS `sysctl(NET_RT_DUMP)`。全程不解析本地化命令行输出。
+  - `suggest_scope` 纯函数：优先取默认路由出口所在接口，跳过环回与 `169.254/16`
+    链路本地地址；前缀过窄（>30，点对点）或过宽（<8）时收敛到 /24，避免扫出无意义目标。
+  - 新命令 `local_network`：返回接口列表、默认网关与建议网段。
+  - 界面：两个扫描模块首次进入自动填入本机网段，上次用过的范围仍优先生效。
+
+### 变更
+- `HostPlatform` 新增 `interfaces()` 与 `suggested_scope()`，默认实现走 `netif`，
+  三个平台实现不再各自返回 `None` 的死代码。
+
 ## [4.0.0-alpha.6] — 2026-11-03
 
 ### 新增

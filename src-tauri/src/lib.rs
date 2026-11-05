@@ -9,6 +9,7 @@ pub fn run() {
         .manage(commands::ScanState::default())
         .invoke_handler(tauri::generate_handler![
             commands::app_info,
+            commands::local_network,
             commands::about_info,
             commands::license_text,
             commands::subnet_calc,

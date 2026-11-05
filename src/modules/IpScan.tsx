@@ -1,10 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { cancelScan, exportIpScanCsv, onIpScanProgress, startIpScan } from "../lib/api";
+import { rememberScanScope, resolveScanScope } from "../lib/scope";
 import type { IpScanProgress, IpScanReport, ProbeMethod } from "../lib/types";
 
 /** 表格一次性渲染的行数上限：/20 这种范围下全量渲染会把界面拖死，超出提示导出 CSV。 */
 const MAX_ROWS = 500;
+
+/** 上次使用的扫描范围，避免每次重填。 */
+const INPUT_KEY = "qqhu.ipscan.input";
 
 const METHOD_LABEL: Record<ProbeMethod, string> = {
   icmp: "ICMP",
@@ -13,7 +17,8 @@ const METHOD_LABEL: Record<ProbeMethod, string> = {
 };
 
 export default function IpScan() {
-  const [input, setInput] = useState("192.168.1.0/24");
+  // 初值留空，挂载后按「本地记忆 → 本机网卡」补齐，避免写死 192.168.1.0/24
+  const [input, setInput] = useState("");
   const [count, setCount] = useState(1);
   const [timeoutMs, setTimeoutMs] = useState(800);
   const [concurrency, setConcurrency] = useState(64);
@@ -42,6 +47,16 @@ export default function IpScan() {
     };
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    void resolveScanScope(INPUT_KEY).then((v) => {
+      if (!cancelled) setInput((cur) => cur || v);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   function parseTcpPorts(): number[] {
     return tcpText
       .split(/[,，\s]+/)
@@ -64,6 +79,7 @@ export default function IpScan() {
     setRunning(true);
     try {
       if (!input.trim()) throw new Error("请填写扫描范围。");
+      rememberScanScope(INPUT_KEY, input);
       const r = await startIpScan({
         input: input.trim(),
         count,

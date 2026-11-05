@@ -7,6 +7,7 @@ import type {
   IpScanProgress,
   IpScanReport,
   IpScanRequest,
+  LocalNetworkInfo,
   MacScanProgress,
   MacScanReport,
   MacScanRequest,
@@ -58,6 +59,12 @@ export async function appInfo(): Promise<AppInfo> {
     return BROWSER_INFO;
   }
   return invoke<AppInfo>("app_info");
+}
+
+/** 本机接口与建议扫描范围。浏览器预览下返回空结果，不抛错。 */
+export async function localNetwork(): Promise<LocalNetworkInfo> {
+  if (!isTauri) return { scope: null, gateway: null, interfaces: [] };
+  return invoke<LocalNetworkInfo>("local_network");
 }
 
 export async function subnetCalc(

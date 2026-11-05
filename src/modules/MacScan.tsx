@@ -6,6 +6,7 @@ import {
   onMacScanProgress,
   runMacScan,
 } from "../lib/api";
+import { rememberScanScope, resolveScanScope } from "../lib/scope";
 import type { ArpState, MacScanProgress, MacScanReport } from "../lib/types";
 
 /** 表格一次性渲染上限，超出提示导出 CSV。 */
@@ -32,9 +33,10 @@ const STATE_TONE: Record<ArpState, string> = {
 
 export default function MacScan() {
   const [probeEnabled, setProbeEnabled] = useState(true);
-  // 记住上次用的范围：本机网段不会经常变，记下来省得每次重填
+  // 记住上次用的范围：本机网段不会经常变，记下来省得每次重填。
+  // 首次进入时若没有记忆值，按本机网卡推断（而不是写死 192.168.1.0/24）。
   const [probeInput, setProbeInput] = useState(
-    () => localStorage.getItem(PROBE_INPUT_KEY) ?? "192.168.1.0/24",
+    () => localStorage.getItem(PROBE_INPUT_KEY) ?? "",
   );
   const [timeoutMs, setTimeoutMs] = useState(600);
   const [concurrency, setConcurrency] = useState(64);
@@ -62,6 +64,16 @@ export default function MacScan() {
     };
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    void resolveScanScope(PROBE_INPUT_KEY).then((v) => {
+      if (!cancelled) setProbeInput((cur) => cur || v);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   async function start() {
     setError("");
     setReport(null);
@@ -73,7 +85,7 @@ export default function MacScan() {
         throw new Error("已启用主动探测，请填写探测范围。");
       }
       if (probeEnabled) {
-        localStorage.setItem(PROBE_INPUT_KEY, probeInput.trim());
+        rememberScanScope(PROBE_INPUT_KEY, probeInput);
       }
       const r = await runMacScan({
         probeInput: probeEnabled ? probeInput.trim() : null,

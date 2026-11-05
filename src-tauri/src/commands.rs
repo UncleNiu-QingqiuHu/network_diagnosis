@@ -161,6 +161,29 @@ pub fn app_info() -> AppInfo {
     build_app_info()
 }
 
+/// 本机网络概况：接口列表 + 默认网关 + 推断出的建议网段。
+///
+/// 前端用它替换硬编码的 `192.168.1.0/24`：只有用户从未填过范围时才自动带入，
+/// 填过就沿用本地记忆值。
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LocalNetworkInfo {
+    pub scope: Option<String>,
+    pub gateway: Option<String>,
+    pub interfaces: Vec<qqhu_sys::NetInterface>,
+}
+
+#[tauri::command]
+pub fn local_network() -> LocalNetworkInfo {
+    let h = host();
+    let interfaces = h.interfaces();
+    LocalNetworkInfo {
+        scope: qqhu_sys::netif::suggest_scope(&interfaces),
+        gateway: h.default_gateway().map(|g| g.to_string()),
+        interfaces,
+    }
+}
+
 #[tauri::command]
 pub fn subnet_calc(
     ip: String,

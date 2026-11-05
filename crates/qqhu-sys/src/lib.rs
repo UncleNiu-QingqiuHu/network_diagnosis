@@ -7,8 +7,10 @@
 use serde::{Deserialize, Serialize};
 
 pub mod arp;
+pub mod netif;
 
 pub use arp::{read_arp_table, ArpRecord};
+pub use netif::{local_interfaces, suggested_scope, NetInterface};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -88,7 +90,19 @@ pub trait HostPlatform: Send + Sync {
     fn is_elevated(&self) -> bool;
 
     /// 默认网关；无默认路由时返回 `None`。
-    fn default_gateway(&self) -> Option<std::net::IpAddr>;
+    fn default_gateway(&self) -> Option<std::net::IpAddr> {
+        netif::default_gateway().map(std::net::IpAddr::V4)
+    }
+
+    /// 本机 IPv4 接口列表。枚举失败时返回空表，不向上抛错。
+    fn interfaces(&self) -> Vec<NetInterface> {
+        local_interfaces().unwrap_or_default()
+    }
+
+    /// 推断出的建议扫描范围，如 `192.168.60.0/24`。
+    fn suggested_scope(&self) -> Option<String> {
+        netif::suggest_scope(&self.interfaces())
+    }
 
     /// 当前 ARP 邻居表。
     ///
@@ -183,11 +197,6 @@ mod imp {
             }
         }
 
-        fn default_gateway(&self) -> Option<std::net::IpAddr> {
-            // P1 由 netdev / IP Helper API 实现；P0 返回 None 由上层降级。
-            None
-        }
-
         fn capabilities(&self) -> CapabilitySet {
             use CapabilityLevel::*;
             CapabilitySet {
@@ -236,10 +245,6 @@ mod imp {
 
         fn is_elevated(&self) -> bool {
             unsafe { libc::geteuid() == 0 }
-        }
-
-        fn default_gateway(&self) -> Option<std::net::IpAddr> {
-            None
         }
 
         fn capabilities(&self) -> CapabilitySet {
@@ -321,10 +326,6 @@ mod imp {
 
         fn is_elevated(&self) -> bool {
             unsafe { libc::geteuid() == 0 }
-        }
-
-        fn default_gateway(&self) -> Option<std::net::IpAddr> {
-            None
         }
 
         fn capabilities(&self) -> CapabilitySet {

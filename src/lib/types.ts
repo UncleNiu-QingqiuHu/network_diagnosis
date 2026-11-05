@@ -282,3 +282,25 @@ export interface MacScanRequest {
   concurrency: number;
   timeoutMs: number;
 }
+
+/** 本机一个 IPv4 接口。 */
+export interface NetInterface {
+  name: string;
+  description: string;
+  ip: string;
+  /** 前缀长度（掩码中 1 的个数） */
+  prefixLen: number;
+  mac: string | null;
+  isUp: boolean;
+  isLoopback: boolean;
+  hasGateway: boolean;
+}
+
+/** 本机网络概况：用于自动填入扫描范围，替代硬编码网段。 */
+export interface LocalNetworkInfo {
+  /** 推断出的建议扫描范围，如 `192.168.60.0/24`；无可用接口时为 null */
+  scope: string | null;
+  gateway: string | null;
+  interfaces: NetInterface[];
+}
+
