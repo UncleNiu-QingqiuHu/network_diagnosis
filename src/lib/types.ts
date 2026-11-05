@@ -345,3 +345,54 @@ export interface SslCheckReport {
 }
 
 
+
+/** 路径追踪单跳 */
+export interface TraceHop {
+  ttl: number;
+  /** 全超时为 null */
+  addr: string | null;
+  rttMs: number | null;
+  reached: boolean;
+  note: string | null;
+}
+
+export interface TraceReport {
+  target: string;
+  resolvedIp: string;
+  hops: TraceHop[];
+  /** 是否到达目标（否则被跳数限制或提前收尾） */
+  completed: boolean;
+  cancelled: boolean;
+  durationMs: number;
+  warnings: string[];
+}
+
+export interface TraceProgress {
+  hop: TraceHop;
+  done: number;
+  total: number;
+}
+
+export interface MtuProbe {
+  /** 本次探测的 MTU 候选值 */
+  mtu: number;
+  passed: boolean;
+  /** 路由器回报的下一跳 MTU */
+  nextHopMtu: number | null;
+  rttMs: number | null;
+  /** ok / too-big / too-big-local / unreachable / timeout / send-error */
+  outcome: string;
+}
+
+export interface MtuReport {
+  target: string;
+  resolvedIp: string;
+  pathMtu: number;
+  probes: MtuProbe[];
+  /** 有探测超时，结论可能受丢包影响 */
+  uncertain: boolean;
+  durationMs: number;
+  warnings: string[];
+  /** 一句话结论（后端生成） */
+  summary: string;
+}

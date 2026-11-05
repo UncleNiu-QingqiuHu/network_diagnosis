@@ -2876,7 +2876,7 @@ dependencies = [
 
 [[package]]
 name = "qqhu-app"
-version = "4.0.0-alpha.8"
+version = "4.0.0-alpha.9"
 dependencies = [
  "chrono",
  "qqhu-core",
@@ -2895,7 +2895,7 @@ dependencies = [
 
 [[package]]
 name = "qqhu-core"
-version = "4.0.0-alpha.8"
+version = "4.0.0-alpha.9"
 dependencies = [
  "chrono",
  "serde",
@@ -2906,9 +2906,10 @@ dependencies = [
 
 [[package]]
 name = "qqhu-probe"
-version = "4.0.0-alpha.8"
+version = "4.0.0-alpha.9"
 dependencies = [
  "chrono",
+ "libc",
  "qqhu-core",
  "qqhu-report",
  "qqhu-sys",
@@ -2916,18 +2917,20 @@ dependencies = [
  "rustls-native-certs",
  "serde",
  "sha2 0.11.1",
+ "socket2",
  "surge-ping",
  "thiserror 2.0.21",
  "tokio",
  "tokio-rustls",
  "tracing",
  "webpki-roots",
+ "windows-sys 0.61.2",
  "x509-parser",
 ]
 
 [[package]]
 name = "qqhu-report"
-version = "4.0.0-alpha.8"
+version = "4.0.0-alpha.9"
 dependencies = [
  "chrono",
  "qqhu-core",
@@ -2939,7 +2942,7 @@ dependencies = [
 
 [[package]]
 name = "qqhu-sys"
-version = "4.0.0-alpha.8"
+version = "4.0.0-alpha.9"
 dependencies = [
  "libc",
  "qqhu-core",

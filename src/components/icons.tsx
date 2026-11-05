@@ -39,6 +39,15 @@ const PATHS: Record<string, ReactNode> = {
     </>
   ),
 
+  // 路径追踪：两点之间的折线路径
+  route: (
+    <>
+      <circle cx="5" cy="19" r="2.4" />
+      <circle cx="19" cy="5" r="2.4" />
+      <path d="M7.4 19h4.6a3.5 3.5 0 0 0 0-7h-1a3.5 3.5 0 0 1 0-7h5.6" />
+    </>
+  ),
+
   // SSL 证书：盾牌 + 勾
   shield: (
     <>

@@ -4,6 +4,33 @@
 > 从 4.0.0 起，本项目改用 Rust + Tauri 重写。下方 `3.x` 记录属于 Python + tkinter 实现，
 > 该实现已归档到 `legacy/python-v3` 分支，仅保留查阅。
 
+## [4.0.0-alpha.9] — 2026-11-05
+
+### 新增
+- **路径追踪（M2.1 第一块）**：定位「在哪一跳开始不通」。
+  - `qqhu-probe::icmp`：自建原始 ICMP socket（`SOCK_RAW + IPPROTO_ICMP`），
+    手写 Echo 报文与校验和、跳过 IP 首部解析 Echo Reply / Time Exceeded /
+    Fragmentation Needed，并从差错报文的内层包取出目的地址与序号做匹配。
+    Windows 普通用户即可创建 raw ICMP socket；Linux/macOS 需 root 或 `CAP_NET_RAW`。
+  - `qqhu-probe::traceroute`：逐跳递增 TTL，每跳重建 socket（TTL 是 socket 级选项）；
+    连续 5 跳无响应提前收尾，避免对屏蔽 ICMP 的目标死等。
+  - 界面：逐跳实时推送（事件 `trace-progress`）、跳数 / RTT / 备注表格、
+    到达提示、重复地址告警（ECMP 或路由环路）。
+- **路径 MTU 探测（M2.1 第二块）**：排查「网页能开、大文件卡住」的分片黑洞。
+  - 发带 DF 标志的 ICMP Echo 并二分查找最大可通尺寸，十几轮收敛到 1 字节。
+  - 先打基线 1500：本机网卡拒绝更大包时（`EMSGSIZE`）直接判定 1500，
+    不再对 1500–9000 做十几次无意义二分（实测探测次数 14 → 2）。
+  - 区分「本地接口 MTU 封顶」与「路径上路由器回 ICMP 3/4」，并读取路由器回报的下一跳 MTU。
+  - 界面：以本机网关为默认目标，结论横幅 + 每次探测明细（MTU / 载荷 / 结果 / RTT / 下一跳 MTU）。
+- 新命令 `trace_route`、`probe_mtu`；侧栏新增「路径追踪」模块（图标 `route`）。
+
+### 修复
+- **ICMP 应答误判**：只比对 ident/seq 时，raw socket 收到的其他 ICMP Echo Reply
+  会被当作「已到达目标」（实测跟踪公网时第 2 跳错报网关即目标）。
+  现在 Echo Reply 必须来自目标地址，差错报文的内层包目的地址也必须匹配。
+- MTU 目标不响应 ICMP 时错误文案曾误用「目标地址无效」，改为直接说明探测失败的
+  原因与替代建议（新增 `ProbeError::ProbeFailed`）。
+
 ## [4.0.0-alpha.8] — 2026-11-05
 
 ### 新增

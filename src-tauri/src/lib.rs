@@ -11,6 +11,8 @@ pub fn run() {
             commands::app_info,
             commands::local_network,
             commands::ssl_check,
+            commands::trace_route,
+            commands::probe_mtu,
             commands::about_info,
             commands::license_text,
             commands::subnet_calc,

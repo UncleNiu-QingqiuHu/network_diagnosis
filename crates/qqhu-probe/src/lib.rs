@@ -11,16 +11,21 @@ use std::net::IpAddr;
 
 pub mod diagnose;
 pub mod dns;
+pub mod icmp;
 pub mod ipscan;
 pub mod macscan;
+pub mod mtu;
 pub mod ping;
 pub mod sslcert;
 pub mod tcp;
+pub mod traceroute;
 
 pub use diagnose::{run_diagnosis, DiagContext, DiagOptions};
 pub use ipscan::{scan_scope, IpScanOptions, ScanProgress};
 pub use macscan::{run_mac_scan, MacScanOptions, MacScanProgress};
+pub use mtu::{probe_path_mtu, MtuOptions};
 pub use ping::{ping_host, PingOptions};
+pub use traceroute::{trace_route, TraceOptions, TraceProgress};
 pub use sslcert::{check_certificate, parse_target, SslCheckOptions};
 pub use tcp::{probe_port, probe_ports, TcpProbeOptions};
 
@@ -37,6 +42,10 @@ pub enum ProbeError {
 
     #[error("目标地址无效：{0}")]
     InvalidTarget(String),
+
+    /// 探测已执行但无法得出结论（如目标屏蔽 ICMP），信息直接面向用户展示
+    #[error("{0}")]
+    ProbeFailed(String),
 }
 
 /// 解析目标为具体 IP。

@@ -79,6 +79,7 @@ fn available_modules(caps: &CapabilitySet) -> Vec<ModuleInfo> {
     };
 
     push_if(&mut out, caps.network_probe, "network", "网络诊断", "wave");
+    push_if(&mut out, caps.network_probe, "trace", "路径追踪", "route");
     push_if(&mut out, caps.subnet, "subnet", "子网计算", "split");
     push_if(&mut out, caps.ip_scan, "ipScan", "IP 扫描", "radar");
     push_if(&mut out, caps.mac_scan, "macScan", "MAC 扫描", "chip");
@@ -194,6 +195,43 @@ pub async fn ssl_check(
         timeout_ms: timeout_ms.unwrap_or(8000),
     };
     qqhu_probe::check_certificate(&input, opts).await
+}
+
+/// 事件名：路径追踪逐跳进度。
+pub const TRACE_PROGRESS_EVENT: &str = "trace-progress";
+
+/// 路径追踪（Traceroute）。逐跳把结果推给前端，最后返回完整报告。
+#[tauri::command]
+pub async fn trace_route(
+    app: AppHandle,
+    target: String,
+    max_hops: Option<u8>,
+    timeout_ms: Option<u64>,
+) -> Result<qqhu_core::TraceReport, String> {
+    let opts = qqhu_probe::TraceOptions {
+        max_hops: max_hops.unwrap_or(30),
+        timeout: Duration::from_millis(timeout_ms.unwrap_or(1200).clamp(200, 5000)),
+        ..Default::default()
+    };
+
+    let handle = app.clone();
+    qqhu_probe::trace_route(&target, &opts, move |p| {
+        let _ = handle.emit(TRACE_PROGRESS_EVENT, &p);
+    })
+    .await
+    .map_err(|e| e.to_string())
+}
+
+/// 路径 MTU 探测。
+#[tauri::command]
+pub async fn probe_mtu(target: String, timeout_ms: Option<u64>) -> Result<qqhu_core::MtuReport, String> {
+    let opts = qqhu_probe::MtuOptions {
+        timeout: Duration::from_millis(timeout_ms.unwrap_or(1200).clamp(200, 5000)),
+        ..Default::default()
+    };
+    qqhu_probe::probe_path_mtu(&target, &opts)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]

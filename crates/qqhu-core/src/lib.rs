@@ -7,9 +7,11 @@ pub mod error;
 pub mod ipscan;
 pub mod macscan;
 pub mod model;
+pub mod mtu;
 pub mod quality;
 pub mod subnet;
 pub mod summary;
+pub mod traceroute;
 pub mod sslcert;
 
 pub use error::{CoreError, CoreResult};
@@ -22,12 +24,14 @@ pub use macscan::{
     ArpState, MacScanReport, OuiDb,
 };
 pub use model::*;
+pub use mtu::{MtuProbe, MtuReport, DEFAULT_MTU, IPV4_ICMP_OVERHEAD, MAX_MTU, MIN_MTU};
 pub use quality::compute_network_quality;
 pub use subnet::{calc_from_cidr_combo, calc_subnet, subdivide_ipv4_equal_children, SubnetCalcResult};
 pub use sslcert::{
     build_warnings, hostname_matches, CertInfo, CertStatus, SslCheckReport, EXPIRING_SOON_DAYS,
 };
 pub use summary::build_summary;
+pub use traceroute::{TraceHop, TraceReport};
 
 /// 应用版本（唯一来源；Tauri 侧通过 build script 注入）。
 pub const APP_VERSION: &str = env!("CARGO_PKG_VERSION");

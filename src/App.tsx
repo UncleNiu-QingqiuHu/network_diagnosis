@@ -6,6 +6,7 @@ import { appInfo, isTauri } from "./lib/api";
 import type { AppInfo } from "./lib/types";
 import SubnetCalc from "./modules/SubnetCalc";
 import NetworkDiag from "./modules/NetworkDiag";
+import RouteTrace from "./modules/RouteTrace";
 import IpScan from "./modules/IpScan";
 import MacScan from "./modules/MacScan";
 import SslCert from "./modules/SslCert";
@@ -23,6 +24,11 @@ const VIEWS: Record<string, ModuleView> = {
     title: "网络诊断",
     desc: "连通性、时延、丢包与端口可达性",
     render: () => <NetworkDiag />,
+  },
+  trace: {
+    title: "路径追踪",
+    desc: "逐跳定位断点，并探测路径 MTU",
+    render: () => <RouteTrace />,
   },
   subnet: {
     title: "子网计算",

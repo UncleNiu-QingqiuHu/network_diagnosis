@@ -11,8 +11,11 @@ import type {
   MacScanProgress,
   MacScanReport,
   MacScanRequest,
+  MtuReport,
   SslCheckReport,
   SubnetCalcResult,
+  TraceProgress,
+  TraceReport,
 } from "./types";
 
 /** 是否运行在 Tauri 容器内。浏览器直接 `pnpm dev` 时为 false。 */
@@ -199,4 +202,28 @@ export async function onMacScanProgress(
 ): Promise<() => void> {
   if (!isTauri) return () => undefined;
   return listen<MacScanProgress>("macscan-progress", (e) => handler(e.payload));
+}
+
+/** 路径追踪：逐跳结果通过事件推送，最终返回完整报告。 */
+export async function traceRoute(
+  target: string,
+  maxHops = 30,
+  timeoutMs = 1200,
+): Promise<TraceReport> {
+  if (!isTauri) throw new Error("路径追踪需要 Rust 后端，请在 Tauri 窗口中运行。");
+  return invoke<TraceReport>("trace_route", { target, maxHops, timeoutMs });
+}
+
+/** 订阅逐跳进度，返回取消订阅函数。 */
+export async function onTraceProgress(
+  handler: (p: TraceProgress) => void,
+): Promise<() => void> {
+  if (!isTauri) return () => undefined;
+  return listen<TraceProgress>("trace-progress", (e) => handler(e.payload));
+}
+
+/** 路径 MTU 探测。 */
+export async function probeMtu(target: string, timeoutMs = 1200): Promise<MtuReport> {
+  if (!isTauri) throw new Error("MTU 探测需要 Rust 后端，请在 Tauri 窗口中运行。");
+  return invoke<MtuReport>("probe_mtu", { target, timeoutMs });
 }
