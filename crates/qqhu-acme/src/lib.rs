@@ -17,13 +17,16 @@ pub mod dns;
 pub mod issue;
 pub mod model;
 pub mod propagate;
+pub mod renewal;
 pub mod store;
+pub mod vault;
 
 pub use model::{
     AcmeCertMeta, DnsCredentials, DnsProviderKind, IssueSpec, ValidIssue, DEFAULT_DNS_WAIT_SECS,
     MAX_DOMAINS,
 };
 pub use store::AcmeStore;
+pub use vault::CredentialVault;
 
 #[derive(Debug, thiserror::Error)]
 pub enum AcmeError {

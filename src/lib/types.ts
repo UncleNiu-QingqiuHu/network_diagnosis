@@ -482,6 +482,8 @@ export interface AcmeIssueSpec {
   staging: boolean;
   directoryUrl?: string | null;
   dnsWaitSecs?: number | null;
+  /** 启用自动续期：凭据存入系统凭据管理器 */
+  enableAutoRenew: boolean;
 }
 
 export interface AcmeCertMeta {
@@ -498,6 +500,12 @@ export interface AcmeCertMeta {
   notBefore: string;
   notAfter: string;
   daysRemaining: number;
+  autoRenew: boolean;
+  providerKey: string;
+  renewCount: number;
+  lastAttemptAt: string | null;
+  lastError: string | null;
+  renewedAt: string | null;
 }
 
 export interface AcmeOverview {
@@ -517,4 +525,33 @@ export interface AcmeProgress {
   /** account / order / dns / verify / challenge / finalize / save / cleanup / done */
   stage: string;
   message: string;
+}
+
+
+export interface RenewDue {
+  id: string;
+  domain: string;
+  daysRemaining: number;
+  lastError: string | null;
+}
+
+export interface RenewalStatus {
+  /** 正在执行续期 */
+  checking: boolean;
+  lastCheck: string | null;
+  nextCheck: string | null;
+  /** 凭据存放后端（系统凭据管理器 / 本地文件） */
+  vaultBackend: string;
+  /** 到期前多少天开始续期 */
+  leadDays: number;
+  due: RenewDue[];
+}
+
+export interface RenewEvent {
+  id: string;
+  domain: string;
+  /** start / account / dns / challenge / save / done / error / idle */
+  stage: string;
+  message: string;
+  ok: boolean | null;
 }

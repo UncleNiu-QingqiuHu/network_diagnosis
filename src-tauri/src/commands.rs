@@ -312,9 +312,14 @@ pub struct AcmeCertText {
     pub dir: String,
 }
 
-fn acme_store() -> qqhu_acme::AcmeStore {
+pub(crate) fn acme_store() -> qqhu_acme::AcmeStore {
     // 与私有 CA 同一棵目录树，便于用户统一备份与收紧权限
     qqhu_acme::AcmeStore::new(crate::paths::pki_dir().join("acme"))
+}
+
+/// DNS 凭据保管：优先系统凭据管理器，取不到才退回本地文件。
+pub(crate) fn acme_vault() -> qqhu_acme::CredentialVault {
+    qqhu_acme::CredentialVault::new(crate::paths::pki_dir().join("acme").join("credentials"))
 }
 
 #[tauri::command]
@@ -333,8 +338,9 @@ pub async fn acme_issue(
     spec: qqhu_acme::IssueSpec,
 ) -> Result<qqhu_acme::AcmeCertMeta, String> {
     let store = acme_store();
+    let vault = acme_vault();
     let handle = app.clone();
-    qqhu_acme::issue::issue(&spec, &store, &move |p| {
+    qqhu_acme::issue::issue(&spec, &store, &vault, &move |p| {
         let _ = handle.emit(ACME_PROGRESS_EVENT, &p);
     })
     .await
@@ -363,6 +369,110 @@ pub fn acme_export_pfx(id: String, password: String) -> Result<String, String> {
     acme_store()
         .export_pfx(&id, &password)
         .map_err(|e| e.to_string())
+}
+
+/// 开关自动续期。
+///
+/// 启用时必须有可用凭据：传了新的就用新的，没传就要求系统里已存过。
+/// 关闭时顺手删掉保存的凭据 —— 不用的密钥留在系统里没有好处。
+#[tauri::command]
+pub fn acme_set_auto_renew(
+    id: String,
+    enabled: bool,
+    credentials: Option<qqhu_acme::DnsCredentials>,
+) -> Result<qqhu_acme::AcmeCertMeta, String> {
+    let store = acme_store();
+    let vault = acme_vault();
+    let mut meta = store
+        .get(&id)
+        .ok_or_else(|| format!("找不到证书 {id}"))?;
+
+    if enabled {
+        match credentials {
+            Some(c) => {
+                let c = c.normalized()?;
+                vault.save(&id, &c).map_err(|e| e.to_string())?;
+            }
+            None => {
+                let existing = vault.load(&id).map_err(|e| e.to_string())?;
+                if existing.is_none() {
+                    return Err(
+                        "该证书尚未保存 DNS 凭据：请填写 AccessKey 后再启用自动续期。".into(),
+                    );
+                }
+            }
+        }
+        meta.auto_renew = true;
+    } else {
+        meta.auto_renew = false;
+        vault.delete(&id).map_err(|e| e.to_string())?;
+    }
+    meta.last_error = None;
+    store.update_meta(&meta).map_err(|e| e.to_string())?;
+    Ok(meta)
+}
+
+/// 续期状态快照：是否在跑、上次/下次检查、当前待续期列表。
+#[tauri::command]
+pub fn acme_renewal_status(state: tauri::State<'_, crate::renewal::RenewalState>) -> crate::renewal::RenewalStatus {
+    crate::renewal::status(&state)
+}
+
+/// 立即检查一轮（异步执行，进度走 acme-renew 事件）。
+#[tauri::command]
+pub async fn acme_check_renewals(app: AppHandle) {
+    crate::renewal::run_check(&app).await;
+}
+
+/// 立即续期指定证书（不等待日程）。
+#[tauri::command]
+pub async fn acme_renew_now(app: AppHandle, id: String) -> Result<qqhu_acme::AcmeCertMeta, String> {
+    let store = acme_store();
+    let vault = acme_vault();
+    let meta = store.get(&id).ok_or_else(|| format!("找不到证书 {id}"))?;
+    let credentials = match vault.load(&id).map_err(|e| e.to_string())? {
+        Some(c) => c,
+        None => return Err("该证书没有保存 DNS 凭据，无法自动续期；请重新填写 AccessKey。".into()),
+    };
+
+    let handle = app.clone();
+    let cert_id = id.clone();
+    let domain = meta.primary_domain.clone();
+    let cb = move |p: qqhu_acme::issue::IssueProgress| {
+        let _ = handle.emit(
+            crate::renewal::RENEW_EVENT,
+            crate::renewal::RenewEvent {
+                id: cert_id.clone(),
+                domain: domain.clone(),
+                stage: p.stage,
+                message: p.message,
+                ok: None,
+            },
+        );
+    };
+
+    let result = qqhu_acme::issue::renew(&meta, credentials, &store, &cb).await;
+    match &result {
+        Ok(next) => {
+            let _ = app.emit(
+                crate::renewal::RENEW_EVENT,
+                crate::renewal::RenewEvent {
+                    id: next.id.clone(),
+                    domain: next.primary_domain.clone(),
+                    stage: "done".into(),
+                    message: format!("续期成功，有效期至 {}", next.not_after.format("%Y-%m-%d")),
+                    ok: Some(true),
+                },
+            );
+        }
+        Err(e) => {
+            let mut m = meta.clone();
+            m.last_error = Some(e.to_string());
+            m.last_attempt_at = Some(chrono::Utc::now());
+            let _ = store.update_meta(&m);
+        }
+    }
+    result.map_err(|e| e.to_string())
 }
 
 /// 返回目录路径，前端用文件管理器定位（WebView 里无法直接调用系统「打开」）。

@@ -23,5 +23,8 @@ x509-parser = { workspace = true }
 uuid = { workspace = true }
 time = { workspace = true }
 
+[target.'cfg(any(target_os = "windows", target_os = "macos"))'.dependencies]
+keyring = { workspace = true }
+
 [dev-dependencies]
 rcgen = { workspace = true }

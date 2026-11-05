@@ -93,6 +93,9 @@ pub struct IssueSpec {
     /// 写入 TXT 后的等待秒数
     #[serde(default)]
     pub dns_wait_secs: Option<u64>,
+    /// 启用自动续期：把 DNS 凭据存入系统凭据管理器，到期前 30 天自动重签
+    #[serde(default)]
+    pub enable_auto_renew: bool,
 }
 
 /// 规范化后的请求。
@@ -106,6 +109,7 @@ pub struct ValidIssue {
     pub credentials: DnsCredentials,
     pub directory_url: String,
     pub dns_wait_secs: u64,
+    pub enable_auto_renew: bool,
 }
 
 impl IssueSpec {
@@ -150,6 +154,7 @@ impl IssueSpec {
             credentials,
             directory_url,
             dns_wait_secs: wait,
+            enable_auto_renew: self.enable_auto_renew,
         })
     }
 }
@@ -313,6 +318,25 @@ pub struct AcmeCertMeta {
     pub not_before: chrono::DateTime<chrono::Utc>,
     pub not_after: chrono::DateTime<chrono::Utc>,
     pub days_remaining: i64,
+
+    /// 是否启用自动续期
+    #[serde(default)]
+    pub auto_renew: bool,
+    /// 服务商标识（aliyun / tencent），续期时用来还原请求
+    #[serde(default)]
+    pub provider_key: String,
+    /// 已自动续期次数
+    #[serde(default)]
+    pub renew_count: u32,
+    /// 最近一次续期尝试时间（无论成败都记，用于失败退避）
+    #[serde(default)]
+    pub last_attempt_at: Option<chrono::DateTime<chrono::Utc>>,
+    /// 最近一次续期失败原因；成功后清空
+    #[serde(default)]
+    pub last_error: Option<String>,
+    /// 最近一次续期成功时间
+    #[serde(default)]
+    pub renewed_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 impl AcmeCertMeta {
@@ -337,6 +361,7 @@ mod tests {
             staging: false,
             directory_url: None,
             dns_wait_secs: None,
+            enable_auto_renew: false,
         }
     }
 
@@ -433,6 +458,12 @@ mod tests {
             not_before: now,
             not_after: now + chrono::Duration::days(90),
             days_remaining: 0,
+            auto_renew: false,
+            provider_key: "aliyun".into(),
+            renew_count: 0,
+            last_attempt_at: None,
+            last_error: None,
+            renewed_at: None,
         };
         meta.refresh(now);
         assert_eq!(meta.days_remaining, 90);

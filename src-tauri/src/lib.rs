@@ -2,11 +2,18 @@
 
 pub mod commands;
 pub mod paths;
+pub mod renewal;
 
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .manage(commands::ScanState::default())
+        .manage(renewal::RenewalState::default())
+        .setup(|app| {
+            // 后台续期：启动即检查一次，之后每 6 小时一轮
+            renewal::spawn(app.handle().clone());
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             commands::app_info,
             commands::local_network,
@@ -27,6 +34,10 @@ pub fn run() {
             commands::acme_cert_text,
             commands::acme_export_pfx,
             commands::acme_dir_of,
+            commands::acme_set_auto_renew,
+            commands::acme_renewal_status,
+            commands::acme_check_renewals,
+            commands::acme_renew_now,
             commands::about_info,
             commands::license_text,
             commands::subnet_calc,

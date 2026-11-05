@@ -7,6 +7,8 @@ import type {
   AcmeIssueSpec,
   AcmeOverview,
   AcmeProgress,
+  RenewalStatus,
+  RenewEvent,
   AppInfo,
   DiagnosisOutcome,
   IpScanProgress,
@@ -322,4 +324,37 @@ export async function acmeExportPfx(id: string, password: string): Promise<strin
 export async function acmeDirOf(id: string): Promise<string> {
   if (!isTauri) throw new Error("ACME 签发需要 Rust 后端。");
   return invoke<string>("acme_dir_of", { id });
+}
+
+export async function acmeSetAutoRenew(
+  id: string,
+  enabled: boolean,
+  credentials?: { accessKeyId: string; accessKeySecret: string } | null,
+): Promise<AcmeCertMeta> {
+  if (!isTauri) throw new Error("ACME 签发需要 Rust 后端。");
+  return invoke<AcmeCertMeta>("acme_set_auto_renew", { id, enabled, credentials });
+}
+
+export async function acmeRenewalStatus(): Promise<RenewalStatus> {
+  if (!isTauri) throw new Error("ACME 签发需要 Rust 后端。");
+  return invoke<RenewalStatus>("acme_renewal_status");
+}
+
+/** 立即检查一轮：命令返回即代表本轮结束，进度走 acme-renew 事件。 */
+export async function acmeCheckRenewals(): Promise<void> {
+  if (!isTauri) throw new Error("ACME 签发需要 Rust 后端。");
+  return invoke<void>("acme_check_renewals");
+}
+
+export async function acmeRenewNow(id: string): Promise<AcmeCertMeta> {
+  if (!isTauri) throw new Error("ACME 签发需要 Rust 后端。");
+  return invoke<AcmeCertMeta>("acme_renew_now", { id });
+}
+
+/** 订阅后台续期进度，返回取消订阅函数。 */
+export async function onAcmeRenew(
+  handler: (e: RenewEvent) => void,
+): Promise<() => void> {
+  if (!isTauri) return () => undefined;
+  return listen<RenewEvent>("acme-renew", (e) => handler(e.payload));
 }

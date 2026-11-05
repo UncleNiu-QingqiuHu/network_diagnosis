@@ -3,7 +3,7 @@ resolver = "2"
 members = ["crates/qqhu-core", "crates/qqhu-sys", "crates/qqhu-probe", "crates/qqhu-report", "crates/qqhu-pki", "crates/qqhu-acme", "src-tauri"]
 
 [workspace.package]
-version = "4.0.0-alpha.11"
+version = "4.0.0-alpha.12"
 edition = "2021"
 rust-version = "1.82"
 license = "MIT"
@@ -17,6 +17,7 @@ thiserror = "2"
 chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 time = "0.3"
+keyring = "4"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time", "process", "io-util", "sync"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }

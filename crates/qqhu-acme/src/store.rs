@@ -131,6 +131,27 @@ impl AcmeStore {
         std::fs::remove_dir_all(&dir).map_err(|e| AcmeError::Io(format!("删除失败：{e}")))
     }
 
+    /// 读取单张证书的元信息（不刷新剩余天数）。
+    pub fn get(&self, id: &str) -> Option<AcmeCertMeta> {
+        let text = std::fs::read_to_string(self.cert_dir(id).join("meta.json")).ok()?;
+        serde_json::from_str(&text).ok()
+    }
+
+    /// 只更新元信息，不动证书文件。
+    ///
+    /// 自动续期失败时把原因写回，让界面能显示「上次失败：xxx」，
+    /// 同时作为退避判定的依据。
+    pub fn update_meta(&self, meta: &AcmeCertMeta) -> Result<(), AcmeError> {
+        let dir = self.cert_dir(&meta.id);
+        if !dir.exists() {
+            return Err(AcmeError::Invalid(format!("找不到证书 {}", meta.id)));
+        }
+        let text = serde_json::to_string_pretty(meta)
+            .map_err(|e| AcmeError::Io(format!("序列化元信息失败：{e}")))?;
+        std::fs::write(dir.join("meta.json"), text)
+            .map_err(|e| AcmeError::Io(format!("写入元信息失败：{e}")))
+    }
+
     /// 读取证书 / 私钥 / 完整链。
     pub fn read_texts(&self, id: &str) -> Result<(String, String, String), AcmeError> {
         let dir = self.cert_dir(id);
@@ -232,6 +253,12 @@ mod tests {
             not_before: now,
             not_after: now + chrono::Duration::days(90),
             days_remaining: 90,
+            auto_renew: false,
+            provider_key: "aliyun".into(),
+            renew_count: 0,
+            last_attempt_at: None,
+            last_error: None,
+            renewed_at: None,
         }
     }
 
@@ -282,6 +309,30 @@ mod tests {
         assert!(store
             .load_account("https://acme-v02.api.letsencrypt.org/directory")
             .is_none());
+        let _ = std::fs::remove_dir_all(store.root());
+    }
+
+    #[test]
+    fn update_meta_keeps_cert_files() {
+        let store = temp_store("meta");
+        let (cert, key) = make_cert();
+        store.save_cert(&meta("m1"), &cert, &key, &cert).unwrap();
+
+        let mut m = store.get("m1").unwrap();
+        m.auto_renew = true;
+        m.last_error = Some("上次失败".into());
+        store.update_meta(&m).unwrap();
+
+        let again = store.get("m1").unwrap();
+        assert!(again.auto_renew);
+        assert_eq!(again.last_error.as_deref(), Some("上次失败"));
+        // 证书文件不受影响
+        assert!(store.read_texts("m1").is_ok());
+
+        // 不存在的 id 必须报错，避免静默丢更新
+        let mut ghost = again.clone();
+        ghost.id = "nope".into();
+        assert!(store.update_meta(&ghost).is_err());
         let _ = std::fs::remove_dir_all(store.root());
     }
 
