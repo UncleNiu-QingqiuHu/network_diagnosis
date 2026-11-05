@@ -396,3 +396,72 @@ export interface MtuReport {
   /** 一句话结论（后端生成） */
   summary: string;
 }
+
+// ---------------------------------------------------------------- 私有 CA
+
+export type KeyAlgorithm = "ecdsaP256" | "ed25519";
+export type CertUsage = "server" | "client" | "both";
+
+export interface CaSpec {
+  commonName: string;
+  organization?: string | null;
+  organizationalUnit?: string | null;
+  country?: string | null;
+  state?: string | null;
+  locality?: string | null;
+  validityDays?: number | null;
+  keyAlgorithm?: KeyAlgorithm;
+}
+
+export interface CaMeta {
+  id: string;
+  commonName: string;
+  /** 完整 DN，取自证书本身 */
+  subject: string;
+  serial: string;
+  fingerprint: string;
+  keyAlgorithm: string;
+  createdAt: string;
+  notBefore: string;
+  notAfter: string;
+  daysRemaining: number;
+  /** 该 CA 已签发证书数 */
+  issuedCount: number;
+}
+
+export interface CertSpec {
+  caId: string;
+  commonName: string;
+  sans: string[];
+  validityDays?: number | null;
+  keyAlgorithm?: KeyAlgorithm;
+  usage?: CertUsage;
+}
+
+export interface CertMeta {
+  id: string;
+  caId: string;
+  commonName: string;
+  sans: string[];
+  serial: string;
+  fingerprint: string;
+  keyAlgorithm: string;
+  usage: string;
+  createdAt: string;
+  notBefore: string;
+  notAfter: string;
+  daysRemaining: number;
+}
+
+export interface PkiOverview {
+  cas: CaMeta[];
+  certs: CertMeta[];
+  /** 私钥以明文 PEM 存放的根目录 */
+  rootDir: string;
+}
+
+export interface CertText {
+  certPem: string;
+  chainPem: string;
+  dir: string;
+}

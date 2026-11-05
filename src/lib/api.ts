@@ -11,7 +11,13 @@ import type {
   MacScanProgress,
   MacScanReport,
   MacScanRequest,
+  CaMeta,
+  CaSpec,
+  CertMeta,
+  CertSpec,
+  CertText,
   MtuReport,
+  PkiOverview,
   SslCheckReport,
   SubnetCalcResult,
   TraceProgress,
@@ -226,4 +232,48 @@ export async function onTraceProgress(
 export async function probeMtu(target: string, timeoutMs = 1200): Promise<MtuReport> {
   if (!isTauri) throw new Error("MTU 探测需要 Rust 后端，请在 Tauri 窗口中运行。");
   return invoke<MtuReport>("probe_mtu", { target, timeoutMs });
+}
+
+// ---------------------------------------------------------------- 私有 CA
+
+export async function pkiOverview(): Promise<PkiOverview> {
+  if (!isTauri) throw new Error("证书签发需要 Rust 后端，请在 Tauri 窗口中运行。");
+  return invoke<PkiOverview>("pki_overview");
+}
+
+export async function pkiCreateCa(spec: CaSpec): Promise<CaMeta> {
+  if (!isTauri) throw new Error("证书签发需要 Rust 后端。");
+  return invoke<CaMeta>("pki_create_ca", { spec });
+}
+
+export async function pkiDeleteCa(id: string): Promise<void> {
+  if (!isTauri) throw new Error("证书签发需要 Rust 后端。");
+  return invoke<void>("pki_delete_ca", { id });
+}
+
+export async function pkiIssue(spec: CertSpec): Promise<CertMeta> {
+  if (!isTauri) throw new Error("证书签发需要 Rust 后端。");
+  return invoke<CertMeta>("pki_issue", { spec });
+}
+
+export async function pkiDeleteCert(id: string): Promise<void> {
+  if (!isTauri) throw new Error("证书签发需要 Rust 后端。");
+  return invoke<void>("pki_delete_cert", { id });
+}
+
+/** 导出 PKCS#12，返回落盘路径。 */
+export async function pkiExportPfx(id: string, password: string): Promise<string> {
+  if (!isTauri) throw new Error("证书签发需要 Rust 后端。");
+  return invoke<string>("pki_export_pfx", { id, password });
+}
+
+export async function pkiCertText(id: string): Promise<CertText> {
+  if (!isTauri) throw new Error("证书签发需要 Rust 后端。");
+  return invoke<CertText>("pki_cert_text", { id });
+}
+
+/** 返回目录路径（kind 为 ca / cert）。 */
+export async function pkiDirOf(id: string, kind: "ca" | "cert"): Promise<string> {
+  if (!isTauri) throw new Error("证书签发需要 Rust 后端。");
+  return invoke<string>("pki_dir_of", { id, kind });
 }

@@ -10,6 +10,7 @@ import RouteTrace from "./modules/RouteTrace";
 import IpScan from "./modules/IpScan";
 import MacScan from "./modules/MacScan";
 import SslCert from "./modules/SslCert";
+import PkiCerts from "./modules/PkiCerts";
 import About from "./modules/About";
 import License from "./modules/License";
 
@@ -49,6 +50,11 @@ const VIEWS: Record<string, ModuleView> = {
     title: "SSL 证书",
     desc: "证书链检查、有效期与信任校验",
     render: () => <SslCert />,
+  },
+  pki: {
+    title: "证书签发",
+    desc: "私有 CA 与内网证书签发、PEM / PFX 导出",
+    render: () => <PkiCerts />,
   },
   about: {
     title: "关于",

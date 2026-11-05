@@ -43,6 +43,16 @@ pub fn macscan_dir() -> PathBuf {
     dir
 }
 
+/// 证书库目录：`pki/`，内含 `cas/` 与 `certs/`。
+///
+/// 注意：按用户选择，CA 私钥与证书私钥以明文 PEM 保存在这里，
+/// 界面必须明确提示位置，避免用户误以为有口令保护。
+pub fn pki_dir() -> PathBuf {
+    let dir = install_root().join("pki");
+    let _ = std::fs::create_dir_all(&dir);
+    dir
+}
+
 /// 配置目录：`config/`，用户可放 `oui.csv` 扩展厂商库。
 pub fn config_dir() -> PathBuf {
     let dir = install_root().join("config");

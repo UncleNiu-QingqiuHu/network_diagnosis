@@ -48,6 +48,14 @@ const PATHS: Record<string, ReactNode> = {
     </>
   ),
 
+  // 证书签发：钥匙
+  key: (
+    <>
+      <circle cx="8" cy="15.5" r="4" />
+      <path d="M11 12.5L19.5 4M17 6.5l2.5 2.5M14.5 9l2 2" />
+    </>
+  ),
+
   // SSL 证书：盾牌 + 勾
   shield: (
     <>

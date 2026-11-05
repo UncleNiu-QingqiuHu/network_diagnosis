@@ -4,6 +4,31 @@
 > 从 4.0.0 起，本项目改用 Rust + Tauri 重写。下方 `3.x` 记录属于 Python + tkinter 实现，
 > 该实现已归档到 `legacy/python-v3` 分支，仅保留查阅。
 
+## [4.0.0-alpha.10] — 2026-11-05
+
+### 新增
+- **私有 CA 与证书签发（M4 第一块）**：内网 HTTPS / 设备证书不再需要装 OpenSSL 敲命令行。
+  - 新 crate `qqhu-pki`，三层职责：`model`（输入校验，纯逻辑）、`issue`（rcgen 生成，
+    不碰文件）、`store`（目录布局与元信息）。
+  - 根 CA：自签名、`KeyCertSign` + `CrlSign`，默认 3650 天，可填 O / OU / C / ST / L。
+  - 站点证书：SAN 同时支持 DNS 名、通配符（只允许最左一级）与 IP，用途可选
+    服务器 / 客户端 / 两者（对应 Extended Key Usage）。
+  - **子证书有效期自动受 CA 剩余有效期截断**，避免出现「每张证书都没过期、链却验不过」。
+  - `chain.pem` 按「服务器证书 → CA」顺序拼接，可直接用于 Nginx `ssl_certificate`。
+  - PKCS#12（`.pfx`）导出：口令保护，打包时一并写入 CA 证书，Windows 双击即可导入。
+    使用 PKCS#12 传统的 RC2-40 加密（Windows / IIS 全版本兼容；OpenSSL 3 默认禁用该算法，
+    需要 `-provider legacy` 才能读取，界面已注明）。
+  - 界面新增「证书签发」模块：CA 列表与创建、签发证书、证书内容查看与复制、
+    PFX 导出、目录定位、删除保护（CA 下仍有证书时拒绝删除）。
+- 命令：`pki_overview` / `pki_create_ca` / `pki_delete_ca` / `pki_issue` /
+  `pki_delete_cert` / `pki_export_pfx` / `pki_cert_text` / `pki_dir_of`。
+
+### 说明
+- 按选择，私钥以**明文 PEM** 保存在 `<安装目录>/pki/`，界面顶部固定提示该路径与风险。
+- 目前仅支持 ECDSA P-256 与 Ed25519：rcgen 的 ring 后端无法生成 RSA 密钥，
+  启用 RSA 需引入 aws-lc-rs（额外依赖 cmake / nasm），待确有需要再加。
+- ACME（Let's Encrypt DNS-01）不在本批次，留作 M4 下一块。
+
 ## [4.0.0-alpha.9] — 2026-11-05
 
 ### 新增

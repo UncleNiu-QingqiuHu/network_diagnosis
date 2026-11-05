@@ -1,0 +1,20 @@
+[package]
+name = "qqhu-pki"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "青丘湖网络工作台 —— 私有 CA 与证书签发（X.509 / PKCS#12）"
+
+[dependencies]
+qqhu-core = { path = "../qqhu-core" }
+serde = { workspace = true }
+chrono = { workspace = true }
+rcgen = { workspace = true }
+p12 = { workspace = true }
+sha2 = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+x509-parser = { workspace = true }
+uuid = { workspace = true }
+time = { workspace = true }

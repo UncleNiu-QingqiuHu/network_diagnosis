@@ -84,6 +84,7 @@ fn available_modules(caps: &CapabilitySet) -> Vec<ModuleInfo> {
     push_if(&mut out, caps.ip_scan, "ipScan", "IP 扫描", "radar");
     push_if(&mut out, caps.mac_scan, "macScan", "MAC 扫描", "chip");
     push_if(&mut out, caps.ssl_cert, "sslCert", "SSL 证书", "shield");
+    push_if(&mut out, caps.ssl_cert, "pki", "证书签发", "key");
 
     // 关于与许可为纯信息页，与平台能力无关，恒定可用。
     out.push(module("about", "关于", "info"));
@@ -195,6 +196,95 @@ pub async fn ssl_check(
         timeout_ms: timeout_ms.unwrap_or(8000),
     };
     qqhu_probe::check_certificate(&input, opts).await
+}
+
+
+// ---------------------------------------------------------------- 私有 CA
+
+/// 证书库总览：CA 列表 + 已签发证书列表 + 私钥存放目录。
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PkiOverview {
+    pub cas: Vec<qqhu_pki::CaMeta>,
+    pub certs: Vec<qqhu_pki::CertMeta>,
+    /// 私钥以明文 PEM 存放的根目录，界面必须展示
+    pub root_dir: String,
+}
+
+/// 证书文本（不含私钥）。
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CertText {
+    pub cert_pem: String,
+    pub chain_pem: String,
+    pub dir: String,
+}
+
+fn pki_store() -> qqhu_pki::PkiStore {
+    qqhu_pki::PkiStore::new(crate::paths::pki_dir())
+}
+
+#[tauri::command]
+pub fn pki_overview() -> Result<PkiOverview, String> {
+    let store = pki_store();
+    Ok(PkiOverview {
+        cas: store.list_cas().map_err(|e| e.to_string())?,
+        certs: store.list_certs(None).map_err(|e| e.to_string())?,
+        root_dir: store.root().to_string_lossy().to_string(),
+    })
+}
+
+#[tauri::command]
+pub fn pki_create_ca(spec: qqhu_pki::CaSpec) -> Result<qqhu_pki::CaMeta, String> {
+    pki_store().create_ca(&spec).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn pki_delete_ca(id: String) -> Result<(), String> {
+    pki_store().delete_ca(&id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn pki_issue(spec: qqhu_pki::CertSpec) -> Result<qqhu_pki::CertMeta, String> {
+    pki_store().issue(&spec).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn pki_delete_cert(id: String) -> Result<(), String> {
+    pki_store().delete_cert(&id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn pki_export_pfx(id: String, password: String) -> Result<String, String> {
+    pki_store()
+        .export_pfx(&id, &password)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn pki_cert_text(id: String) -> Result<CertText, String> {
+    let store = pki_store();
+    let (cert_pem, chain_pem) = store.read_cert_text(&id).map_err(|e| e.to_string())?;
+    Ok(CertText {
+        cert_pem,
+        chain_pem,
+        dir: store.cert_dir(&id).to_string_lossy().to_string(),
+    })
+}
+
+/// 返回目录路径，前端用文件管理器定位（WebView 里无法直接调用系统「打开」）。
+#[tauri::command]
+pub fn pki_dir_of(id: String, kind: String) -> Result<String, String> {
+    let store = pki_store();
+    let dir = if kind == "ca" {
+        store.ca_dir(&id)
+    } else {
+        store.cert_dir(&id)
+    };
+    if !dir.exists() {
+        return Err(format!("目录不存在：{}", dir.display()));
+    }
+    Ok(dir.to_string_lossy().to_string())
 }
 
 /// 事件名：路径追踪逐跳进度。
