@@ -4,6 +4,41 @@
 > 从 4.0.0 起，本项目改用 Rust + Tauri 重写。下方 `3.x` 记录属于 Python + tkinter 实现，
 > 该实现已归档到 `legacy/python-v3` 分支，仅保留查阅。
 
+## [4.0.0-alpha.11] — 2026-11-05
+
+### 新增
+- **ACME 证书签发（M4 第二块，DNS-01）**：不占公网 80/443，内网机器也能签公网证书，
+  且支持泛域名。
+  - 新 crate `qqhu-acme`：`model` 校验 / `dns` 服务商适配 / `propagate` 传播确认 /
+    `store` 落盘 / `issue` 流程编排。
+  - **阿里云 DNS**：RPC 风格 API，HMAC-SHA1 签名。签名实现用官方文档样例做回归
+    （`OLeaidS1JvxuMvnyHOwuJ+uX5qY=`），把排序、编码、密钥拼接、Base64 四个环节一起锁住。
+  - **腾讯云 DNSPod**：API 3.0，TC3-HMAC-SHA256 逐级派生密钥签名。签名值对照
+    Python 独立实现的结果做断言，避免「自己算自己验」。
+  - 区域自动识别：拉取账号下全部域名，取**最长匹配后缀**。同时托管 `example.com`
+    与 `a.example.com` 时，记录不会误写到父域。
+  - 先写完全部 TXT 再统一等待，多域名不会把等待时间乘以域名数；
+    用 DoH（阿里 / Cloudflare 双源）确认记录生效后再交给 CA 校验。
+  - 无论成功失败都会清理写入的 TXT 记录，不在域名下留垃圾。
+  - 账户凭据按 ACME 目录地址分文件存放，正式与测试环境互不干扰；
+    签发结果含 `cert.pem` / `chain.pem`（Nginx 直用）/ `key.pem`（PKCS#8）/ `cert.pfx`。
+  - 界面新增「ACME 证书」模块：服务商切换、AccessKey 输入（仅本次使用，不落盘）、
+    测试环境开关、DNS 等待可调、**逐阶段进度实时推送**、证书列表、内容复制与 PFX 导出。
+- 命令：`acme_overview` / `acme_issue` / `acme_delete_cert` / `acme_cert_text` /
+  `acme_export_pfx` / `acme_dir_of`，进度事件 `acme-progress`。
+- 手动联调入口：`live_provider_smoke`（`QQHU_ACME_PROVIDER` / `QQHU_ACME_AK` /
+  `QQHU_ACME_SK`），可直接验证某套 AccessKey 能否列出域名。
+
+### 修复
+- 磁盘写满导致编译中断：清理 `target/debug/incremental`（11 GB）后恢复，
+  后续构建建议加 `CARGO_INCREMENTAL=0`。
+
+### 说明
+- AccessKey 只用于写入 TXT 记录，不保存；**账户密钥**（含账户私钥）保存在
+  `pki/acme/accounts/`，属于必须保护的凭据。
+- 证书**续期**需手动重新申请：Let's Encrypt 证书 90 天有效，界面按剩余天数着色提醒。
+- 未做 HTTP-01 与 TLS-ALPN-01；EAB（ZeroSSL 等）也未支持。
+
 ## [4.0.0-alpha.10] — 2026-11-05
 
 ### 新增

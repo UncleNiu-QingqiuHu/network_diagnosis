@@ -11,6 +11,7 @@ import IpScan from "./modules/IpScan";
 import MacScan from "./modules/MacScan";
 import SslCert from "./modules/SslCert";
 import PkiCerts from "./modules/PkiCerts";
+import AcmeCert from "./modules/AcmeCert";
 import About from "./modules/About";
 import License from "./modules/License";
 
@@ -55,6 +56,11 @@ const VIEWS: Record<string, ModuleView> = {
     title: "证书签发",
     desc: "私有 CA 与内网证书签发、PEM / PFX 导出",
     render: () => <PkiCerts />,
+  },
+  acme: {
+    title: "ACME 证书",
+    desc: "Let's Encrypt 免费证书（DNS-01 验证）",
+    render: () => <AcmeCert />,
   },
   about: {
     title: "关于",

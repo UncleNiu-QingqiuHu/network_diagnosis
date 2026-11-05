@@ -85,6 +85,7 @@ fn available_modules(caps: &CapabilitySet) -> Vec<ModuleInfo> {
     push_if(&mut out, caps.mac_scan, "macScan", "MAC 扫描", "chip");
     push_if(&mut out, caps.ssl_cert, "sslCert", "SSL 证书", "shield");
     push_if(&mut out, caps.ssl_cert, "pki", "证书签发", "key");
+    push_if(&mut out, caps.ssl_cert, "acme", "ACME 证书", "cloud");
 
     // 关于与许可为纯信息页，与平台能力无关，恒定可用。
     out.push(module("about", "关于", "info"));
@@ -281,6 +282,93 @@ pub fn pki_dir_of(id: String, kind: String) -> Result<String, String> {
     } else {
         store.cert_dir(&id)
     };
+    if !dir.exists() {
+        return Err(format!("目录不存在：{}", dir.display()));
+    }
+    Ok(dir.to_string_lossy().to_string())
+}
+
+// ---------------------------------------------------------------- ACME
+
+/// 事件名：ACME 签发进度。
+pub const ACME_PROGRESS_EVENT: &str = "acme-progress";
+
+/// ACME 证书库总览。
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AcmeOverview {
+    pub certs: Vec<qqhu_acme::AcmeCertMeta>,
+    /// 证书与私钥的存放目录，界面必须展示（私钥为明文）
+    pub root_dir: String,
+}
+
+/// 证书文本（含私钥，用于复制到服务器）。
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AcmeCertText {
+    pub cert_pem: String,
+    pub key_pem: String,
+    pub chain_pem: String,
+    pub dir: String,
+}
+
+fn acme_store() -> qqhu_acme::AcmeStore {
+    // 与私有 CA 同一棵目录树，便于用户统一备份与收紧权限
+    qqhu_acme::AcmeStore::new(crate::paths::pki_dir().join("acme"))
+}
+
+#[tauri::command]
+pub fn acme_overview() -> Result<AcmeOverview, String> {
+    let store = acme_store();
+    Ok(AcmeOverview {
+        certs: store.list(),
+        root_dir: store.root().to_string_lossy().to_string(),
+    })
+}
+
+/// 申请证书。耗时较长（DNS 传播 + CA 校验），进度通过事件推送。
+#[tauri::command]
+pub async fn acme_issue(
+    app: AppHandle,
+    spec: qqhu_acme::IssueSpec,
+) -> Result<qqhu_acme::AcmeCertMeta, String> {
+    let store = acme_store();
+    let handle = app.clone();
+    qqhu_acme::issue::issue(&spec, &store, &move |p| {
+        let _ = handle.emit(ACME_PROGRESS_EVENT, &p);
+    })
+    .await
+    .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn acme_delete_cert(id: String) -> Result<(), String> {
+    acme_store().delete(&id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn acme_cert_text(id: String) -> Result<AcmeCertText, String> {
+    let store = acme_store();
+    let (cert_pem, key_pem, chain_pem) = store.read_texts(&id).map_err(|e| e.to_string())?;
+    Ok(AcmeCertText {
+        cert_pem,
+        key_pem,
+        chain_pem,
+        dir: store.cert_dir(&id).to_string_lossy().to_string(),
+    })
+}
+
+#[tauri::command]
+pub fn acme_export_pfx(id: String, password: String) -> Result<String, String> {
+    acme_store()
+        .export_pfx(&id, &password)
+        .map_err(|e| e.to_string())
+}
+
+/// 返回目录路径，前端用文件管理器定位（WebView 里无法直接调用系统「打开」）。
+#[tauri::command]
+pub fn acme_dir_of(id: String) -> Result<String, String> {
+    let dir = acme_store().cert_dir(&id);
     if !dir.exists() {
         return Err(format!("目录不存在：{}", dir.display()));
     }

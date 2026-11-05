@@ -56,6 +56,11 @@ const PATHS: Record<string, ReactNode> = {
     </>
   ),
 
+  // ACME 证书：云形轮廓（DNS-01 依赖云端 DNS）
+  cloud: (
+    <path d="M7.2 18.5h9.6a3.6 3.6 0 0 0 .5-7.16 5 5 0 0 0-9.55-1.6A4.2 4.2 0 0 0 7.2 18.5z" />
+  ),
+
   // SSL 证书：盾牌 + 勾
   shield: (
     <>

@@ -2,6 +2,11 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type {
   AboutInfo,
+  AcmeCertMeta,
+  AcmeCertText,
+  AcmeIssueSpec,
+  AcmeOverview,
+  AcmeProgress,
   AppInfo,
   DiagnosisOutcome,
   IpScanProgress,
@@ -276,4 +281,45 @@ export async function pkiCertText(id: string): Promise<CertText> {
 export async function pkiDirOf(id: string, kind: "ca" | "cert"): Promise<string> {
   if (!isTauri) throw new Error("证书签发需要 Rust 后端。");
   return invoke<string>("pki_dir_of", { id, kind });
+}
+
+// ---------------------------------------------------------------- ACME
+
+export async function acmeOverview(): Promise<AcmeOverview> {
+  if (!isTauri) throw new Error("ACME 签发需要 Rust 后端，请在 Tauri 窗口中运行。");
+  return invoke<AcmeOverview>("acme_overview");
+}
+
+/** 申请证书：耗时较长，进度通过 acme-progress 事件推送。 */
+export async function acmeIssue(spec: AcmeIssueSpec): Promise<AcmeCertMeta> {
+  if (!isTauri) throw new Error("ACME 签发需要 Rust 后端。");
+  return invoke<AcmeCertMeta>("acme_issue", { spec });
+}
+
+/** 订阅签发进度，返回取消订阅函数。 */
+export async function onAcmeProgress(
+  handler: (p: AcmeProgress) => void,
+): Promise<() => void> {
+  if (!isTauri) return () => undefined;
+  return listen<AcmeProgress>("acme-progress", (e) => handler(e.payload));
+}
+
+export async function acmeCertText(id: string): Promise<AcmeCertText> {
+  if (!isTauri) throw new Error("ACME 签发需要 Rust 后端。");
+  return invoke<AcmeCertText>("acme_cert_text", { id });
+}
+
+export async function acmeDeleteCert(id: string): Promise<void> {
+  if (!isTauri) throw new Error("ACME 签发需要 Rust 后端。");
+  return invoke<void>("acme_delete_cert", { id });
+}
+
+export async function acmeExportPfx(id: string, password: string): Promise<string> {
+  if (!isTauri) throw new Error("ACME 签发需要 Rust 后端。");
+  return invoke<string>("acme_export_pfx", { id, password });
+}
+
+export async function acmeDirOf(id: string): Promise<string> {
+  if (!isTauri) throw new Error("ACME 签发需要 Rust 后端。");
+  return invoke<string>("acme_dir_of", { id });
 }

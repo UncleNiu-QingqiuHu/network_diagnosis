@@ -1,0 +1,27 @@
+[package]
+name = "qqhu-acme"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "青丘湖网络工作台 —— ACME 证书签发（Let's Encrypt DNS-01）"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+chrono = { workspace = true }
+tokio = { workspace = true }
+instant-acme = { workspace = true }
+reqwest = { workspace = true }
+ring = { workspace = true }
+rustls = { workspace = true }
+hex = { workspace = true }
+base64 = { workspace = true }
+p12 = { workspace = true }
+x509-parser = { workspace = true }
+uuid = { workspace = true }
+time = { workspace = true }
+
+[dev-dependencies]
+rcgen = { workspace = true }

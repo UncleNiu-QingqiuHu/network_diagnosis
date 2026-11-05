@@ -25,9 +25,10 @@ Windows / macOS / Linux 桌面网络工作台，Rust + Tauri 2 + React 实现。
 | SSL 证书检查（信任链 / 有效期 / SAN / 指纹） | 已完成 |
 | 路径追踪（Traceroute）与路径 MTU 探测 | 已完成 |
 | 私有 CA 与证书签发（PEM / PFX 导出） | 已完成 |
+| ACME 证书（Let's Encrypt DNS-01，阿里云 / 腾讯云） | 已完成 |
 | 关于 / 许可 | 已完成 |
 | 带宽测试 | 待定（需对端配合，暂不纳入） |
-| ACME 证书签发（Let's Encrypt DNS-01）与 AI 接入 | 排期 M4 后续 |
+| 右侧 AI Agent 接入真实模型 | 排期 M4 后续 |
 
 ## 环境要求
 

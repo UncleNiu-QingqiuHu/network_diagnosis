@@ -465,3 +465,56 @@ export interface CertText {
   chainPem: string;
   dir: string;
 }
+
+// ---------------------------------------------------------------- ACME
+
+export type DnsProviderKind = "aliyun" | "tencent";
+
+export interface DnsCredentials {
+  accessKeyId: string;
+  accessKeySecret: string;
+}
+
+export interface AcmeIssueSpec {
+  domains: string[];
+  provider: DnsProviderKind;
+  credentials: DnsCredentials;
+  staging: boolean;
+  directoryUrl?: string | null;
+  dnsWaitSecs?: number | null;
+}
+
+export interface AcmeCertMeta {
+  id: string;
+  primaryDomain: string;
+  domains: string[];
+  directory: string;
+  /** 测试环境签出的证书不受信任 */
+  staging: boolean;
+  provider: string;
+  serial: string;
+  fingerprint: string;
+  createdAt: string;
+  notBefore: string;
+  notAfter: string;
+  daysRemaining: number;
+}
+
+export interface AcmeOverview {
+  certs: AcmeCertMeta[];
+  /** 证书与私钥的存放目录（明文私钥） */
+  rootDir: string;
+}
+
+export interface AcmeCertText {
+  certPem: string;
+  keyPem: string;
+  chainPem: string;
+  dir: string;
+}
+
+export interface AcmeProgress {
+  /** account / order / dns / verify / challenge / finalize / save / cleanup / done */
+  stage: string;
+  message: string;
+}

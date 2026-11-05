@@ -1,9 +1,9 @@
 [workspace]
 resolver = "2"
-members = ["crates/qqhu-core", "crates/qqhu-sys", "crates/qqhu-probe", "crates/qqhu-report", "crates/qqhu-pki", "src-tauri"]
+members = ["crates/qqhu-core", "crates/qqhu-sys", "crates/qqhu-probe", "crates/qqhu-report", "crates/qqhu-pki", "crates/qqhu-acme", "src-tauri"]
 
 [workspace.package]
-version = "4.0.0-alpha.10"
+version = "4.0.0-alpha.11"
 edition = "2021"
 rust-version = "1.82"
 license = "MIT"
@@ -29,6 +29,12 @@ webpki-roots = "1"
 socket2 = "0.6"
 rcgen = { version = "0.14", default-features = false, features = ["crypto", "pem", "ring", "x509-parser"] }
 p12 = "0.6"
+instant-acme = { version = "0.8", default-features = false, features = ["hyper-rustls", "ring", "rcgen", "x509-parser", "time"] }
+reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider", "json", "http2", "query"] }
+hex = "0.4"
+base64 = "0.22"
+ring = "0.17"
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }
 
 [profile.release]
 lto = "thin"

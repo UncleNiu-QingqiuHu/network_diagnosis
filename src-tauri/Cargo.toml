@@ -27,3 +27,4 @@ qqhu-sys = { path = "../crates/qqhu-sys" }
 qqhu-probe = { path = "../crates/qqhu-probe" }
 qqhu-report = { path = "../crates/qqhu-report" }
 qqhu-pki = { path = "../crates/qqhu-pki" }
+qqhu-acme = { path = "../crates/qqhu-acme" }
