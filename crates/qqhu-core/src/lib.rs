@@ -10,6 +10,7 @@ pub mod model;
 pub mod quality;
 pub mod subnet;
 pub mod summary;
+pub mod sslcert;
 
 pub use error::{CoreError, CoreResult};
 pub use ipscan::{
@@ -23,6 +24,9 @@ pub use macscan::{
 pub use model::*;
 pub use quality::compute_network_quality;
 pub use subnet::{calc_from_cidr_combo, calc_subnet, subdivide_ipv4_equal_children, SubnetCalcResult};
+pub use sslcert::{
+    build_warnings, hostname_matches, CertInfo, CertStatus, SslCheckReport, EXPIRING_SOON_DAYS,
+};
 pub use summary::build_summary;
 
 /// 应用版本（唯一来源；Tauri 侧通过 build script 注入）。

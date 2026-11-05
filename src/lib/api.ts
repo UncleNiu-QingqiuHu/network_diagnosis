@@ -11,6 +11,7 @@ import type {
   MacScanProgress,
   MacScanReport,
   MacScanRequest,
+  SslCheckReport,
   SubnetCalcResult,
 } from "./types";
 
@@ -65,6 +66,12 @@ export async function appInfo(): Promise<AppInfo> {
 export async function localNetwork(): Promise<LocalNetworkInfo> {
   if (!isTauri) return { scope: null, gateway: null, interfaces: [] };
   return invoke<LocalNetworkInfo>("local_network");
+}
+
+/** 检查目标站点的 TLS 证书。 */
+export async function sslCheck(input: string, timeoutMs = 8000): Promise<SslCheckReport> {
+  if (!isTauri) throw new Error("证书检查需要 Rust 后端，请在 Tauri 窗口中运行。");
+  return invoke<SslCheckReport>("ssl_check", { input, timeoutMs });
 }
 
 export async function subnetCalc(

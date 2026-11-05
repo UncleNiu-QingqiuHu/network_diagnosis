@@ -849,6 +849,12 @@ textarea {
   color: var(--warning);
 }
 
+.alert.ok {
+  border-color: rgba(45, 212, 167, 0.4);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
 /* ---------------------------------------------------------------- MAC 扫描 */
 
 /* 三格统计用更窄的最小宽度，避免窄容器下退化成 2+1 留出大片空白 */

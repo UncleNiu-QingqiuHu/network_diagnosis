@@ -14,12 +14,14 @@ pub mod dns;
 pub mod ipscan;
 pub mod macscan;
 pub mod ping;
+pub mod sslcert;
 pub mod tcp;
 
 pub use diagnose::{run_diagnosis, DiagContext, DiagOptions};
 pub use ipscan::{scan_scope, IpScanOptions, ScanProgress};
 pub use macscan::{run_mac_scan, MacScanOptions, MacScanProgress};
 pub use ping::{ping_host, PingOptions};
+pub use sslcert::{check_certificate, parse_target, SslCheckOptions};
 pub use tcp::{probe_port, probe_ports, TcpProbeOptions};
 
 #[derive(Debug, thiserror::Error)]

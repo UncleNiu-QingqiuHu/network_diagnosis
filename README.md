@@ -22,9 +22,10 @@ Windows / macOS / Linux 桌面网络工作台，Rust + Tauri 2 + React 实现。
 | 诊断报告（Markdown 归档 + 历史对比） | 已完成 |
 | IP 扫描（并发探活 / TCP 兜底 / CSV 导出） | 已完成 |
 | MAC 扫描（ARP 邻居表 / OUI 厂商 / CSV 导出） | 已完成 |
+| SSL 证书检查（信任链 / 有效期 / SAN / 指纹） | 已完成 |
 | 关于 / 许可 | 已完成 |
 | 网络诊断进阶（Traceroute / MTU / 带宽） | 排期 M2.1 |
-| SSL 证书 / AI 接入 | 排期 M4 |
+| 证书签发（ACME DNS-01 / 私有 CA / PFX）与 AI 接入 | 排期 M4 |
 
 ## 环境要求
 

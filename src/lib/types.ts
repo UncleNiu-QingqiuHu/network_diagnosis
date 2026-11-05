@@ -304,3 +304,44 @@ export interface LocalNetworkInfo {
   interfaces: NetInterface[];
 }
 
+/** 证书有效期状态 */
+export type CertStatus = "valid" | "expiringSoon" | "expired" | "notYetValid";
+
+export interface CertInfo {
+  subject: string;
+  issuer: string;
+  commonName: string | null;
+  serial: string;
+  notBefore: string;
+  notAfter: string;
+  status: CertStatus;
+  /** 距到期天数，已过期为负 */
+  daysRemaining: number;
+  sans: string[];
+  signatureAlgorithm: string;
+  keyAlgorithm: string;
+  keyBits: number | null;
+  isCa: boolean;
+  selfSigned: boolean;
+  sha256Fingerprint: string;
+  /** 是否为服务器证书（链上第一张） */
+  isLeaf: boolean;
+}
+
+export interface SslCheckReport {
+  host: string;
+  port: number;
+  checkedAt: string;
+  remoteIp: string;
+  tlsVersion: string;
+  cipherSuite: string;
+  chain: CertInfo[];
+  hostnameMatched: boolean;
+  /** 系统根证书校验是否通过 */
+  trusted: boolean;
+  trustError: string | null;
+  durationMs: number;
+  warnings: string[];
+}
+
+

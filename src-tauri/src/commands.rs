@@ -184,6 +184,18 @@ pub fn local_network() -> LocalNetworkInfo {
     }
 }
 
+/// 检查目标站点的 TLS 证书链。
+#[tauri::command]
+pub async fn ssl_check(
+    input: String,
+    timeout_ms: Option<u64>,
+) -> Result<qqhu_core::SslCheckReport, String> {
+    let opts = qqhu_probe::SslCheckOptions {
+        timeout_ms: timeout_ms.unwrap_or(8000),
+    };
+    qqhu_probe::check_certificate(&input, opts).await
+}
+
 #[tauri::command]
 pub fn subnet_calc(
     ip: String,

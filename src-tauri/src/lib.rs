@@ -10,6 +10,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::app_info,
             commands::local_network,
+            commands::ssl_check,
             commands::about_info,
             commands::license_text,
             commands::subnet_calc,

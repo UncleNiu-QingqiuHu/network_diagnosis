@@ -4,11 +4,11 @@ import AiPanel from "./components/AiPanel";
 import Sidebar from "./components/Sidebar";
 import { appInfo, isTauri } from "./lib/api";
 import type { AppInfo } from "./lib/types";
-import Placeholder from "./modules/Placeholder";
 import SubnetCalc from "./modules/SubnetCalc";
 import NetworkDiag from "./modules/NetworkDiag";
 import IpScan from "./modules/IpScan";
 import MacScan from "./modules/MacScan";
+import SslCert from "./modules/SslCert";
 import About from "./modules/About";
 import License from "./modules/License";
 
@@ -41,14 +41,8 @@ const VIEWS: Record<string, ModuleView> = {
   },
   sslCert: {
     title: "SSL 证书",
-    desc: "Let's Encrypt 与私有 CA 签发",
-    render: () => (
-      <Placeholder
-        title="SSL 证书"
-        milestone="M4"
-        items={["DNS-01 签发（阿里云 / 腾讯云 DNS）", "私有 CA 与站点证书", "PFX 导出"]}
-      />
-    ),
+    desc: "证书链检查、有效期与信任校验",
+    render: () => <SslCert />,
   },
   about: {
     title: "关于",
