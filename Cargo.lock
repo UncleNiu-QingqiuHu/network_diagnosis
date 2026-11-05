@@ -2876,7 +2876,7 @@ dependencies = [
 
 [[package]]
 name = "qqhu-app"
-version = "4.0.0-alpha.7"
+version = "4.0.0-alpha.8"
 dependencies = [
  "chrono",
  "qqhu-core",
@@ -2895,7 +2895,7 @@ dependencies = [
 
 [[package]]
 name = "qqhu-core"
-version = "4.0.0-alpha.7"
+version = "4.0.0-alpha.8"
 dependencies = [
  "chrono",
  "serde",
@@ -2906,7 +2906,7 @@ dependencies = [
 
 [[package]]
 name = "qqhu-probe"
-version = "4.0.0-alpha.7"
+version = "4.0.0-alpha.8"
 dependencies = [
  "chrono",
  "qqhu-core",
@@ -2927,7 +2927,7 @@ dependencies = [
 
 [[package]]
 name = "qqhu-report"
-version = "4.0.0-alpha.7"
+version = "4.0.0-alpha.8"
 dependencies = [
  "chrono",
  "qqhu-core",
@@ -2939,7 +2939,7 @@ dependencies = [
 
 [[package]]
 name = "qqhu-sys"
-version = "4.0.0-alpha.7"
+version = "4.0.0-alpha.8"
 dependencies = [
  "libc",
  "qqhu-core",
