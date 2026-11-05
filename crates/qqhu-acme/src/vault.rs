@@ -1,37 +1,36 @@
-//! DNS 凭据保管。
+//! ACME 的 DNS 凭据保管。
 //!
 //! 自动续期需要在无人值守时写 DNS 记录，因此必须把 AccessKey 存下来。
 //! 这比证书私钥更敏感 —— 私钥只影响一张证书，AccessKey 能改整个域名的解析。
 //!
-//! 所以优先用**系统凭据管理器**（Windows Credential Manager / macOS Keychain），
-//! 由操作系统加密并绑定当前用户；只有拿不到凭据管理器的平台才退回文件，
-//! 文件模式下收紧到 0600，并在界面明确提示。
+//! 实际存储交给 [`qqhu_secret`]：系统凭据管理器优先，取不到才退回 0600 文件。
 
 use crate::model::DnsCredentials;
 use crate::AcmeError;
-use std::path::{Path, PathBuf};
+use qqhu_secret::SecretStore;
+use std::path::Path;
 
-/// 凭据管理器里的服务名，统一前缀便于用户在系统里辨识与清理。
+/// 凭据管理器里的服务名，与 Agent 等其它模块共用同一前缀。
 const SERVICE: &str = "qingqiuhu-network-workbench";
 
 pub struct CredentialVault {
-    fallback_dir: PathBuf,
+    inner: SecretStore,
 }
 
 impl CredentialVault {
-    pub fn new(fallback_dir: impl Into<PathBuf>) -> Self {
+    pub fn new(fallback_dir: impl Into<std::path::PathBuf>) -> Self {
         Self {
-            fallback_dir: fallback_dir.into(),
+            inner: SecretStore::new(SERVICE, fallback_dir),
         }
     }
 
     pub fn root(&self) -> &Path {
-        &self.fallback_dir
+        self.inner.fallback_dir()
     }
 
     /// 当前后端的中文名，界面要显示，避免用户误以为一定进了系统凭据库。
     pub fn backend(&self) -> &'static str {
-        imp::BACKEND
+        self.inner.backend()
     }
 
     fn entry_name(id: &str) -> String {
@@ -41,98 +40,29 @@ impl CredentialVault {
     pub fn save(&self, id: &str, creds: &DnsCredentials) -> Result<(), AcmeError> {
         let payload = serde_json::to_string(creds)
             .map_err(|e| AcmeError::Io(format!("序列化凭据失败：{e}")))?;
-        imp::save(&self.fallback_dir, &Self::entry_name(id), &payload)
+        self.inner
+            .set(&Self::entry_name(id), &payload)
+            .map_err(|e| AcmeError::Io(e.to_string()))
     }
 
     /// 读取凭据；不存在时返回 `None`（而不是报错）。
     pub fn load(&self, id: &str) -> Result<Option<DnsCredentials>, AcmeError> {
-        let Some(text) = imp::load(&self.fallback_dir, &Self::entry_name(id))? else {
+        let Some(text) = self
+            .inner
+            .get(&Self::entry_name(id))
+            .map_err(|e| AcmeError::Io(e.to_string()))?
+        else {
             return Ok(None);
         };
         serde_json::from_str(&text)
             .map(Some)
-            .map_err(|e| AcmeError::Io(format!("凭据文件损坏：{e}")))
+            .map_err(|e| AcmeError::Io(format!("凭据格式损坏：{e}")))
     }
 
     pub fn delete(&self, id: &str) -> Result<(), AcmeError> {
-        imp::delete(&self.fallback_dir, &Self::entry_name(id))
-    }
-}
-
-#[cfg(any(target_os = "windows", target_os = "macos"))]
-mod imp {
-    use crate::AcmeError;
-    use keyring::Entry;
-    use std::path::Path;
-
-    pub const BACKEND: &str = "系统凭据管理器";
-
-    pub fn save(_dir: &Path, name: &str, secret: &str) -> Result<(), AcmeError> {
-        let entry = Entry::new(super::SERVICE, name)
-            .map_err(|e| AcmeError::Io(format!("打开凭据管理器失败：{e}")))?;
-        entry
-            .set_password(secret)
-            .map_err(|e| AcmeError::Io(format!("写入凭据管理器失败：{e}")))
-    }
-
-    pub fn load(_dir: &Path, name: &str) -> Result<Option<String>, AcmeError> {
-        let entry = Entry::new(super::SERVICE, name)
-            .map_err(|e| AcmeError::Io(format!("打开凭据管理器失败：{e}")))?;
-        match entry.get_password() {
-            Ok(v) => Ok(Some(v)),
-            Err(keyring::Error::NoEntry) => Ok(None),
-            Err(e) => Err(AcmeError::Io(format!("读取凭据管理器失败：{e}"))),
-        }
-    }
-
-    pub fn delete(_dir: &Path, name: &str) -> Result<(), AcmeError> {
-        let entry = Entry::new(super::SERVICE, name)
-            .map_err(|e| AcmeError::Io(format!("打开凭据管理器失败：{e}")))?;
-        match entry.delete_credential() {
-            Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
-            Err(e) => Err(AcmeError::Io(format!("删除凭据失败：{e}"))),
-        }
-    }
-}
-
-#[cfg(not(any(target_os = "windows", target_os = "macos")))]
-mod imp {
-    use crate::AcmeError;
-    use std::path::Path;
-
-    pub const BACKEND: &str = "本地文件（0600）";
-
-    fn path(dir: &Path, name: &str) -> std::path::PathBuf {
-        // 名字里有冒号，文件名换成下划线更安全
-        dir.join(format!("{}.json", name.replace(':', "_")))
-    }
-
-    pub fn save(dir: &Path, name: &str, secret: &str) -> Result<(), AcmeError> {
-        std::fs::create_dir_all(dir).map_err(|e| AcmeError::Io(format!("创建目录失败：{e}")))?;
-        let file = path(dir, name);
-        std::fs::write(&file, secret).map_err(|e| AcmeError::Io(format!("写入凭据失败：{e}")))?;
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let _ = std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o600));
-        }
-        Ok(())
-    }
-
-    pub fn load(dir: &Path, name: &str) -> Result<Option<String>, AcmeError> {
-        match std::fs::read_to_string(path(dir, name)) {
-            Ok(v) => Ok(Some(v)),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
-            Err(e) => Err(AcmeError::Io(format!("读取凭据失败：{e}"))),
-        }
-    }
-
-    pub fn delete(dir: &Path, name: &str) -> Result<(), AcmeError> {
-        match std::fs::remove_file(path(dir, name)) {
-            Ok(()) => Ok(()),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
-            Err(e) => Err(AcmeError::Io(format!("删除凭据失败：{e}"))),
-        }
+        self.inner
+            .delete(&Self::entry_name(id))
+            .map_err(|e| AcmeError::Io(e.to_string()))
     }
 }
 

@@ -28,3 +28,5 @@ qqhu-probe = { path = "../crates/qqhu-probe" }
 qqhu-report = { path = "../crates/qqhu-report" }
 qqhu-pki = { path = "../crates/qqhu-pki" }
 qqhu-acme = { path = "../crates/qqhu-acme" }
+qqhu-agent = { path = "../crates/qqhu-agent" }
+uuid = { workspace = true }

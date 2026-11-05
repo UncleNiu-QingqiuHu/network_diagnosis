@@ -53,6 +53,15 @@ pub fn pki_dir() -> PathBuf {
     dir
 }
 
+/// AI Agent 目录：`agent/`，内含 `config.json` 与 `skills/`。
+///
+/// 模型 API Key 不在这里 —— 它走系统凭据管理器，目录里只有模型元信息。
+pub fn agent_dir() -> PathBuf {
+    let dir = install_root().join("agent");
+    let _ = std::fs::create_dir_all(&dir);
+    dir
+}
+
 /// 配置目录：`config/`，用户可放 `oui.csv` 扩展厂商库。
 pub fn config_dir() -> PathBuf {
     let dir = install_root().join("config");

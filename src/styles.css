@@ -1004,3 +1004,157 @@ code {
     transform: rotate(360deg);
   }
 }
+
+/* ---------------------------------------------------------------- AI Agent */
+
+.ai-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 8px 12px 0;
+  flex: none;
+}
+
+.ai-tabs button {
+  flex: 1;
+  height: 28px;
+  border: 1px solid transparent;
+  border-radius: var(--radius) var(--radius) 0 0;
+  background: transparent;
+  color: var(--text-faint);
+  font-size: 12px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.ai-tabs button:hover {
+  color: var(--text);
+}
+
+.ai-tabs button.active {
+  background: var(--bg);
+  border-color: var(--border);
+  border-bottom-color: var(--bg);
+  color: var(--text);
+}
+
+.ai-tab-count {
+  font-size: 10px;
+  padding: 0 5px;
+  border-radius: 99px;
+  background: var(--surface-3);
+  color: var(--text-faint);
+}
+
+.section-title {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--text-faint);
+  text-transform: uppercase;
+  margin-top: 4px;
+}
+
+.model-row,
+.skill-row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px dashed var(--border);
+}
+
+.model-name {
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 190px;
+}
+
+/* 工具调用小卡：一眼看出调了什么、成没成 */
+.tool-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border-radius: 99px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  font-size: 11px;
+  color: var(--text-dim);
+  cursor: default;
+  max-width: 100%;
+}
+
+.tool-chip[data-status="error"] {
+  border-color: rgba(224, 102, 102, 0.5);
+  color: var(--danger, #e06666);
+}
+
+.tool-chip-name {
+  font-family: var(--font-mono, monospace);
+}
+
+.tool-chip-status {
+  color: var(--text-faint);
+}
+
+/* 命令执行确认：必须显眼，不能让用户漏看 */
+.confirm-card {
+  margin: 0 12px 8px;
+  padding: 10px 12px;
+  border: 1px solid rgba(230, 180, 80, 0.55);
+  background: rgba(230, 180, 80, 0.08);
+  border-radius: var(--radius);
+}
+
+.confirm-head {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--warning);
+}
+
+.confirm-cmd {
+  margin-top: 6px;
+  font-size: 12px;
+  word-break: break-all;
+  color: var(--text);
+  background: var(--surface-2);
+  border-radius: var(--radius);
+  padding: 6px 8px;
+}
+
+.confirm-note {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+.ai .field > span {
+  font-size: 11px;
+  color: var(--text-faint);
+  margin-bottom: 4px;
+  display: block;
+}
+
+.ai .field {
+  display: flex;
+  flex-direction: column;
+}
+
+/* 复选框里的补充说明要独占一行，否则会和主文案挤成一句 */
+.ai .check .ai-tip {
+  display: block;
+  margin-top: 2px;
+  line-height: 1.5;
+}

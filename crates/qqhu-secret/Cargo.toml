@@ -1,0 +1,13 @@
+[package]
+name = "qqhu-secret"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "青丘湖网络工作台 —— 凭据保管（系统凭据管理器优先）"
+
+[dependencies]
+thiserror = { workspace = true }
+
+[target.'cfg(any(target_os = "windows", target_os = "macos"))'.dependencies]
+keyring = { workspace = true }

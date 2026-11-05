@@ -615,12 +615,6 @@ pub async fn run_diagnosis(
 
 /// AI Agent 通道。
 /// 骨架阶段先把 IPC 打通、错误路径跑通；真正的 LLM 流式调用在 M4 接入
-/// （复用旧版 OpenAI 兼容协议 + tool calling）。
-#[tauri::command]
-pub fn ai_chat(_message: String) -> Result<String, String> {
-    Err("AI 通道尚未接入模型（计划 M4 实现，复用旧版 OpenAI 兼容协议）。".into())
-}
-
 // ------------------------------------------------------------------ IP 扫描
 
 /// 事件名：扫描进度。

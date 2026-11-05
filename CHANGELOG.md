@@ -4,6 +4,48 @@
 > 从 4.0.0 起，本项目改用 Rust + Tauri 重写。下方 `3.x` 记录属于 Python + tkinter 实现，
 > 该实现已归档到 `legacy/python-v3` 分支，仅保留查阅。
 
+## [4.0.0-alpha.13] — 2026-11-05
+
+### 新增
+- **AI Agent（右侧常驻面板）**：可配置主流模型的 OpenAI 兼容接口，边聊边调本机诊断能力。
+  - 新 crate `qqhu-agent`：`config`（模型配置）/ `secrets`（Key 保管）/ `skills`（技能）/
+    `prompt`（角色与边界）/ `chat`（流式与工具调用）/ `tools`（工具定义与命令白名单）。
+  - 新 crate `qqhu-secret`：凭据保管统一收口，ACME 与 Agent 共用一套 keyring 逻辑。
+  - **模型接入**：任意 OpenAI 兼容服务（DeepSeek / 通义 / Kimi / 智谱 / OpenAI / 本地 Ollama），
+    填 BaseURL + 模型 ID 即可；内置常用服务商快捷填充。API Key 存系统凭据管理器，
+    配置文件里不出现明文。
+  - **流式对话**：SSE 逐字输出，支持中途「停止」；一轮最多 6 次工具往返。
+  - **工具调用**：内置 `subnet_calc` / `ping_host` / `trace_route` / `check_ssl`；
+    开启命令执行后额外提供 `run_command`。
+  - **技能**：扫描本机 Claude Code / WorkBuddy / Codex / Cursor / Qoder 的技能目录，
+    列出候选并可导入（**只读扫描，导入是复制**，不改对方文件）；支持启停与删除。
+    技能正文按预算注入系统提示词，超出截断。
+  - **角色与边界**：系统提示词固定角色（网络运维助手）与拒绝规则（渗透 / 攻击 /
+    越权 / 无关话题），并附事实纪律（实测 / 推断 / 建议分开）与命令纪律；
+    与技能内容冲突时以边界为准。
+- 命令 `agent_*`（配置、Key、技能、对话、取消、确认），事件 `agent-delta` /
+  `agent-tool` / `agent-confirm`。
+
+### 安全设计
+- 命令执行**默认关闭**；开启后每条命令仍需用户点「允许执行」确认，120 秒未确认视为拒绝。
+- 命令走**白名单 + 参数校验**：只允许 ping / tracert / nslookup / arp / ipconfig /
+  route print / netstat，拒绝管道、重定向、分号等字符；`route add`、`netstat -s`、
+  `ipconfig /release`、`ping -t` 这类会被单独拦下。
+- 直接 spawn 进程、不经 shell；Windows 下不弹控制台窗口，命令超时 20 秒。
+
+### 修复
+- 命令确认期间无法中断：原先只等 120 秒超时，用户点「停止」或刷新页面后对话会一直占着
+  后端。现在确认等待同时监听取消信号（300ms 轮询），前端挂载时也会清理上一次残留请求。
+- 技能描述解析：真实技能常用 YAML 块标量（`description: |` 加缩进多行），
+  原先只取冒号右边，结果描述变成字面量 `|`。现已支持 `|` / `>` / `|-` / `>-` 四种写法。
+- 面板复选框里的补充说明与主文案挤成一句，补充了块级样式。
+
+### 说明
+- 仅支持 OpenAI 兼容协议（含流式与工具调用）；Anthropic / Gemini 原生协议未接入。
+- 技能扫描只覆盖有明确目录约定的 Agent（Claude Code / WorkBuddy / Codex / Cursor / Qoder），
+  不做全盘搜索，避免把无关 Markdown 当技能。
+- 对话历史只存在界面内存，刷新即清空；没有做会话落盘。
+
 ## [4.0.0-alpha.12] — 2026-11-05
 
 ### 新增

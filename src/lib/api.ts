@@ -113,11 +113,6 @@ export async function subnetSubdivide(
   return invoke<string>("subnet_subdivide", { parent, childPrefix, maxList });
 }
 
-export async function aiChat(message: string): Promise<string> {
-  if (!isTauri) throw new Error("AI 通道需要 Rust 后端。");
-  return invoke<string>("ai_chat", { message });
-}
-
 export async function aboutInfo(): Promise<AboutInfo> {
   if (!isTauri) throw new Error("关于信息需要 Rust 后端。");
   return invoke<AboutInfo>("about_info");

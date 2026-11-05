@@ -1,54 +1,44 @@
-import { useRef, useState } from "react";
-import { aiChat } from "../lib/api";
+import { useCallback, useEffect, useState } from "react";
+import AiChat from "./AiChat";
+import AiSettings from "./AiSettings";
+import AiSkills from "./AiSkills";
+import { agentConfig } from "../lib/agent";
+import type { AgentConfigView } from "../lib/agent";
 
-type Role = "user" | "agent" | "sys";
-
-interface Msg {
-  id: number;
-  role: Role;
-  text: string;
-}
+type Tab = "chat" | "skills" | "settings";
 
 interface Props {
   collapsed: boolean;
   onToggle: () => void;
-  /** 当前所在模块，供 AI 感知上下文（M4 会随请求一并送入模型）。 */
+  /** 当前所在模块，供 AI 感知上下文 */
   contextLabel: string;
 }
 
-const SUGGESTIONS = [
-  "诊断 192.168.1.1 的连通性",
-  "计算 10.20.30.40/22 的子网",
-  "这个网段能划出多少 /26 子网",
+const TABS: Array<{ key: Tab; label: string }> = [
+  { key: "chat", label: "对话" },
+  { key: "skills", label: "技能" },
+  { key: "settings", label: "设置" },
 ];
 
 export default function AiPanel({ collapsed, onToggle, contextLabel }: Props) {
-  const [messages, setMessages] = useState<Msg[]>([]);
-  const [draft, setDraft] = useState("");
-  const [busy, setBusy] = useState(false);
-  const seq = useRef(0);
+  const [tab, setTab] = useState<Tab>("chat");
+  const [config, setConfig] = useState<AgentConfigView | null>(null);
+  const [error, setError] = useState("");
 
-  const push = (role: Role, text: string) => {
-    seq.current += 1;
-    const id = seq.current;
-    setMessages((prev) => [...prev, { id, role, text }]);
-  };
-
-  const send = async (text: string) => {
-    const body = text.trim();
-    if (!body || busy) return;
-    setDraft("");
-    push("user", body);
-    setBusy(true);
+  const reload = useCallback(async () => {
     try {
-      const reply = await aiChat(body);
-      push("agent", reply);
+      const c = await agentConfig();
+      setConfig(c);
+      setError("");
     } catch (e) {
-      push("sys", e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(false);
+      setError(e instanceof Error ? e.message : String(e));
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    void reload();
+  }, [reload]);
+
 
   if (collapsed) {
     return (
@@ -58,12 +48,22 @@ export default function AiPanel({ collapsed, onToggle, contextLabel }: Props) {
             <Chevron dir="left" />
           </button>
         </div>
-        <div style={{ writingMode: "vertical-rl", color: "var(--text-faint)", fontSize: 11, marginTop: 12 }}>
+        <div
+          style={{
+            writingMode: "vertical-rl",
+            color: "var(--text-faint)",
+            fontSize: 11,
+            marginTop: 12,
+          }}
+        >
           AI Agent
         </div>
       </aside>
     );
   }
+
+  const active = config?.models.find((m) => m.id === config.activeModel);
+  const badgeText = active ? (active.hasKey ? active.name : `${active.name}（缺 Key）`) : "未配置";
 
   return (
     <aside className="ai">
@@ -72,55 +72,46 @@ export default function AiPanel({ collapsed, onToggle, contextLabel }: Props) {
           <span className="pulse" />
           <span>AI Agent</span>
         </div>
-        <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-          <span className="badge warn">未接入</span>
+        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          <span className={`badge ${active?.hasKey ? "" : "warn"}`} title={active?.model}>
+            {badgeText}
+          </span>
           <button className="icon-btn" onClick={onToggle} title="收起" type="button">
             <Chevron dir="right" />
           </button>
         </div>
       </div>
 
-      <div className="ai-body">
-        {messages.length === 0 ? (
-          <div className="ai-empty">
-            <p>当前上下文：{contextLabel}</p>
-            <p>直接描述你要做的事，助手会调用本机能力完成。</p>
-            <div className="suggest">
-              {SUGGESTIONS.map((s) => (
-                <button key={s} onClick={() => void send(s)} type="button">
-                  {s}
-                </button>
-              ))}
-            </div>
-          </div>
-        ) : (
-          messages.map((m) => (
-            <div key={m.id} className={`bubble ${m.role}`}>
-              {m.text}
-            </div>
-          ))
-        )}
+      <div className="ai-tabs">
+        {TABS.map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            className={tab === t.key ? "active" : ""}
+            onClick={() => setTab(t.key)}
+          >
+            {t.label}
+            {t.key === "skills" && config && config.skills.length > 0 && (
+              <span className="ai-tab-count">{config.skills.length}</span>
+            )}
+          </button>
+        ))}
       </div>
 
-      <div className="ai-foot">
-        <div className="ai-input">
-          <textarea
-            value={draft}
-            placeholder="向 AI 描述你的需求…"
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                void send(draft);
-              }
-            }}
-          />
-          <button className="btn primary" disabled={busy || !draft.trim()} onClick={() => void send(draft)} type="button">
-            {busy ? "…" : "发送"}
-          </button>
+      {error && (
+        <div className="alert error" style={{ margin: "0 12px 8px", fontSize: 11 }}>
+          {error}
         </div>
-        <div className="ai-tip">Enter 发送 · Shift+Enter 换行</div>
-      </div>
+      )}
+
+      {/* 三个视图都保持挂载：切到设置页时对话流不会中断 */}
+      <AiChat
+        hidden={tab !== "chat"}
+        contextLabel={contextLabel}
+        onOpenSettings={() => setTab("settings")}
+      />
+      <AiSkills hidden={tab !== "skills"} config={config} onReload={reload} onError={setError} />
+      <AiSettings hidden={tab !== "settings"} config={config} onReload={reload} onError={setError} />
     </aside>
   );
 }
@@ -129,7 +120,14 @@ function Chevron({ dir }: { dir: "left" | "right" }) {
   const d = dir === "left" ? "M11 3L5.5 8L11 13" : "M5 3L10.5 8L5 13";
   return (
     <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true">
-      <path d={d} fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+      <path
+        d={d}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
   );
 }

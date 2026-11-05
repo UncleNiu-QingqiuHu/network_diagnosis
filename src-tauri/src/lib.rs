@@ -1,5 +1,6 @@
 //! 应用入口：注册命令、初始化日志。
 
+pub mod agent;
 pub mod commands;
 pub mod paths;
 pub mod renewal;
@@ -9,6 +10,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .manage(commands::ScanState::default())
         .manage(renewal::RenewalState::default())
+        .manage(agent::AgentState::default())
         .setup(|app| {
             // 后台续期：启动即检查一次，之后每 6 小时一轮
             renewal::spawn(app.handle().clone());
@@ -49,7 +51,21 @@ pub fn run() {
             commands::ip_scan_export_csv,
             commands::mac_scan_run,
             commands::mac_scan_export_csv,
-            commands::ai_chat,
+            agent::agent_config,
+            agent::agent_save_model,
+            agent::agent_delete_model,
+            agent::agent_set_key,
+            agent::agent_set_active_model,
+            agent::agent_set_options,
+            agent::agent_skills,
+            agent::agent_scan_skills,
+            agent::agent_import_skill,
+            agent::agent_set_skill_enabled,
+            agent::agent_delete_skill,
+            agent::agent_chat,
+            agent::agent_cancel,
+            agent::agent_confirm,
+            agent::agent_status,
         ])
         .run(tauri::generate_context!())
         .expect("应用启动失败");
