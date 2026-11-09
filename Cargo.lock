@@ -702,6 +702,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "core_detect"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f8f80099a98041a3d1622845c271458a2d73e688351bf3cb999266764b81d48"
+
+[[package]]
 name = "cpubits"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1110,6 +1116,20 @@ name = "embed_plist"
 version = "1.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4ef6b89e5b37196644d8796de5268852ff179b44e96276cf4290264843743bb7"
+
+[[package]]
+name = "encoding_rs"
+version = "0.8.44"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "89253175e704ab869b04f9db224d38630e0211a53841a79181deae0889e169f5"
+dependencies = [
+ "cfg-if",
+ "core_detect",
+ "multiversion_no_op",
+ "rustversion",
+ "scopeguard",
+ "simdutf8",
+]
 
 [[package]]
 name = "endi"
@@ -2511,6 +2531,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "multiversion_no_op"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "743fb55ba31b18fb1ecef6bdc9aa2743314978ac084044301a7eee33fb99a20d"
+
+[[package]]
 name = "ndk"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3251,7 +3277,7 @@ dependencies = [
 
 [[package]]
 name = "qqhu-acme"
-version = "4.0.0-alpha.13"
+version = "4.0.0-alpha.14"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -3274,7 +3300,7 @@ dependencies = [
 
 [[package]]
 name = "qqhu-agent"
-version = "4.0.0-alpha.13"
+version = "4.0.0-alpha.14"
 dependencies = [
  "chrono",
  "dirs 6.0.0",
@@ -3292,9 +3318,10 @@ dependencies = [
 
 [[package]]
 name = "qqhu-app"
-version = "4.0.0-alpha.13"
+version = "4.0.0-alpha.14"
 dependencies = [
  "chrono",
+ "encoding_rs",
  "qqhu-acme",
  "qqhu-agent",
  "qqhu-core",
@@ -3315,7 +3342,7 @@ dependencies = [
 
 [[package]]
 name = "qqhu-core"
-version = "4.0.0-alpha.13"
+version = "4.0.0-alpha.14"
 dependencies = [
  "chrono",
  "serde",
@@ -3326,7 +3353,7 @@ dependencies = [
 
 [[package]]
 name = "qqhu-pki"
-version = "4.0.0-alpha.13"
+version = "4.0.0-alpha.14"
 dependencies = [
  "chrono",
  "p12",
@@ -3343,7 +3370,7 @@ dependencies = [
 
 [[package]]
 name = "qqhu-probe"
-version = "4.0.0-alpha.13"
+version = "4.0.0-alpha.14"
 dependencies = [
  "chrono",
  "libc",
@@ -3367,7 +3394,7 @@ dependencies = [
 
 [[package]]
 name = "qqhu-report"
-version = "4.0.0-alpha.13"
+version = "4.0.0-alpha.14"
 dependencies = [
  "chrono",
  "qqhu-core",
@@ -3379,7 +3406,7 @@ dependencies = [
 
 [[package]]
 name = "qqhu-secret"
-version = "4.0.0-alpha.13"
+version = "4.0.0-alpha.14"
 dependencies = [
  "keyring",
  "thiserror 2.0.21",
@@ -3387,7 +3414,7 @@ dependencies = [
 
 [[package]]
 name = "qqhu-sys"
-version = "4.0.0-alpha.13"
+version = "4.0.0-alpha.14"
 dependencies = [
  "libc",
  "qqhu-core",

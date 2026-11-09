@@ -73,6 +73,7 @@ pub fn run() {
             agent::agent_session_rename,
             agent::agent_session_delete,
             agent::agent_session_append,
+            agent::agent_session_export,
         ])
         .run(tauri::generate_context!())
         .expect("应用启动失败");

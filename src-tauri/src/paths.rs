@@ -62,6 +62,15 @@ pub fn agent_dir() -> PathBuf {
     dir
 }
 
+/// Agent 会话报告目录：`reports/agent/<session_id>/report.md`。
+///
+/// 与诊断报告同根：用户按 `reports/` 一处备份即可，不必记两套路径。
+pub fn agent_report_dir() -> PathBuf {
+    let dir = report_root().join("agent");
+    let _ = std::fs::create_dir_all(&dir);
+    dir
+}
+
 /// 配置目录：`config/`，用户可放 `oui.csv` 扩展厂商库。
 pub fn config_dir() -> PathBuf {
     let dir = install_root().join("config");

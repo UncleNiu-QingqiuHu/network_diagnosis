@@ -30,3 +30,4 @@ qqhu-pki = { path = "../crates/qqhu-pki" }
 qqhu-acme = { path = "../crates/qqhu-acme" }
 qqhu-agent = { path = "../crates/qqhu-agent" }
 uuid = { workspace = true }
+encoding_rs = { workspace = true }

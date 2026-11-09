@@ -237,6 +237,12 @@ export async function agentSessionRename(id: string, title: string): Promise<Ses
   return invoke<SessionSummary>("agent_session_rename", { id, title });
 }
 
+/** 把会话导成 Markdown 报告，返回文件路径。 */
+export async function agentSessionExport(id: string): Promise<string> {
+  ensure();
+  return invoke<string>("agent_session_export", { id });
+}
+
 /** 删除会话，返回剩余列表（后端保证至少留一个）。 */
 export async function agentSessionDelete(id: string): Promise<SessionSummary[]> {
   ensure();

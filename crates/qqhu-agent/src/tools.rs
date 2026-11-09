@@ -211,6 +211,29 @@ pub fn truncate_output(text: &str, max_chars: usize) -> String {
     format!("{head}\n…（输出过长已截断，共 {} 字符）…\n{tail}", text.chars().count())
 }
 
+/// 命令输出的一句话摘要。
+///
+/// 完整输出可能几十行，工具标签和报告表格里只放得下一行。优先取统计行
+/// （「丢失 = 0」这类），它比开头的命令行更有信息量。
+pub fn summarize_command(output: &str) -> String {
+    let lines: Vec<&str> = output
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty())
+        .collect();
+    if lines.is_empty() {
+        return "（无输出）".to_string();
+    }
+    if let Some(stat) = lines
+        .iter()
+        .find(|l| l.contains("丢失") || l.to_ascii_lowercase().contains("loss"))
+    {
+        return truncate_output(stat, 120);
+    }
+    let head: Vec<&str> = lines.iter().take(2).copied().collect();
+    truncate_output(&head.join(" · "), 120)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

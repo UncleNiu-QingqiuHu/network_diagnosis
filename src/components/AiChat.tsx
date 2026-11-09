@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from "react";
+import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import {
   agentCancel,
   agentChat,
   agentConfirm,
   agentSessionAppend,
   agentSessionDelete,
+  agentSessionExport,
   agentSessionGet,
   agentSessionNew,
   agentSessionRename,
@@ -94,6 +96,9 @@ export default function AiChat({ contextLabel, onOpenSettings, hidden }: Props) 
   const [picker, setPicker] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
+  /** 导出的报告路径，非空时显示成功提示条 */
+  const [exported, setExported] = useState("");
+  const [exporting, setExporting] = useState(false);
 
   const seq = useRef(0);
   const streamingId = useRef<number | null>(null);
@@ -185,6 +190,7 @@ export default function AiChat({ contextLabel, onOpenSettings, hidden }: Props) 
       setSessionId(s.id);
       setTitle(s.title);
       setError("");
+      setExported("");
       setPicker(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -201,6 +207,7 @@ export default function AiChat({ contextLabel, onOpenSettings, hidden }: Props) 
       setTitle(s.title);
       setPicker(false);
       setError("");
+      setExported("");
       setSessions(await agentSessions());
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -237,6 +244,20 @@ export default function AiChat({ contextLabel, onOpenSettings, hidden }: Props) 
       setSessions(await agentSessions());
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  async function exportReport() {
+    if (!sessionId || exporting) return;
+    setExporting(true);
+    setError("");
+    try {
+      setExported(await agentSessionExport(sessionId));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      setExported("");
+    } finally {
+      setExporting(false);
     }
   }
 
@@ -373,6 +394,15 @@ export default function AiChat({ contextLabel, onOpenSettings, hidden }: Props) 
         <button
           className="icon-btn"
           type="button"
+          title="导出为 Markdown 报告"
+          disabled={exporting || messages.length === 0}
+          onClick={() => void exportReport()}
+        >
+          <DownloadIcon />
+        </button>
+        <button
+          className="icon-btn"
+          type="button"
           title="新建对话"
           onClick={() => void newSession()}
           disabled={busy}
@@ -380,6 +410,27 @@ export default function AiChat({ contextLabel, onOpenSettings, hidden }: Props) 
           <PlusIcon />
         </button>
       </div>
+
+      {exported && (
+        <div className="alert ok" style={{ margin: "8px 8px 0", fontSize: 11 }}>
+          <div style={{ display: "flex", gap: 6, alignItems: "flex-start" }}>
+            <span style={{ flex: 1, minWidth: 0, wordBreak: "break-all" }}>
+              已导出报告：
+              <span className="mono">{exported}</span>
+            </span>
+            <button
+              className="btn"
+              type="button"
+              onClick={() => void revealItemInDir(exported).catch(() => undefined)}
+            >
+              打开目录
+            </button>
+            <button className="icon-btn" type="button" title="关闭" onClick={() => setExported("")}>
+              ×
+            </button>
+          </div>
+        </div>
+      )}
 
       {picker && (
         <div className="sess-menu">
@@ -528,6 +579,21 @@ function PenIcon() {
         fill="none"
         stroke="currentColor"
         strokeWidth="1.3"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function DownloadIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true">
+      <path
+        d="M8 2.5v7.5M5 7.5L8 10.5l3-3M3 13h10"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.4"
         strokeLinecap="round"
         strokeLinejoin="round"
       />

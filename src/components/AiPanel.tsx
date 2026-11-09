@@ -41,6 +41,7 @@ export default function AiPanel({ collapsed, onToggle, contextLabel }: Props) {
 
 
 
+
   if (collapsed) {
     return (
       <aside className="ai collapsed">

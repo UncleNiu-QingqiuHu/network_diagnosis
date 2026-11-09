@@ -52,6 +52,10 @@ pub struct Session {
     pub title: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    /// 本会话首次对话时所用的模型名。报告里要写清楚结论是哪个模型给的，
+    /// 换过模型的话以首次为准（会话中途换模型属于少数情况）。
+    #[serde(default)]
+    pub model: Option<String>,
     #[serde(default)]
     pub messages: Vec<StoredMessage>,
 }
@@ -76,6 +80,7 @@ impl Session {
             title: "新对话".to_string(),
             created_at: now,
             updated_at: now,
+            model: None,
             messages: Vec::new(),
         }
     }

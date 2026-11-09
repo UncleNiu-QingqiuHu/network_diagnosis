@@ -316,15 +316,21 @@ pub fn agent_session_append(
     text: String,
     tools: Option<Vec<session::StoredTool>>,
 ) -> Result<SessionSummary, String> {
-    let store = session_store();
-    let mut s = store.get(&id).unwrap_or_else(|| Session::empty(&id));
+    let session_store = session_store();
+    let mut s = session_store
+        .get(&id)
+        .unwrap_or_else(|| Session::empty(&id));
+    // 记下首次对话用的模型：报告里要写清结论出自哪个模型
+    if s.model.is_none() {
+        s.model = store().load().active().map(model_label);
+    }
     s.push(StoredMessage {
         role,
         text,
         tools: tools.unwrap_or_default(),
         at: Utc::now(),
     });
-    store.save(&s).map_err(|e| e.to_string())?;
+    session_store.save(&s).map_err(|e| e.to_string())?;
     Ok(s.summary())
 }
 
@@ -439,19 +445,20 @@ async fn run_chat(
             }
             let outcome = run_tool(app, state, &cfg, call).await;
             match &outcome {
-                Ok(text) => {
+                Ok(done) => {
                     let _ = app.emit(
                         TOOL_EVENT,
                         json!({
                             "id": call.id,
                             "name": call.function.name,
                             "status": "ok",
-                            "preview": tools::truncate_output(text, 400),
+                            // 摘要用于标签与报告；完整输出只回给模型
+                            "preview": done.summary,
                         }),
                     );
                     msgs.push(ChatMessage::tool_result(
                         call.id.clone(),
-                        tools::truncate_output(text, TOOL_OUTPUT_LIMIT),
+                        tools::truncate_output(&done.text, TOOL_OUTPUT_LIMIT),
                     ));
                 }
                 Err(e) => {
@@ -485,12 +492,21 @@ async fn run_chat(
 
 // ---------------------------------------------------------------- 工具执行
 
+/// 一次工具执行的结果。
+///
+/// `text` 是回填给模型的完整输出，`summary` 是给人看的一句话 ——
+/// 工具返回的 JSON 塞进对话标签和报告表格里没法读，摘要必须在这里生成。
+struct ToolOutcome {
+    text: String,
+    summary: String,
+}
+
 async fn run_tool(
     app: &AppHandle,
     state: &AgentState,
     cfg: &AgentConfig,
     call: &ToolCall,
-) -> Result<String, String> {
+) -> Result<ToolOutcome, String> {
     let args: Value = serde_json::from_str(&call.function.arguments)
         .map_err(|e| format!("参数不是合法 JSON：{e}"))?;
 
@@ -512,7 +528,14 @@ async fn run_tool(
                 .and_then(|v| v.as_u64())
                 .ok_or("缺少 prefix_len 参数")? as u8;
             let r = qqhu_core::calc_subnet(ip, Some(prefix), None).map_err(|e| e.to_string())?;
-            Ok(serde_json::to_string_pretty(&r).unwrap_or_default())
+            let summary = format!(
+                "{}，可用主机 {} 个（{} – {}）",
+                r.network_cidr, r.usable_hosts, r.first_host, r.last_host
+            );
+            Ok(ToolOutcome {
+                text: serde_json::to_string_pretty(&r).unwrap_or_default(),
+                summary,
+            })
         }
         "ping_host" => {
             let host = args
@@ -531,7 +554,23 @@ async fn run_tool(
             let stats = qqhu_probe::ping_host(host, &opts)
                 .await
                 .map_err(|e| e.to_string())?;
-            Ok(serde_json::to_string_pretty(&stats).unwrap_or_default())
+            let summary = match stats.avg_ms {
+                Some(avg) => format!(
+                    "收到 {}/{}，丢包 {}，平均 {:.1} ms",
+                    stats.received,
+                    stats.attempted,
+                    stats.lost,
+                    avg
+                ),
+                None => format!(
+                    "收到 {}/{}，全部超时（目标可能屏蔽 ICMP）",
+                    stats.received, stats.attempted
+                ),
+            };
+            Ok(ToolOutcome {
+                text: serde_json::to_string_pretty(&stats).unwrap_or_default(),
+                summary,
+            })
         }
         "trace_route" => {
             let host = args
@@ -550,7 +589,21 @@ async fn run_tool(
             let report = qqhu_probe::trace_route(host, &opts, |_| {})
                 .await
                 .map_err(|e| e.to_string())?;
-            Ok(serde_json::to_string_pretty(&report).unwrap_or_default())
+            let answered = report.hops.iter().filter(|h| h.addr.is_some()).count();
+            let summary = format!(
+                "{} 跳，其中 {} 跳有响应，{}",
+                report.hops.len(),
+                answered,
+                if report.completed {
+                    "已到达目标"
+                } else {
+                    "未到达目标（被跳数限制或上游屏蔽 ICMP）"
+                }
+            );
+            Ok(ToolOutcome {
+                text: serde_json::to_string_pretty(&report).unwrap_or_default(),
+                summary,
+            })
         }
         "check_ssl" => {
             let host = args
@@ -566,9 +619,26 @@ async fn run_tool(
             let report = qqhu_probe::check_certificate(&target, Default::default())
                 .await
                 .map_err(|e| e)?;
-            Ok(serde_json::to_string_pretty(&report).unwrap_or_default())
+            let summary = match report.chain.first() {
+                Some(leaf) => format!(
+                    "{}，{}，剩余 {} 天，主机名{}",
+                    leaf.subject,
+                    if report.trusted { "已信任" } else { "不受信任" },
+                    leaf.days_remaining,
+                    if report.hostname_matched { "匹配" } else { "不匹配" }
+                ),
+                None => format!("{} 未取到证书链", report.host),
+            };
+            Ok(ToolOutcome {
+                text: serde_json::to_string_pretty(&report).unwrap_or_default(),
+                summary,
+            })
         }
-        "run_command" => run_command(app, state, cfg, &args).await,
+        "run_command" => {
+            let text = run_command(app, state, cfg, &args).await?;
+            let summary = tools::summarize_command(&text);
+            Ok(ToolOutcome { text, summary })
+        }
         other => Err(format!("未知工具：{other}")),
     }
 }
@@ -681,14 +751,16 @@ async fn run_process(program: &str, args: &[String]) -> Result<String, String> {
     Ok(text)
 }
 
-/// 优先按 UTF-8 解码，失败再按 GBK 兼容（中文 Windows 的命令输出常是 GBK）。
+/// 优先按 UTF-8 解码，失败再按 GBK 解（中文 Windows 的控制台输出是 CP936）。
+///
+/// 早先用 `from_utf8_lossy` 兜底，结果中文全变成 `?` —— 工具输出会原样进
+/// 对话与导出的报告，乱码等于把这条记录作废，所以按真正的编码解一次。
 fn decode_output(bytes: &[u8]) -> String {
-    match String::from_utf8(bytes.to_vec()) {
-        Ok(s) => s,
+    match std::str::from_utf8(bytes) {
+        Ok(s) => s.to_string(),
         Err(_) => {
-            // 没有引入 encoding 库：GBK 里常用汉字用 lossy 会变「?」，
-            // 但至少不会让整段输出丢掉；后续如确有需要再引入 encoding_rs。
-            String::from_utf8_lossy(bytes).to_string()
+            let (text, _, _) = encoding_rs::GBK.decode(bytes);
+            text.into_owned()
         }
     }
 }
@@ -720,4 +792,60 @@ mod tests {
         let raw = [0xff, 0xfe, 0x41];
         assert!(!decode_output(&raw).is_empty());
     }
+
+    #[test]
+    fn decodes_gbk_console_output() {
+        // Windows 中文控制台输出的「字节=32 时间<1ms」片段（GBK 编码）
+        let gbk = [
+            0xd7, 0xd6, 0xbd, 0xda, 0x3d, 0x33, 0x32, 0x20, 0xca, 0xb1, 0xbc, 0xe4, 0x3c, 0x31,
+            0x6d, 0x73,
+        ];
+        let text = decode_output(&gbk);
+        assert!(text.contains("字节=32"), "GBK 应解成中文，实际：{text}");
+        assert!(text.contains("时间<1ms"), "实际：{text}");
+        assert!(!text.contains('?'), "不应出现替换字符");
+    }
+
+    #[test]
+    fn keeps_utf8_when_valid() {
+        assert_eq!(decode_output("中文输出".as_bytes()), "中文输出");
+    }
+}
+
+/// 模型在报告/日志里的显示名：`DeepSeek V3（deepseek-chat）`。
+fn model_label(m: &ModelConfig) -> String {
+    if m.name.trim().is_empty() {
+        m.model.clone()
+    } else {
+        format!("{}（{}）", m.name, m.model)
+    }
+}
+
+/// 导出会话报告，返回 Markdown 路径。
+///
+/// 空会话直接拒绝：导出一份没有内容的报告，只会让人以为程序出了问题。
+#[tauri::command]
+pub fn agent_session_export(id: String) -> Result<String, String> {
+    let session = session_store()
+        .get(&id)
+        .ok_or_else(|| format!("找不到会话 {id}"))?;
+    if session.messages.is_empty() {
+        return Err("这个会话还没有对话内容，先问一句再导出。".into());
+    }
+
+    let info = crate::commands::build_app_info();
+    let ctx = qqhu_agent::ReportContext {
+        model: session
+            .model
+            .clone()
+            .or_else(|| store().load().active().map(model_label))
+            .unwrap_or_else(|| "（未记录）".to_string()),
+        version: info.version,
+        hostname: info.hostname,
+        os: info.os_summary,
+        report_dir: Default::default(),
+    };
+    let path = qqhu_agent::export_report(&session, &ctx, &paths::agent_report_dir())
+        .map_err(|e| e.to_string())?;
+    Ok(path.to_string_lossy().to_string())
 }
