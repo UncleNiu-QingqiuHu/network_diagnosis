@@ -1158,3 +1158,145 @@ code {
   margin-top: 2px;
   line-height: 1.5;
 }
+
+/* 会话条：标题占满剩余宽度，右侧两个图标按钮固定 */
+.sess-bar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  flex: none;
+}
+
+.sess-current {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.sess-current:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.sess-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sess-caret {
+  flex: none;
+  font-size: 8px;
+  color: var(--text-faint);
+}
+
+.sess-input {
+  flex: 1;
+  min-width: 0;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12px;
+}
+
+.sess-menu {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  top: 38px;
+  z-index: 20;
+  max-height: 320px;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-elev);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+}
+
+.sess-menu-head {
+  flex: none;
+  padding: 6px 10px;
+  font-size: 11px;
+  color: var(--text-faint);
+  border-bottom: 1px solid var(--border);
+}
+
+.sess-menu-list {
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.sess-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 6px 6px 10px;
+  cursor: pointer;
+  border-bottom: 1px dashed var(--border);
+}
+
+.sess-item:hover {
+  background: var(--surface-2);
+}
+
+/* 当前会话要一眼认出来：只靠底色深浅，在实际屏幕上几乎看不出差别 */
+.sess-item.active {
+  background: var(--surface-3);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.sess-item:last-child {
+  border-bottom: 0;
+}
+
+.sess-item-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.sess-item-title {
+  font-size: 12px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sess-item-sub {
+  margin-top: 2px;
+  font-size: 10px;
+  color: var(--text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.icon-btn.danger:hover {
+  color: var(--danger, #e06666);
+}
+
+.icon-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}

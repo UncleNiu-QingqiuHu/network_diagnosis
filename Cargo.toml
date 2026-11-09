@@ -3,7 +3,7 @@ resolver = "2"
 members = ["crates/qqhu-core", "crates/qqhu-sys", "crates/qqhu-probe", "crates/qqhu-report", "crates/qqhu-pki", "crates/qqhu-acme", "crates/qqhu-secret", "crates/qqhu-agent", "src-tauri"]
 
 [workspace.package]
-version = "4.0.0-alpha.13"
+version = "4.0.0-alpha.14"
 edition = "2021"
 rust-version = "1.82"
 license = "MIT"

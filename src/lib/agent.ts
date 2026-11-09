@@ -55,6 +55,36 @@ export interface ChatReply {
   cancelled: boolean;
 }
 
+/** 会话消息里记录的工具摘要（落盘用，不含完整输出） */
+export interface StoredTool {
+  name: string;
+  status: string;
+  preview?: string;
+}
+
+export interface StoredMessage {
+  role: "user" | "assistant";
+  text: string;
+  tools?: StoredTool[];
+  at: string;
+}
+
+export interface Session {
+  id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  messages: StoredMessage[];
+}
+
+export interface SessionSummary {
+  id: string;
+  title: string;
+  updatedAt: string;
+  messageCount: number;
+  lastUserText: string;
+}
+
 export interface ToolEvent {
   id: string;
   name: string;
@@ -163,4 +193,52 @@ export async function onAgentConfirm(
 ): Promise<() => void> {
   if (!isTauri) return () => undefined;
   return listen<ConfirmRequest>("agent-confirm", (e) => handler(e.payload));
+}
+
+// ---------------------------------------------------------------- 会话
+
+export async function agentSessions(): Promise<SessionSummary[]> {
+  ensure();
+  return invoke<SessionSummary[]>("agent_sessions");
+}
+
+export async function agentSessionGet(id: string): Promise<Session> {
+  ensure();
+  return invoke<Session>("agent_session_get", { id });
+}
+
+export async function agentSessionNew(): Promise<Session> {
+  ensure();
+  return invoke<Session>("agent_session_new");
+}
+
+/** 往会话里追加一条消息，返回更新后的列表项。 */
+export async function agentSessionAppend(
+  id: string,
+  role: "user" | "assistant",
+  text: string,
+  tools?: ToolEvent[],
+): Promise<SessionSummary> {
+  ensure();
+  return invoke<SessionSummary>("agent_session_append", {
+    id,
+    role,
+    text,
+    tools: (tools ?? []).map((t) => ({
+      name: t.name,
+      status: t.status,
+      preview: t.preview.slice(0, 300),
+    })),
+  });
+}
+
+export async function agentSessionRename(id: string, title: string): Promise<SessionSummary> {
+  ensure();
+  return invoke<SessionSummary>("agent_session_rename", { id, title });
+}
+
+/** 删除会话，返回剩余列表（后端保证至少留一个）。 */
+export async function agentSessionDelete(id: string): Promise<SessionSummary[]> {
+  ensure();
+  return invoke<SessionSummary[]>("agent_session_delete", { id });
 }

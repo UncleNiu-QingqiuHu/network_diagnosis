@@ -11,6 +11,7 @@ use chrono::Utc;
 use qqhu_agent::chat::{ChatMessage, ToolCall};
 use qqhu_agent::config::{AgentConfig, AgentStore, ModelConfig};
 use qqhu_agent::prompt::{self, PromptCtx};
+use qqhu_agent::session::{self, Session, SessionStore, SessionSummary, StoredMessage};
 use qqhu_agent::skills::{self, Skill, SkillCandidate};
 use qqhu_agent::{secrets, tools, AgentError};
 use serde::Serialize;
@@ -222,6 +223,109 @@ pub fn agent_set_skill_enabled(slug: String, enabled: bool) -> Result<Skill, Str
 #[tauri::command]
 pub fn agent_delete_skill(slug: String) -> Result<(), String> {
     skills::delete(&store(), &slug).map_err(|e| e.to_string())
+}
+
+// ---------------------------------------------------------------- 会话
+
+fn session_store() -> SessionStore {
+    SessionStore::new(paths::agent_dir().join("sessions"))
+}
+
+#[tauri::command]
+pub fn agent_sessions() -> Vec<SessionSummary> {
+    let store = session_store();
+    let list = store.list();
+    // 首次进入或全部删光时给一个空会话，前端不必处理「零会话」这个状态
+    if list.is_empty() {
+        let s = Session::empty(SessionStore::new_id());
+        if store.save(&s).is_ok() {
+            return vec![s.summary()];
+        }
+    }
+    list
+}
+
+#[tauri::command]
+pub fn agent_session_get(id: String) -> Result<Session, String> {
+    session_store()
+        .get(&id)
+        .ok_or_else(|| format!("找不到会话 {id}"))
+}
+
+/// 新建会话并立即落盘：否则用户新建后没说话就切走，这个会话会凭空消失。
+///
+/// 已有空会话时直接复用：连点几次「新建」不该堆出一排「新对话」。
+#[tauri::command]
+pub fn agent_session_new() -> Result<Session, String> {
+    let store = session_store();
+    let empties: Vec<_> = store
+        .list()
+        .into_iter()
+        .filter(|s| s.message_count == 0)
+        .collect();
+    if let Some(first) = empties.first() {
+        // 只留一个空会话，其余删掉：列表里堆一排「新对话」没有意义
+        for extra in empties.iter().skip(1) {
+            let _ = store.delete(&extra.id);
+        }
+        if let Some(s) = store.get(&first.id) {
+            return Ok(s);
+        }
+    }
+    let s = Session::empty(SessionStore::new_id());
+    store.save(&s).map_err(|e| e.to_string())?;
+    Ok(s)
+}
+
+/// 整体覆盖保存一个会话（对话结束后调用一次）。
+#[tauri::command]
+pub fn agent_session_save(session: Session) -> Result<SessionSummary, String> {
+    session_store()
+        .save(&session)
+        .map_err(|e| e.to_string())?;
+    Ok(session.summary())
+}
+
+#[tauri::command]
+pub fn agent_session_rename(id: String, title: String) -> Result<SessionSummary, String> {
+    let s = session_store()
+        .rename(&id, &title)
+        .map_err(|e| e.to_string())?;
+    Ok(s.summary())
+}
+
+#[tauri::command]
+pub fn agent_session_delete(id: String) -> Result<Vec<SessionSummary>, String> {
+    let store = session_store();
+    store.delete(&id).map_err(|e| e.to_string())?;
+    let list = store.list();
+    if list.is_empty() {
+        let s = Session::empty(SessionStore::new_id());
+        store.save(&s).map_err(|e| e.to_string())?;
+        return Ok(vec![s.summary()]);
+    }
+    Ok(list)
+}
+
+/// 把消息追加进会话并保存。与 `agent_session_save` 分开，
+/// 是因为前端不必为了「记一条消息」而把整个会话回传一遍。
+#[tauri::command]
+pub fn agent_session_append(
+    id: String,
+    role: String,
+    text: String,
+    tools: Option<Vec<session::StoredTool>>,
+) -> Result<SessionSummary, String> {
+    let store = session_store();
+    let mut s = store.get(&id).unwrap_or_else(|| Session::empty(&id));
+    s.push(StoredMessage {
+        role,
+        text,
+        tools: tools.unwrap_or_default(),
+        at: Utc::now(),
+    });
+    store.save(&s).map_err(|e| e.to_string())?;
+    Ok(s.summary())
 }
 
 // ---------------------------------------------------------------- 对话

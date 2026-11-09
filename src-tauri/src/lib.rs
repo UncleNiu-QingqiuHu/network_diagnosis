@@ -66,6 +66,13 @@ pub fn run() {
             agent::agent_cancel,
             agent::agent_confirm,
             agent::agent_status,
+            agent::agent_sessions,
+            agent::agent_session_get,
+            agent::agent_session_new,
+            agent::agent_session_save,
+            agent::agent_session_rename,
+            agent::agent_session_delete,
+            agent::agent_session_append,
         ])
         .run(tauri::generate_context!())
         .expect("应用启动失败");
