@@ -116,33 +116,37 @@ pub fn info() -> &'static DataRootInfo {
 
 // ---------------------------------------------------------------- 落点解析
 
-#[cfg(debug_assertions)]
-fn resolve() -> Result<DataRootInfo, PathError> {
-    if let Some(root) = custom_root()? {
-        return Ok(root);
-    }
-    // 开发态固定落在仓库根：`CARGO_MANIFEST_DIR` = <repo>/src-tauri
-    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .map(Path::to_path_buf)
-        .unwrap_or_else(|| PathBuf::from("."));
-    ensure_writable(&root)?;
-    Ok(DataRootInfo {
-        root,
-        mode: DataRootMode::Repo,
-        migrated: Vec::new(),
-        migrated_from: None,
-    })
-}
-
-#[cfg(not(debug_assertions))]
+/// 解析数据根目录。
+///
+/// 开发态与安装态的判定写在**同一个函数**里、用运行期的 `cfg!` 区分，
+/// 而不是 `#[cfg(debug_assertions)]` 劈成两份。
+///
+/// 理由来自一次真实翻车：用 `#[cfg]` 拆开之后，`release` 那份代码在
+/// `cargo test` / `cargo check` 里根本不参与编译，分支写错了要等到打包才发现；
+/// 同时 debug 构建会把只在 release 用到的辅助函数全标成 dead_code，
+/// 只能靠一堆 `allow(dead_code)` 压着 —— 那等于把「这段没被验证」的告警关掉。
 fn resolve() -> Result<DataRootInfo, PathError> {
     if let Some(root) = custom_root()? {
         return Ok(root);
     }
 
-    let exe = exe_dir();
+    if cfg!(debug_assertions) {
+        // 开发态固定落在仓库根：`CARGO_MANIFEST_DIR` = <repo>/src-tauri
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| PathBuf::from("."));
+        ensure_writable(&root)?;
+        return Ok(DataRootInfo {
+            root,
+            mode: DataRootMode::Repo,
+            migrated: Vec::new(),
+            migrated_from: None,
+        });
+    }
+
     // 便携版优先原地：用户把整个文件夹拷走就能带走全部数据。
+    let exe = exe_dir();
     let exe_writable = ensure_writable(&exe).is_ok();
     match plan_root(&exe, exe_writable) {
         RootPlan::InPlace => Ok(DataRootInfo {
@@ -185,6 +189,9 @@ pub enum RootPlan {
 /// - 便携版 + 可写 → 原地，数据跟着程序走；
 /// - 便携版 + 不可写 → 搬去用户目录（Program Files 里塞绿色版的典型情形）；
 /// - 非便携版 → 用户数据目录，安装版的正常路径。
+///
+/// 只在 release 分支的 [`resolve`] 与单测里调用：开发态固定落仓库根，
+/// 走不到这里，所以 debug 构建需要豁免 dead_code。
 fn plan_root(exe: &Path, exe_writable: bool) -> RootPlan {
     if !is_portable(exe) {
         return RootPlan::UserData { migrate_from: None };
@@ -223,7 +230,6 @@ fn custom_root() -> Result<Option<DataRootInfo>, PathError> {
     }))
 }
 
-#[cfg_attr(debug_assertions, allow(dead_code))]
 fn exe_dir() -> PathBuf {
     std::env::current_exe()
         .ok()
@@ -232,7 +238,6 @@ fn exe_dir() -> PathBuf {
 }
 
 /// 是否为便携版布局：有标记文件，或同级已存在旧版的数据目录。
-#[cfg_attr(debug_assertions, allow(dead_code))]
 fn is_portable(dir: &Path) -> bool {
     if dir.join(PORTABLE_FLAG).is_file() {
         return true;
@@ -242,7 +247,6 @@ fn is_portable(dir: &Path) -> bool {
         .any(|name| dir.join(name).is_dir())
 }
 
-#[cfg_attr(debug_assertions, allow(dead_code))]
 fn user_data_root() -> Result<PathBuf, PathError> {
     // 本地数据目录而非漫游目录：证书私钥与模型凭据不该被域漫游配置同步到服务器。
     dirs::data_local_dir()
