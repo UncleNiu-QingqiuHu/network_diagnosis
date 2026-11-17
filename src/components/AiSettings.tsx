@@ -44,6 +44,12 @@ const PRESETS: Array<{ label: string; baseUrl: string; model: string }> = [
   { label: "本地 Ollama", baseUrl: "http://127.0.0.1:11434/v1", model: "qwen2.5" },
 ];
 
+/** 反查当前 BaseURL 属于哪个预设，用于回显下拉选中项；手填的地址返回空串（自定义）。 */
+function presetLabel(baseUrl: string): string {
+  const hit = PRESETS.find((p) => p.baseUrl === baseUrl.trim());
+  return hit?.label ?? "";
+}
+
 export default function AiSettings({ config, onReload, onError, hidden }: Props) {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [busy, setBusy] = useState(false);
@@ -150,23 +156,34 @@ export default function AiSettings({ config, onReload, onError, hidden }: Props)
         </button>
       ) : (
         <div className="card" style={{ padding: 10, display: "grid", gap: 8 }}>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-            {PRESETS.map((p) => (
-              <button
-                key={p.label}
-                className="btn"
-                type="button"
-                style={{ height: 26, padding: "0 8px", fontSize: 11 }}
-                onClick={() =>
-                  setDraft((d) =>
-                    d ? { ...d, name: d.name || p.label, baseUrl: p.baseUrl, model: p.model } : d,
-                  )
-                }
-              >
-                {p.label}
-              </button>
-            ))}
-          </div>
+          <label className="field">
+            <span>服务商</span>
+            <select
+              className="select"
+              value={presetLabel(draft.baseUrl)}
+              onChange={(e) => {
+                const label = e.target.value;
+                const p = PRESETS.find((x) => x.label === label);
+                setDraft((d) => {
+                  if (!d) return d;
+                  if (!p) {
+                    // 从预设切到「自定义」时清掉预设填的地址与模型 ID。
+                    // 否则界面显示「自定义」，实际仍在用上一个厂商的地址，保存出去就是错的。
+                    const wasPreset = PRESETS.some((x) => x.baseUrl === d.baseUrl.trim());
+                    return wasPreset ? { ...d, baseUrl: "", model: "" } : d;
+                  }
+                  return { ...d, name: d.name || p.label, baseUrl: p.baseUrl, model: p.model };
+                });
+              }}
+            >
+              <option value="">自定义（下方手动填写）</option>
+              {PRESETS.map((p) => (
+                <option key={p.label} value={p.label}>
+                  {p.label}
+                </option>
+              ))}
+            </select>
+          </label>
 
           <label className="field">
             <span>名称</span>

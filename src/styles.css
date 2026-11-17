@@ -67,7 +67,10 @@ textarea {
 
 .app {
   display: grid;
-  grid-template-columns: 216px minmax(0, 1fr) 372px;
+  /* 第三列必须可压缩（minmax(0, …)）：固定 372px 时，视口窄于 216+372=588
+     的三栏总和，右栏会被 .app 的 overflow:hidden 直接裁掉 —— 表现就是 AI 面板
+     右侧内容被切，和里面放了什么无关。实测视口 496px 时右栏溢出 92px。 */
+  grid-template-columns: 216px minmax(0, 1fr) minmax(0, 372px);
   height: 100%;
   overflow: hidden;
 }
@@ -310,6 +313,12 @@ textarea {
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
+/* Windows 的展开列表默认白底，暗色主题下会闪一块白 */
+.select option {
+  background: var(--bg);
+  color: var(--text);
+}
+
 .input.mono {
   font-family: var(--mono);
   letter-spacing: 0.3px;
@@ -526,6 +535,9 @@ textarea {
   flex-direction: column;
   gap: 10px;
   min-height: 0;
+  /* .ai 是 grid item，min-width 默认 auto 会按内容的 min-content 撑开，
+     让右栏压缩不下去。这里允许整列收缩，配合 .app 第三列的 minmax(0, …)。 */
+  min-width: 0;
 }
 
 .ai-empty {
