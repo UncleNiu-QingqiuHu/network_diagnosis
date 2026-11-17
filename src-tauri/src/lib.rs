@@ -12,6 +12,22 @@ pub fn run() {
         .manage(renewal::RenewalState::default())
         .manage(agent::AgentState::default())
         .setup(|app| {
+            // 数据目录必须先就绪：报告、证书库、Agent 配置全都挂在它下面。
+            // 失败就直接拦在这里 —— 放过去只会在第一次写文件时抛出无关的错。
+            let data = paths::init().map_err(|e| {
+                eprintln!("[启动失败] {e}");
+                e.to_string()
+            })?;
+            if !data.migrated.is_empty() {
+                eprintln!(
+                    "[数据迁移] 已从 {} 迁移：{}",
+                    data.migrated_from
+                        .as_ref()
+                        .map(|p| p.display().to_string())
+                        .unwrap_or_default(),
+                    data.migrated.join("、")
+                );
+            }
             // 后台续期：启动即检查一次，之后每 6 小时一轮
             renewal::spawn(app.handle().clone());
             Ok(())

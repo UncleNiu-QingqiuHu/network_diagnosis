@@ -30,6 +30,7 @@ Windows / macOS / Linux 桌面网络工作台，Rust + Tauri 2 + React 实现。
 | AI Agent（模型接入 / 技能导入 / 角色边界 / 工具调用） | 已完成 |
 | 对话历史落盘与多会话管理 | 已完成 |
 | 会话导出为 Markdown 报告 | 已完成 |
+| 数据目录（跨平台可写 / 便携模式 / 旧数据迁移） | 已完成 |
 | 关于 / 许可 | 已完成 |
 | 带宽测试 | 待定（需对端配合，暂不纳入） |
 
@@ -53,6 +54,24 @@ cargo test        # 跑 Rust 单测
 
 只调界面时可 `pnpm dev` 用浏览器打开 `http://localhost:1420`，
 此时后端未连接，界面显示「浏览器预览」角标。
+
+## 数据目录
+
+报告、证书库（含私钥）、Agent 配置与会话都存在**同一个数据根目录**下，
+备份时整个目录拷走即可。它落在哪里取决于程序怎么装的：
+
+| 场景 | 落点 |
+|---|---|
+| 开发态（`cargo tauri dev`） | 仓库根 |
+| 便携版 / 绿色版 | 可执行文件同级（`portable.flag`，或同级已有 `pki/` `reports/` `agent/` `config/`） |
+| 安装版（NSIS / MSI / .app / AppImage） | 用户数据目录：`%LOCALAPPDATA%\QingqiuhuNetworkWorkbench`、`~/Library/Application Support/…`、`$XDG_DATA_HOME/…` |
+
+「关于」页会显示实际路径并提供「打开目录」。
+
+- **想固定数据在程序旁边**：在可执行文件同级放一个空的 `portable.flag`。
+- **便携版被装进受保护目录**（如 `Program Files`）：首次启动会把原有数据复制到用户数据目录，
+  并在目标目录留下 `MIGRATED.txt` 说明来源。原目录不删除，确认无误后可自行清理。
+- `QQHU_DATA_DIR` 环境变量可强制指定数据根目录（测试与特殊部署用）。
 
 ## 目录结构
 
@@ -138,9 +157,9 @@ ICMP 走二层，内核必须先解析 MAC 才能发包，探活完成后邻居�
 
 ## 待办
 
-- [ ] M0 技术 spike：Windows 上原生 ICMP 免管理员验证 + 三平台 ARP 表获取
+- [x] `AppPaths`：跨平台可写目录解析（mac/Linux 不能写 app 包内部）
 - [ ] CI 三平台矩阵（windows / macos / ubuntu 跑 `cargo check` + `cargo test`）
-- [ ] `AppPaths`：跨平台可写目录解析（mac/Linux 不能写 app 包内部）
+- [ ] 安装包签名与自动更新链路
 - [ ] `qqhu-cli`：报告对拍与批量诊断入口
 
 ## 许可证

@@ -7,6 +7,7 @@
 //! - [`prompt`]：角色与边界，系统提示词的唯一来源
 //! - [`chat`]：流式对话与工具调用协议
 //! - [`tools`]：工具定义与命令白名单（执行在应用层）
+//! - [`context`]：按预算裁剪历史（长会话不撞上下文上限）
 //! - [`session`]：对话历史落盘（一个会话一个文件，不维护全局索引）
 //! - [`report`]：把会话导成可交付的 Markdown 报告
 //!
@@ -14,6 +15,7 @@
 
 pub mod chat;
 pub mod config;
+pub mod context;
 pub mod prompt;
 pub mod report;
 pub mod secrets;
@@ -23,6 +25,7 @@ pub mod tools;
 
 pub use chat::{stream_completion, ChatMessage, ToolCall, TurnResult};
 pub use config::{AgentConfig, AgentStore, ModelConfig};
+pub use context::{trim_history, Trimmed, DEFAULT_BUDGET_CHARS};
 pub use secrets::SecretStore;
 pub use report::{export as export_report, render as render_report, ReportContext};
 pub use session::{Session, SessionStore, SessionSummary, StoredMessage, StoredTool};

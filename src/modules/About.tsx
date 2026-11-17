@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { openUrl } from "@tauri-apps/plugin-opener";
+import { openPath, openUrl } from "@tauri-apps/plugin-opener";
 import { aboutInfo, isTauri } from "../lib/api";
 import type { AboutInfo } from "../lib/types";
 
@@ -22,6 +22,15 @@ export default function About() {
       await openUrl(url);
     } catch {
       await navigator.clipboard.writeText(url).catch(() => undefined);
+    }
+  }
+
+  async function openDataDir(dir: string) {
+    if (!isTauri) return;
+    try {
+      await openPath(dir);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
     }
   }
 
@@ -68,6 +77,33 @@ export default function About() {
           <Row k="系统" v={info.osSummary} />
           <Row k="权限" v={info.elevated ? "管理员 / root" : "普通用户"} />
         </div>
+      </section>
+
+      <section className="card">
+        <div className="card-head">
+          <span className="card-title">数据目录</span>
+          <button
+            className="btn"
+            type="button"
+            onClick={() => void openDataDir(info.dataRoot)}
+          >
+            打开目录
+          </button>
+        </div>
+        {info.dataMigrated.length > 0 && (
+          <div className="alert info" style={{ marginBottom: 12 }}>
+            检测到旧版本数据，已将 {info.dataMigrated.join("、")} 迁移到当前数据目录。
+            原目录 {info.dataMigratedFrom} 保留未删除，确认无误后可自行清理。
+          </div>
+        )}
+        <div className="kv">
+          <Row k="位置" v={info.dataRoot} />
+          <Row k="模式" v={info.dataMode} />
+        </div>
+        <p className="about-copy dim" style={{ marginTop: 10 }}>
+          报告、证书库（含私钥）、Agent 配置与会话都存在这里。备份时整个目录拷走即可。
+          便携模式想固定数据在程序旁边，可在可执行文件同级放一个空的 <code>portable.flag</code>。
+        </p>
       </section>
 
       <section className="card">

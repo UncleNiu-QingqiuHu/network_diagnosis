@@ -388,15 +388,31 @@ async fn run_chat(
 
     // 技能正文 + 角色边界一起进系统提示词
     let skill_contents = skills::enabled_contents(&st, skills::MAX_SKILL_CHARS);
-    let system = prompt::system_prompt(&PromptCtx {
+    let mut system = prompt::system_prompt(&PromptCtx {
         module: module.as_deref(),
         allow_commands: cfg.allow_commands,
         skills: &skill_contents,
     });
 
-    let mut msgs = Vec::with_capacity(history.len() + 2);
+    // 历史全量发出会在几十轮后撞上下文上限：按预算裁剪，并把「有省略」告诉模型，
+    // 否则它会把缺失的上下文当成自己记得的内容继续编。
+    let filtered: Vec<ChatMessage> = history
+        .into_iter()
+        .filter(|m| m.role != "system")
+        .collect();
+    let trimmed = qqhu_agent::trim_history(&filtered, qqhu_agent::DEFAULT_BUDGET_CHARS);
+    if trimmed.dropped > 0 {
+        system.push_str(&format!(
+            "\n\n【上下文提示】本次请求只携带了最近的部分对话，\
+             较早的 {} 条消息因长度限制未发送。\
+             如果用户提到你无法确认的此前细节，直接说明并请其补充，不要猜测或编造。",
+            trimmed.dropped
+        ));
+    }
+
+    let mut msgs = Vec::with_capacity(trimmed.messages.len() + 2);
     msgs.push(ChatMessage::system(system));
-    msgs.extend(history.into_iter().filter(|m| m.role != "system"));
+    msgs.extend(trimmed.messages);
 
     let tool_defs = tools::definitions(cfg.allow_commands);
     let client = secrets::http_client();

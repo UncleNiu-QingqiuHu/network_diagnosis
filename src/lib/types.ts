@@ -65,6 +65,14 @@ export interface AboutInfo {
   community: string;
   copyright: string;
   license: string;
+  /** 数据根目录（报告 / 证书库 / Agent 配置的父目录）。 */
+  dataRoot: string;
+  /** 落点说明：开发态（仓库根）/ 便携模式（程序目录）/ 用户数据目录。 */
+  dataMode: string;
+  /** 本次启动从旧版本位置迁移过来的子目录名。 */
+  dataMigrated: string[];
+  /** 迁移来源目录，未迁移时为空串。 */
+  dataMigratedFrom: string;
 }
 
 // ---------------------------------------------------------------- 网络诊断

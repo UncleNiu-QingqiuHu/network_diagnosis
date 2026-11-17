@@ -114,11 +114,20 @@ pub struct AboutInfo {
     pub community: String,
     pub copyright: String,
     pub license: String,
+    /// 数据根目录（报告 / 证书库 / Agent 配置的父目录）。
+    pub data_root: String,
+    /// 数据目录落点的说明文案：仓库根 / 便携模式 / 用户数据目录。
+    pub data_mode: String,
+    /// 本次启动从旧版本位置迁移过来的子目录名。
+    pub data_migrated: Vec<String>,
+    /// 迁移来源（旧的可执行文件同级目录）。
+    pub data_migrated_from: String,
 }
 
 #[tauri::command]
 pub fn about_info() -> AboutInfo {
     let h = host();
+    let data = crate::paths::info();
     AboutInfo {
         name: APP_NAME.into(),
         name_en: APP_NAME_EN.into(),
@@ -136,6 +145,14 @@ pub fn about_info() -> AboutInfo {
         community: COMMUNITY_URL.into(),
         copyright: COPYRIGHT.into(),
         license: LICENSE_NAME.into(),
+        data_root: data.root.display().to_string(),
+        data_mode: data.mode.display().into(),
+        data_migrated: data.migrated.clone(),
+        data_migrated_from: data
+            .migrated_from
+            .as_ref()
+            .map(|p| p.display().to_string())
+            .unwrap_or_default(),
     }
 }
 
@@ -571,8 +588,7 @@ pub async fn run_diagnosis(
     }
 
     let h = host();
-    let report_base = crate::paths::report_root().join("diagnosis");
-    let _ = std::fs::create_dir_all(&report_base);
+    let report_base = crate::paths::diagnosis_dir();
 
     let opts = DiagOptions {
         target: t,
